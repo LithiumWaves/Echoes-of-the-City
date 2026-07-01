@@ -16,6 +16,8 @@
     const state = {
         isOpen: false,
         audioEnabled: false,
+        audioUnlocked: false,
+        audioUnlockPromise: null,
         draggingPointerId: null,
         isDragging: false,
         suppressClick: false,
@@ -46,6 +48,13 @@
     function configureAudio(audio, volume) {
         audio.preload = 'auto';
         audio.volume = volume;
+    }
+
+    function removeAudioUnlockListeners() {
+        document.removeEventListener('pointerdown', handleAudioUnlockGesture, true);
+        document.removeEventListener('keydown', handleAudioUnlockGesture, true);
+        document.removeEventListener('touchstart', handleAudioUnlockGesture, true);
+        document.removeEventListener('click', handleAudioUnlockGesture, true);
     }
 
     function getBackgroundImageUrl(value) {
@@ -107,12 +116,11 @@
     }
 
     function startThemeAudio() {
-        if (!themeAudio.src) {
+        if (!themeAudio.src || !state.audioUnlocked) {
             return;
         }
 
         try {
-            themeAudio.currentTime = 0;
             const playPromise = themeAudio.play();
             if (playPromise && typeof playPromise.catch === 'function') {
                 playPromise.catch(() => {});
@@ -131,10 +139,31 @@
         }
     }
 
+    async function primeAudioElement(audio) {
+        if (!audio?.src) {
+            return;
+        }
+
+        try {
+            audio.muted = true;
+            audio.currentTime = 0;
+            const playPromise = audio.play();
+            if (playPromise && typeof playPromise.then === 'function') {
+                await playPromise;
+            }
+            audio.pause();
+            audio.currentTime = 0;
+        } catch (error) {
+            console.debug(`${EXTENSION_ID}: audio priming skipped.`, error);
+        } finally {
+            audio.muted = false;
+        }
+    }
+
     async function resumeAudioContext() {
         if (!audioContext) {
             state.audioEnabled = true;
-            return false;
+            return true;
         }
 
         try {
@@ -148,6 +177,42 @@
             console.debug(`${EXTENSION_ID}: audio context resume skipped.`, error);
             return false;
         }
+    }
+
+    async function unlockAudioPlayback() {
+        if (state.audioUnlocked) {
+            return true;
+        }
+
+        if (state.audioUnlockPromise) {
+            return state.audioUnlockPromise;
+        }
+
+        state.audioUnlockPromise = (async () => {
+            await resumeAudioContext();
+            await Promise.all([
+                primeAudioElement(hoverAudio),
+                primeAudioElement(clickAudio),
+                primeAudioElement(themeAudio),
+            ]);
+
+            state.audioUnlocked = true;
+            removeAudioUnlockListeners();
+
+            if (state.isOpen) {
+                startThemeAudio();
+            }
+
+            return true;
+        })().finally(() => {
+            state.audioUnlockPromise = null;
+        });
+
+        return state.audioUnlockPromise;
+    }
+
+    function handleAudioUnlockGesture() {
+        void unlockAudioPlayback();
     }
 
     async function loadAudioBuffer(name, path) {
@@ -326,21 +391,31 @@
         elements.panel.setAttribute('aria-hidden', String(!state.isOpen));
     }
 
+    function syncThemePlayback() {
+        if (state.isOpen) {
+            startThemeAudio();
+            return;
+        }
+
+        stopThemeAudio();
+    }
+
     function openBattlePanel() {
         state.isOpen = true;
         syncPanelState();
-        startThemeAudio();
+        syncThemePlayback();
     }
 
     function closeBattlePanel() {
         state.isOpen = false;
         syncPanelState();
-        stopThemeAudio();
+        syncThemePlayback();
     }
 
     function toggleBattlePanel() {
         state.isOpen = !state.isOpen;
         syncPanelState();
+        syncThemePlayback();
     }
 
     function handleLauncherHover() {
@@ -357,13 +432,13 @@
             return;
         }
 
-        await resumeAudioContext();
+        await unlockAudioPlayback();
         playSound('click');
         toggleBattlePanel();
     }
 
     async function handleCloseClick() {
-        await resumeAudioContext();
+        await unlockAudioPlayback();
         playSound('click');
         closeBattlePanel();
     }
@@ -379,7 +454,7 @@
             return;
         }
 
-        await resumeAudioContext();
+        await unlockAudioPlayback();
 
         state.draggingPointerId = event.pointerId;
         state.isDragging = false;
@@ -516,6 +591,10 @@
         configureAudio(clickAudio, 0.7);
         configureAudio(themeAudio, 0.42);
         themeAudio.loop = true;
+        document.addEventListener('pointerdown', handleAudioUnlockGesture, true);
+        document.addEventListener('keydown', handleAudioUnlockGesture, true);
+        document.addEventListener('touchstart', handleAudioUnlockGesture, true);
+        document.addEventListener('click', handleAudioUnlockGesture, true);
         createBattleInterface();
         preloadAudio();
         syncPanelState();
