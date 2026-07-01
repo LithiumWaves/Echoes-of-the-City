@@ -1,0 +1,11 @@
+{
+  "display_name": "Echoes of the City",
+  "loading_order": 100,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "style.css",
+  "author": "LithiumWaves",
+  "version": "1.1.0",
+  "homePage": "https://github.com/LithiumWaves/Echoes-of-the-City"
+}
