@@ -4,6 +4,11 @@
     z-index: 9999;
     pointer-events: none;
     --echoes-button-width: clamp(5rem, 6vw, 6.4rem);
+    --echoes-button-left: 0px;
+    --echoes-button-top: 0px;
+    --echoes-panel-left: 0px;
+    --echoes-panel-top: 0px;
+    --echoes-panel-width: min(72vw, 1100px);
 }
 
 .echoes-battle-launcher,
@@ -14,17 +19,20 @@
 
 .echoes-battle-launcher {
     position: fixed;
-    top: 50%;
-    right: 0.75rem;
+    left: var(--echoes-button-left);
+    top: var(--echoes-button-top);
     width: var(--echoes-button-width);
     aspect-ratio: 343 / 316;
-    transform: translateY(-50%);
+    transform: translate3d(0, 0, 0);
     border: 0;
     padding: 0;
     background: url("./assets/battlewindow/mainbutton.png") center / contain no-repeat;
     cursor: pointer;
     isolation: isolate;
     transition: transform 180ms ease, filter 180ms ease;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .echoes-battle-launcher__glow {
@@ -54,10 +62,18 @@
 }
 
 .echoes-battle-launcher:hover {
-    transform: translateY(-50%) translateX(-4px) scale(1.02);
+    transform: translate3d(-4px, 0, 0) scale(1.02);
     filter:
         drop-shadow(0 0 16px rgba(255, 143, 45, 0.7))
         drop-shadow(0 0 28px rgba(255, 103, 24, 0.35));
+}
+
+.echoes-battle-launcher.is-dragging,
+.echoes-battle-launcher.is-dragging:hover {
+    transform: translate3d(0, 0, 0) scale(1.01);
+    filter:
+        drop-shadow(0 0 16px rgba(255, 143, 45, 0.45))
+        drop-shadow(0 0 28px rgba(255, 103, 24, 0.22));
 }
 
 .echoes-battle-launcher:hover .echoes-battle-launcher__glow {
@@ -92,13 +108,13 @@
 
 .echoes-battle-panel {
     position: fixed;
-    top: 50%;
-    right: calc(var(--echoes-button-width) + 1.8rem);
-    width: min(72vw, 1100px);
-    max-width: 1100px;
+    left: var(--echoes-panel-left);
+    top: var(--echoes-panel-top);
+    width: var(--echoes-panel-width);
+    max-width: min(72vw, 1100px);
     opacity: 0;
     visibility: hidden;
-    transform: translate(2.5rem, -50%) scale(0.97);
+    transform: translate3d(2.5rem, 0, 0) scale(0.97);
     transform-origin: right center;
     transition: transform 260ms ease, opacity 220ms ease, visibility 220ms ease;
 }
@@ -191,7 +207,7 @@
 .echoes-battle-ui.is-open .echoes-battle-panel {
     opacity: 1;
     visibility: visible;
-    transform: translate(0, -50%) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
 }
 
 .echoes-sr-only {
@@ -261,7 +277,7 @@
 
 @media (max-width: 1200px) {
     .echoes-battle-panel {
-        width: min(78vw, 980px);
+        max-width: min(78vw, 980px);
     }
 }
 
@@ -270,26 +286,17 @@
         --echoes-button-width: min(5.1rem, 20vw);
     }
 
-    .echoes-battle-launcher {
-        top: auto;
-        right: 0.9rem;
-        bottom: 0.9rem;
-        transform: none;
-    }
-
     .echoes-battle-launcher:hover {
-        transform: translateY(-3px) scale(1.02);
+        transform: translate3d(0, -3px, 0) scale(1.02);
     }
 
     .echoes-battle-panel {
-        top: auto;
-        right: 0.75rem;
-        bottom: calc(var(--echoes-button-width) + 1.25rem);
         width: calc(100vw - 1.5rem);
-        transform: translateY(1rem) scale(0.98);
+        max-width: calc(100vw - 1.5rem);
+        transform: translate3d(0, 1rem, 0) scale(0.98);
     }
 
     .echoes-battle-ui.is-open .echoes-battle-panel {
-        transform: translateY(0) scale(1);
+        transform: translate3d(0, 0, 0) scale(1);
     }
 }
