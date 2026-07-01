@@ -48,19 +48,6 @@
     transform: scale(0.86);
 }
 
-.echoes-battle-launcher__logo {
-    position: absolute;
-    top: 16%;
-    left: 12%;
-    width: 48%;
-    height: 68%;
-    object-fit: contain;
-    filter:
-        drop-shadow(0 3px 6px rgba(0, 0, 0, 0.55))
-        drop-shadow(0 0 12px rgba(255, 162, 58, 0.18));
-    transition: transform 180ms ease, filter 180ms ease;
-}
-
 .echoes-battle-launcher:hover {
     transform: translate3d(0, 0, 0) scale(1.02);
     filter:
@@ -79,13 +66,6 @@
 .echoes-battle-launcher:hover .echoes-battle-launcher__glow {
     opacity: 1;
     transform: scale(1.04);
-}
-
-.echoes-battle-launcher:hover .echoes-battle-launcher__logo {
-    transform: scale(1.03);
-    filter:
-        drop-shadow(0 4px 8px rgba(0, 0, 0, 0.58))
-        drop-shadow(0 0 18px rgba(255, 172, 70, 0.28));
 }
 
 .echoes-battle-launcher:focus-visible,

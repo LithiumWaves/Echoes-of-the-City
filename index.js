@@ -8,9 +8,9 @@
     const DRAG_THRESHOLD = 6;
     const PANEL_ASPECT_RATIO = 1640 / 4120;
     const ASSET_RELATIVE_PATHS = {
-        logo: 'assets/battlewindow/logo.png',
         hover: 'audio/battlewindow/hovermechanical.wav',
         click: 'audio/battlewindow/buttonclick.wav',
+        theme: 'audio/battlewindow/maintheme.wav',
     };
 
     const state = {
@@ -35,6 +35,7 @@
 
     const hoverAudio = new Audio();
     const clickAudio = new Audio();
+    const themeAudio = new Audio();
     const audioContext = typeof window.AudioContext === 'function'
         ? new window.AudioContext()
         : typeof window.webkitAudioContext === 'function'
@@ -96,17 +97,38 @@
     function syncAssetUrls() {
         state.extensionBaseUrl = detectExtensionBaseUrl();
 
-        const logoUrl = resolveExtensionUrl(ASSET_RELATIVE_PATHS.logo);
         const hoverUrl = resolveExtensionUrl(ASSET_RELATIVE_PATHS.hover);
         const clickUrl = resolveExtensionUrl(ASSET_RELATIVE_PATHS.click);
-
-        const logo = elements.button?.querySelector('.echoes-battle-launcher__logo');
-        if (logo && logo.getAttribute('src') !== logoUrl) {
-            logo.setAttribute('src', logoUrl);
-        }
+        const themeUrl = resolveExtensionUrl(ASSET_RELATIVE_PATHS.theme);
 
         hoverAudio.src = hoverUrl;
         clickAudio.src = clickUrl;
+        themeAudio.src = themeUrl;
+    }
+
+    function startThemeAudio() {
+        if (!themeAudio.src) {
+            return;
+        }
+
+        try {
+            themeAudio.currentTime = 0;
+            const playPromise = themeAudio.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+                playPromise.catch(() => {});
+            }
+        } catch (error) {
+            console.debug(`${EXTENSION_ID}: theme audio playback skipped.`, error);
+        }
+    }
+
+    function stopThemeAudio() {
+        try {
+            themeAudio.pause();
+            themeAudio.currentTime = 0;
+        } catch (error) {
+            console.debug(`${EXTENSION_ID}: theme audio stop skipped.`, error);
+        }
     }
 
     async function resumeAudioContext() {
@@ -307,11 +329,13 @@
     function openBattlePanel() {
         state.isOpen = true;
         syncPanelState();
+        startThemeAudio();
     }
 
     function closeBattlePanel() {
         state.isOpen = false;
         syncPanelState();
+        stopThemeAudio();
     }
 
     function toggleBattlePanel() {
@@ -410,13 +434,8 @@
         updateLayoutPosition();
     }
 
-    function preloadAssets() {
-        const logoPath = resolveExtensionUrl(ASSET_RELATIVE_PATHS.logo);
-        const image = new Image();
-        image.src = logoPath;
-    }
-
     function preloadAudio() {
+        themeAudio.load();
         void Promise.all([
             loadAudioBuffer('hover', resolveExtensionUrl(ASSET_RELATIVE_PATHS.hover)),
             loadAudioBuffer('click', resolveExtensionUrl(ASSET_RELATIVE_PATHS.click)),
@@ -442,12 +461,6 @@
                 title="Toggle battle panel"
             >
                 <span class="echoes-battle-launcher__glow" aria-hidden="true"></span>
-                <img
-                    class="echoes-battle-launcher__logo"
-                    src=""
-                    alt=""
-                    aria-hidden="true"
-                />
                 <span class="echoes-sr-only">Toggle battle panel</span>
             </button>
 
@@ -501,8 +514,9 @@
     function initialize() {
         configureAudio(hoverAudio, 0.55);
         configureAudio(clickAudio, 0.7);
+        configureAudio(themeAudio, 0.42);
+        themeAudio.loop = true;
         createBattleInterface();
-        preloadAssets();
         preloadAudio();
         syncPanelState();
 
