@@ -191,25 +191,30 @@
     bottom: 16.4%;
     display: flex;
     align-items: stretch;
-    gap: 0.15%;
+    justify-content: flex-start;
+    gap: 0.35%;
 }
 
 .echoes-battle-panel__roster-menu {
-    flex: 0 0 16.6%;
-    background: url("./assets/characterstab/rostermenu.png") center / contain no-repeat;
+    flex: 0 0 auto;
+    height: 100%;
+    aspect-ratio: 352 / 738;
+    background: url("./assets/characterstab/rostermenu.png") left center / 100% 100% no-repeat;
 }
 
 .echoes-battle-panel__character-screen {
     position: relative;
-    flex: 1 1 auto;
-    background: url("./assets/characterstab/characterselectscreen.png") center / contain no-repeat;
+    flex: 0 0 auto;
+    height: 100%;
+    aspect-ratio: 2038 / 1134;
+    background: url("./assets/characterstab/characterselectscreen.png") left center / 100% 100% no-repeat;
 }
 
 .echoes-battle-panel__no-character {
     position: absolute;
-    top: 16.9%;
-    left: 6.2%;
-    width: 13.1%;
+    top: 13.6%;
+    left: 3.8%;
+    width: 10.9%;
     aspect-ratio: 356 / 491;
     background: url("./assets/characterstab/nocharacter.png") center / contain no-repeat;
 }
