@@ -165,11 +165,49 @@
         #020202;
 }
 
+.echoes-battle-panel__tray {
+    position: absolute;
+    right: 2.4%;
+    bottom: 3.6%;
+    width: min(45%, 28rem);
+    aspect-ratio: 1517 / 227;
+    background: url("./assets/mainmenu/bottomrighttray.png") center / contain no-repeat;
+    pointer-events: none;
+}
+
+.echoes-battle-panel__tray-button {
+    position: absolute;
+    right: 2.5%;
+    top: 50%;
+    width: 18.5%;
+    aspect-ratio: 217 / 188;
+    transform: translateY(-50%);
+    border: 0;
+    padding: 0;
+    background: url("./assets/mainmenu/traybutton.png") center / contain no-repeat;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: transform 140ms ease, filter 140ms ease;
+}
+
+.echoes-battle-panel__tray-button:hover {
+    transform: translateY(-50%) scale(1.02);
+    filter: drop-shadow(0 0 12px rgba(255, 129, 46, 0.25));
+}
+
+.echoes-battle-panel__tray-button[aria-pressed="true"] {
+    background-image: url("./assets/mainmenu/traybuttonpressed.png");
+}
+
 .echoes-battle-panel__screen:fullscreen {
     width: 100vw;
     height: 100vh;
     clip-path: none;
     background: #020202;
+}
+
+.echoes-battle-panel__screen:fullscreen .echoes-battle-panel__tray {
+    width: min(34vw, 34rem);
 }
 
 .echoes-battle-ui.is-open .echoes-battle-backdrop {

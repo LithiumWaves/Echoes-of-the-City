@@ -11,6 +11,7 @@
         hover: 'audio/battlewindow/hovermechanical.wav',
         click: 'audio/battlewindow/buttonclick.wav',
         theme: 'audio/battlewindow/maintheme.wav',
+        heavyPanel: 'audio/battlewindow/heavypanel.wav',
     };
 
     const state = {
@@ -35,11 +36,13 @@
         closeButton: null,
         fullscreenButton: null,
         screen: null,
+        trayButton: null,
     };
 
     const hoverAudio = new Audio();
     const clickAudio = new Audio();
     const themeAudio = new Audio();
+    const heavyPanelAudio = new Audio();
     const audioContext = typeof window.AudioContext === 'function'
         ? new window.AudioContext()
         : typeof window.webkitAudioContext === 'function'
@@ -111,10 +114,12 @@
         const hoverUrl = resolveExtensionUrl(ASSET_RELATIVE_PATHS.hover);
         const clickUrl = resolveExtensionUrl(ASSET_RELATIVE_PATHS.click);
         const themeUrl = resolveExtensionUrl(ASSET_RELATIVE_PATHS.theme);
+        const heavyPanelUrl = resolveExtensionUrl(ASSET_RELATIVE_PATHS.heavyPanel);
 
         hoverAudio.src = hoverUrl;
         clickAudio.src = clickUrl;
         themeAudio.src = themeUrl;
+        heavyPanelAudio.src = heavyPanelUrl;
     }
 
     function startThemeAudio() {
@@ -138,6 +143,22 @@
             themeAudio.currentTime = 0;
         } catch (error) {
             console.debug(`${EXTENSION_ID}: theme audio stop skipped.`, error);
+        }
+    }
+
+    function playHeavyPanelAudio() {
+        if (!heavyPanelAudio.src || !state.audioUnlocked) {
+            return;
+        }
+
+        try {
+            heavyPanelAudio.currentTime = 0;
+            const playPromise = heavyPanelAudio.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+                playPromise.catch(() => {});
+            }
+        } catch (error) {
+            console.debug(`${EXTENSION_ID}: heavy panel audio playback skipped.`, error);
         }
     }
 
@@ -196,6 +217,7 @@
                 primeAudioElement(hoverAudio),
                 primeAudioElement(clickAudio),
                 primeAudioElement(themeAudio),
+                primeAudioElement(heavyPanelAudio),
             ]);
 
             state.audioUnlocked = true;
@@ -403,21 +425,33 @@
     }
 
     function openBattlePanel() {
+        if (state.isOpen) {
+            return;
+        }
+
         state.isOpen = true;
         syncPanelState();
+        playHeavyPanelAudio();
         syncThemePlayback();
     }
 
     function closeBattlePanel() {
+        if (!state.isOpen) {
+            return;
+        }
+
         state.isOpen = false;
         syncPanelState();
         syncThemePlayback();
     }
 
     function toggleBattlePanel() {
-        state.isOpen = !state.isOpen;
-        syncPanelState();
-        syncThemePlayback();
+        if (state.isOpen) {
+            closeBattlePanel();
+            return;
+        }
+
+        openBattlePanel();
     }
 
     function handleLauncherHover() {
@@ -511,6 +545,22 @@
         updateLayoutPosition();
     }
 
+    async function handleTrayButtonClick() {
+        await unlockAudioPlayback();
+        playSound('click');
+
+        if (!elements.trayButton) {
+            return;
+        }
+
+        const pressed = elements.trayButton.getAttribute('aria-pressed') === 'true';
+        elements.trayButton.setAttribute('aria-pressed', String(!pressed));
+    }
+
+    function handleTrayButtonHover() {
+        playSound('hover', { requireAudioEnabled: true });
+    }
+
     async function toggleScreenFullscreen() {
         if (!elements.screen) {
             return;
@@ -585,6 +635,15 @@
                 <div class="echoes-battle-panel__window" aria-hidden="true">
                     <div class="echoes-battle-panel__screen">
                         <div class="echoes-battle-panel__content"></div>
+                        <div class="echoes-battle-panel__tray" aria-hidden="true">
+                            <button
+                                class="echoes-battle-panel__tray-button"
+                                type="button"
+                                aria-label="Toggle tray button"
+                                aria-pressed="false"
+                                title="Toggle tray button"
+                            ></button>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -599,6 +658,7 @@
         elements.closeButton = root.querySelector('.echoes-battle-panel__close');
         elements.fullscreenButton = root.querySelector('.echoes-battle-panel__fullscreen');
         elements.screen = root.querySelector('.echoes-battle-panel__screen');
+        elements.trayButton = root.querySelector('.echoes-battle-panel__tray-button');
 
         syncAssetUrls();
         elements.button.addEventListener('mouseenter', handleLauncherHover);
@@ -610,6 +670,8 @@
         elements.backdrop.addEventListener('click', closeBattlePanel);
         elements.closeButton.addEventListener('click', handleCloseClick);
         elements.fullscreenButton.addEventListener('click', toggleScreenFullscreen);
+        elements.trayButton.addEventListener('mouseenter', handleTrayButtonHover);
+        elements.trayButton.addEventListener('click', handleTrayButtonClick);
         document.addEventListener('keydown', handleKeydown);
         window.addEventListener('resize', handleResize);
 
@@ -620,6 +682,7 @@
         configureAudio(hoverAudio, 0.55);
         configureAudio(clickAudio, 0.7);
         configureAudio(themeAudio, 0.42);
+        configureAudio(heavyPanelAudio, 0.8);
         themeAudio.loop = true;
         document.addEventListener('pointerdown', handleAudioUnlockGesture, true);
         document.addEventListener('keydown', handleAudioUnlockGesture, true);
