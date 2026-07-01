@@ -185,27 +185,27 @@
 
 .echoes-battle-panel__roster-menu {
     position: absolute;
-    left: 3.1%;
-    top: 7.9%;
-    bottom: 12.8%;
-    width: 19.3%;
+    left: 2.9%;
+    top: 6.8%;
+    bottom: 10.3%;
+    width: 18.9%;
     background: url("./assets/characterstab/rostermenu.png") center / contain no-repeat;
 }
 
 .echoes-battle-panel__character-screen {
     position: absolute;
-    left: 22%;
-    right: 1.9%;
-    top: 6.6%;
-    bottom: 10.1%;
+    left: 20.9%;
+    right: 1.6%;
+    top: 5.5%;
+    bottom: 8.4%;
     background: url("./assets/characterstab/characterselectscreen.png") center / contain no-repeat;
 }
 
 .echoes-battle-panel__no-character {
     position: absolute;
-    top: 15.5%;
-    left: 5.6%;
-    width: 13.8%;
+    top: 13.2%;
+    left: 5.2%;
+    width: 15.1%;
     aspect-ratio: 356 / 491;
     background: url("./assets/characterstab/nocharacter.png") center / contain no-repeat;
 }
@@ -288,16 +288,23 @@
 }
 
 .echoes-battle-panel__screen:fullscreen .echoes-battle-panel__roster-menu {
-    width: min(18vw, 16rem);
+    left: 2.8vw;
+    top: 6.3vh;
+    bottom: 9.8vh;
+    width: min(20vw, 18rem);
 }
 
 .echoes-battle-panel__screen:fullscreen .echoes-battle-panel__character-screen {
-    left: min(20vw, 18rem);
-    right: 3vw;
+    left: min(21.4vw, 19.2rem);
+    right: 2.6vw;
+    top: 5.2vh;
+    bottom: 7.6vh;
 }
 
 .echoes-battle-panel__screen:fullscreen .echoes-battle-panel__no-character {
-    width: 12%;
+    top: 12.2%;
+    left: 4.9%;
+    width: 13.1%;
 }
 
 .echoes-battle-ui.is-open .echoes-battle-backdrop {
