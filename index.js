@@ -16,6 +16,7 @@
 
     const state = {
         isOpen: false,
+        isCharacterSelectOpen: false,
         audioEnabled: false,
         audioUnlocked: false,
         audioUnlockPromise: null,
@@ -411,6 +412,7 @@
         }
 
         elements.root.classList.toggle('is-open', state.isOpen);
+        elements.root.classList.toggle('is-character-select', state.isCharacterSelectOpen);
         elements.button.setAttribute('aria-expanded', String(state.isOpen));
         elements.panel.setAttribute('aria-hidden', String(!state.isOpen));
     }
@@ -553,8 +555,13 @@
             return;
         }
 
-        const pressed = elements.trayButton.getAttribute('aria-pressed') === 'true';
-        elements.trayButton.setAttribute('aria-pressed', String(!pressed));
+        if (state.isCharacterSelectOpen) {
+            return;
+        }
+
+        state.isCharacterSelectOpen = true;
+        elements.trayButton.setAttribute('aria-pressed', 'true');
+        syncPanelState();
     }
 
     function handleTrayButtonHover() {
@@ -634,17 +641,25 @@
 
                 <div class="echoes-battle-panel__window" aria-hidden="true">
                     <div class="echoes-battle-panel__screen">
-                        <div class="echoes-battle-panel__content"></div>
-                        <div class="echoes-battle-panel__tray" aria-hidden="true">
-                            <button
-                                class="echoes-battle-panel__tray-button"
-                                type="button"
-                                aria-label="Toggle tray button"
-                                aria-pressed="false"
-                                title="Toggle tray button"
-                            >
-                                <span class="echoes-battle-panel__tray-icon" aria-hidden="true"></span>
-                            </button>
+                        <div class="echoes-battle-panel__main-menu">
+                            <div class="echoes-battle-panel__content"></div>
+                            <div class="echoes-battle-panel__tray" aria-hidden="true">
+                                <button
+                                    class="echoes-battle-panel__tray-button"
+                                    type="button"
+                                    aria-label="Open character select"
+                                    aria-pressed="false"
+                                    title="Open character select"
+                                >
+                                    <span class="echoes-battle-panel__tray-icon" aria-hidden="true"></span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="echoes-battle-panel__character-select" aria-hidden="true">
+                            <div class="echoes-battle-panel__roster-menu"></div>
+                            <div class="echoes-battle-panel__character-screen">
+                                <div class="echoes-battle-panel__no-character"></div>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -157,12 +157,57 @@
     clip-path: polygon(2.3% 0, 97.7% 0, 100% 3.5%, 100% 96.5%, 97.7% 100%, 2.3% 100%, 0 96.5%, 0 3.5%);
 }
 
+.echoes-battle-panel__main-menu,
+.echoes-battle-panel__character-select {
+    position: absolute;
+    inset: 0;
+    transition: transform 420ms cubic-bezier(0.22, 0.8, 0.2, 1), opacity 320ms ease;
+}
+
+.echoes-battle-panel__main-menu {
+    opacity: 1;
+    transform: translateY(0);
+}
+
 .echoes-battle-panel__content {
     position: absolute;
     inset: 0;
     background:
         url("./assets/mainmenu/mainpanel.png") center / cover no-repeat,
         #020202;
+}
+
+.echoes-battle-panel__character-select {
+    opacity: 0;
+    transform: translateY(-120%);
+    pointer-events: none;
+}
+
+.echoes-battle-panel__roster-menu {
+    position: absolute;
+    left: 2.8%;
+    top: 10.5%;
+    width: 16.8%;
+    height: 74.5%;
+    background: url("./assets/characterstab/rostermenu.png") center / contain no-repeat;
+}
+
+.echoes-battle-panel__character-screen {
+    position: absolute;
+    left: 20.8%;
+    right: 2.7%;
+    top: 10.5%;
+    bottom: 13.8%;
+    background: url("./assets/characterstab/characterselectscreen.png") center / contain no-repeat;
+}
+
+.echoes-battle-panel__no-character {
+    position: absolute;
+    top: 9%;
+    left: 4.8%;
+    width: 19%;
+    aspect-ratio: 356 / 491;
+    background: url("./assets/characterstab/nocharacter.png") center / contain no-repeat;
 }
 
 .echoes-battle-panel__tray {
@@ -218,6 +263,18 @@
     background-color: #f08a35;
 }
 
+.echoes-battle-ui.is-character-select .echoes-battle-panel__main-menu {
+    opacity: 0;
+    transform: translateY(115%);
+    pointer-events: none;
+}
+
+.echoes-battle-ui.is-character-select .echoes-battle-panel__character-select {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
 .echoes-battle-panel__screen:fullscreen {
     width: 100vw;
     height: 100vh;
@@ -227,6 +284,15 @@
 
 .echoes-battle-panel__screen:fullscreen .echoes-battle-panel__tray {
     width: min(34vw, 34rem);
+}
+
+.echoes-battle-panel__screen:fullscreen .echoes-battle-panel__roster-menu {
+    width: min(18vw, 16rem);
+}
+
+.echoes-battle-panel__screen:fullscreen .echoes-battle-panel__character-screen {
+    left: min(20vw, 18rem);
+    right: 3vw;
 }
 
 .echoes-battle-ui.is-open .echoes-battle-backdrop {
