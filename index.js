@@ -33,6 +33,8 @@
         panel: null,
         backdrop: null,
         closeButton: null,
+        fullscreenButton: null,
+        screen: null,
     };
 
     const hoverAudio = new Audio();
@@ -509,6 +511,23 @@
         updateLayoutPosition();
     }
 
+    async function toggleScreenFullscreen() {
+        if (!elements.screen) {
+            return;
+        }
+
+        try {
+            if (document.fullscreenElement === elements.screen) {
+                await document.exitFullscreen();
+                return;
+            }
+
+            await elements.screen.requestFullscreen();
+        } catch (error) {
+            console.debug(`${EXTENSION_ID}: fullscreen toggle skipped.`, error);
+        }
+    }
+
     function preloadAudio() {
         themeAudio.load();
         void Promise.all([
@@ -547,6 +566,14 @@
                 aria-hidden="true"
             >
                 <button
+                    class="echoes-battle-panel__fullscreen"
+                    type="button"
+                    aria-label="Fullscreen battle screen"
+                    title="Fullscreen battle screen"
+                >
+                    Full
+                </button>
+                <button
                     class="echoes-battle-panel__close"
                     type="button"
                     aria-label="Close battle panel"
@@ -557,7 +584,7 @@
 
                 <div class="echoes-battle-panel__window" aria-hidden="true">
                     <div class="echoes-battle-panel__screen">
-                        <div class="echoes-tv-static"></div>
+                        <div class="echoes-battle-panel__content"></div>
                     </div>
                 </div>
             </section>
@@ -570,6 +597,8 @@
         elements.panel = root.querySelector('.echoes-battle-panel');
         elements.backdrop = root.querySelector('.echoes-battle-backdrop');
         elements.closeButton = root.querySelector('.echoes-battle-panel__close');
+        elements.fullscreenButton = root.querySelector('.echoes-battle-panel__fullscreen');
+        elements.screen = root.querySelector('.echoes-battle-panel__screen');
 
         syncAssetUrls();
         elements.button.addEventListener('mouseenter', handleLauncherHover);
@@ -580,6 +609,7 @@
         elements.button.addEventListener('click', handleLauncherClick);
         elements.backdrop.addEventListener('click', closeBattlePanel);
         elements.closeButton.addEventListener('click', handleCloseClick);
+        elements.fullscreenButton.addEventListener('click', toggleScreenFullscreen);
         document.addEventListener('keydown', handleKeydown);
         window.addEventListener('resize', handleResize);
 
