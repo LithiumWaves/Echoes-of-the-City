@@ -298,20 +298,22 @@
 
 .echoes-battle-panel__screen:fullscreen .echoes-battle-panel__character-layout {
     left: 3.2vw;
-    right: 2.5vw;
-    top: 5.4vh;
-    bottom: 14.4vh;
-    gap: 0.7vw;
+    right: auto;
+    top: 6.5vh;
+    bottom: auto;
+    height: 71.5vh;
+    width: auto;
+    gap: 0.45vw;
 }
 
 .echoes-battle-panel__screen:fullscreen .echoes-battle-panel__roster-menu {
-    flex-basis: 17.2%;
+    height: 100%;
 }
 
 .echoes-battle-panel__screen:fullscreen .echoes-battle-panel__no-character {
-    top: 14.1%;
-    left: 4.4%;
-    width: 14.8%;
+    top: 13.7%;
+    left: 4.1%;
+    width: 13.4%;
 }
 
 .echoes-battle-ui.is-open .echoes-battle-backdrop {
