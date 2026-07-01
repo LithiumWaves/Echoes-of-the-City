@@ -643,23 +643,23 @@
                     <div class="echoes-battle-panel__screen">
                         <div class="echoes-battle-panel__main-menu">
                             <div class="echoes-battle-panel__content"></div>
-                            <div class="echoes-battle-panel__tray" aria-hidden="true">
-                                <button
-                                    class="echoes-battle-panel__tray-button"
-                                    type="button"
-                                    aria-label="Open character select"
-                                    aria-pressed="false"
-                                    title="Open character select"
-                                >
-                                    <span class="echoes-battle-panel__tray-icon" aria-hidden="true"></span>
-                                </button>
-                            </div>
                         </div>
                         <div class="echoes-battle-panel__character-select" aria-hidden="true">
                             <div class="echoes-battle-panel__roster-menu"></div>
                             <div class="echoes-battle-panel__character-screen">
                                 <div class="echoes-battle-panel__no-character"></div>
                             </div>
+                        </div>
+                        <div class="echoes-battle-panel__tray" aria-hidden="true">
+                            <button
+                                class="echoes-battle-panel__tray-button"
+                                type="button"
+                                aria-label="Open character select"
+                                aria-pressed="false"
+                                title="Open character select"
+                            >
+                                <span class="echoes-battle-panel__tray-icon" aria-hidden="true"></span>
+                            </button>
                         </div>
                     </div>
                 </div>

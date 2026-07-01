@@ -185,27 +185,27 @@
 
 .echoes-battle-panel__roster-menu {
     position: absolute;
-    left: 2.8%;
-    top: 10.5%;
-    width: 16.8%;
-    height: 74.5%;
+    left: 3.1%;
+    top: 7.9%;
+    bottom: 12.8%;
+    width: 19.3%;
     background: url("./assets/characterstab/rostermenu.png") center / contain no-repeat;
 }
 
 .echoes-battle-panel__character-screen {
     position: absolute;
-    left: 20.8%;
-    right: 2.7%;
-    top: 10.5%;
-    bottom: 13.8%;
+    left: 22%;
+    right: 1.9%;
+    top: 6.6%;
+    bottom: 10.1%;
     background: url("./assets/characterstab/characterselectscreen.png") center / contain no-repeat;
 }
 
 .echoes-battle-panel__no-character {
     position: absolute;
-    top: 9%;
-    left: 4.8%;
-    width: 19%;
+    top: 15.5%;
+    left: 5.6%;
+    width: 13.8%;
     aspect-ratio: 356 / 491;
     background: url("./assets/characterstab/nocharacter.png") center / contain no-repeat;
 }
@@ -218,6 +218,7 @@
     aspect-ratio: 1517 / 227;
     background: url("./assets/mainmenu/bottomrighttray.png") center / contain no-repeat;
     pointer-events: none;
+    z-index: 4;
 }
 
 .echoes-battle-panel__tray-button {
@@ -293,6 +294,10 @@
 .echoes-battle-panel__screen:fullscreen .echoes-battle-panel__character-screen {
     left: min(20vw, 18rem);
     right: 3vw;
+}
+
+.echoes-battle-panel__screen:fullscreen .echoes-battle-panel__no-character {
+    width: 12%;
 }
 
 .echoes-battle-ui.is-open .echoes-battle-backdrop {
