@@ -2,20 +2,15 @@
     const EXTENSION_ID = 'echoes-of-the-city';
     const ROOT_ID = `${EXTENSION_ID}-root`;
     const BUTTON_ID = `${EXTENSION_ID}-battle-launcher`;
-    const EXTENSION_BASE_URL = new URL('./', document.currentScript?.src || window.location.href);
-    const BUTTON_MARGIN = 12;
+    const BUTTON_MARGIN = 0;
     const PANEL_MARGIN = 8;
     const PANEL_GAP = 24;
     const DRAG_THRESHOLD = 6;
     const PANEL_ASPECT_RATIO = 1640 / 4120;
-    const ASSET_PATHS = {
-        mainWindow: new URL('./assets/battlewindow/mainwindow.png', EXTENSION_BASE_URL).href,
-        mainButton: new URL('./assets/battlewindow/mainbutton.png', EXTENSION_BASE_URL).href,
-        logo: new URL('./assets/battlewindow/logo.png', EXTENSION_BASE_URL).href,
-    };
-    const AUDIO_PATHS = {
-        hover: new URL('./audio/battlewindow/hovermechanical.wav', EXTENSION_BASE_URL).href,
-        click: new URL('./audio/battlewindow/buttonclick.wav', EXTENSION_BASE_URL).href,
+    const ASSET_RELATIVE_PATHS = {
+        logo: 'assets/battlewindow/logo.png',
+        hover: 'audio/battlewindow/hovermechanical.wav',
+        click: 'audio/battlewindow/buttonclick.wav',
     };
 
     const state = {
@@ -27,6 +22,7 @@
         dragStartPointer: { x: 0, y: 0 },
         dragStartButton: { x: 0, y: 0 },
         buttonPosition: { x: 0, y: 0 },
+        extensionBaseUrl: null,
     };
 
     const elements = {
@@ -37,8 +33,8 @@
         closeButton: null,
     };
 
-    const hoverAudio = new Audio(AUDIO_PATHS.hover);
-    const clickAudio = new Audio(AUDIO_PATHS.click);
+    const hoverAudio = new Audio();
+    const clickAudio = new Audio();
     const audioContext = typeof window.AudioContext === 'function'
         ? new window.AudioContext()
         : typeof window.webkitAudioContext === 'function'
@@ -49,6 +45,68 @@
     function configureAudio(audio, volume) {
         audio.preload = 'auto';
         audio.volume = volume;
+    }
+
+    function getBackgroundImageUrl(value) {
+        const match = /url\((['"]?)(.*?)\1\)/.exec(value || '');
+        return match?.[2] || null;
+    }
+
+    function detectExtensionBaseUrl() {
+        const currentScriptSource = document.currentScript?.src;
+        if (currentScriptSource) {
+            return new URL('./', currentScriptSource).href;
+        }
+
+        const scriptMatch = Array.from(document.querySelectorAll('script[src]'))
+            .map((script) => script.src)
+            .find((src) => src.includes('Echoes-of-the-City') && src.endsWith('/index.js'));
+
+        if (scriptMatch) {
+            return new URL('./', scriptMatch).href;
+        }
+
+        const stylesheetMatch = Array.from(document.querySelectorAll('link[rel="stylesheet"][href]'))
+            .map((link) => link.href)
+            .find((href) => href.includes('Echoes-of-the-City') && href.endsWith('/style.css'));
+
+        if (stylesheetMatch) {
+            return new URL('./', stylesheetMatch).href;
+        }
+
+        if (elements.button) {
+            const backgroundImage = getComputedStyle(elements.button).backgroundImage;
+            const backgroundUrl = getBackgroundImageUrl(backgroundImage);
+            if (backgroundUrl) {
+                return new URL('../../', backgroundUrl).href;
+            }
+        }
+
+        return new URL('./', window.location.href).href;
+    }
+
+    function resolveExtensionUrl(relativePath) {
+        if (!state.extensionBaseUrl) {
+            state.extensionBaseUrl = detectExtensionBaseUrl();
+        }
+
+        return new URL(relativePath, state.extensionBaseUrl).href;
+    }
+
+    function syncAssetUrls() {
+        state.extensionBaseUrl = detectExtensionBaseUrl();
+
+        const logoUrl = resolveExtensionUrl(ASSET_RELATIVE_PATHS.logo);
+        const hoverUrl = resolveExtensionUrl(ASSET_RELATIVE_PATHS.hover);
+        const clickUrl = resolveExtensionUrl(ASSET_RELATIVE_PATHS.click);
+
+        const logo = elements.button?.querySelector('.echoes-battle-launcher__logo');
+        if (logo && logo.getAttribute('src') !== logoUrl) {
+            logo.setAttribute('src', logoUrl);
+        }
+
+        hoverAudio.src = hoverUrl;
+        clickAudio.src = clickUrl;
     }
 
     async function resumeAudioContext() {
@@ -161,7 +219,14 @@
     }
 
     function getButtonRect() {
-        return elements.button?.getBoundingClientRect() || { width: 0, height: 0 };
+        if (!elements.button) {
+            return { width: 0, height: 0 };
+        }
+
+        return {
+            width: elements.button.offsetWidth,
+            height: elements.button.offsetHeight,
+        };
     }
 
     function updateLayoutPosition() {
@@ -346,16 +411,15 @@
     }
 
     function preloadAssets() {
-        Object.values(ASSET_PATHS).forEach((path) => {
-            const image = new Image();
-            image.src = path;
-        });
+        const logoPath = resolveExtensionUrl(ASSET_RELATIVE_PATHS.logo);
+        const image = new Image();
+        image.src = logoPath;
     }
 
     function preloadAudio() {
         void Promise.all([
-            loadAudioBuffer('hover', AUDIO_PATHS.hover),
-            loadAudioBuffer('click', AUDIO_PATHS.click),
+            loadAudioBuffer('hover', resolveExtensionUrl(ASSET_RELATIVE_PATHS.hover)),
+            loadAudioBuffer('click', resolveExtensionUrl(ASSET_RELATIVE_PATHS.click)),
         ]);
     }
 
@@ -380,7 +444,7 @@
                 <span class="echoes-battle-launcher__glow" aria-hidden="true"></span>
                 <img
                     class="echoes-battle-launcher__logo"
-                    src="${ASSET_PATHS.logo}"
+                    src=""
                     alt=""
                     aria-hidden="true"
                 />
@@ -419,6 +483,7 @@
         elements.backdrop = root.querySelector('.echoes-battle-backdrop');
         elements.closeButton = root.querySelector('.echoes-battle-panel__close');
 
+        syncAssetUrls();
         elements.button.addEventListener('mouseenter', handleLauncherHover);
         elements.button.addEventListener('pointerdown', handleLauncherPointerDown);
         elements.button.addEventListener('pointermove', handleLauncherPointerMove);
@@ -436,9 +501,9 @@
     function initialize() {
         configureAudio(hoverAudio, 0.55);
         configureAudio(clickAudio, 0.7);
+        createBattleInterface();
         preloadAssets();
         preloadAudio();
-        createBattleInterface();
         syncPanelState();
 
         window.EchoesOfTheCity = {
