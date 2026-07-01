@@ -185,17 +185,17 @@
 
 .echoes-battle-panel__character-layout {
     position: absolute;
-    left: 3.5%;
-    right: 2.1%;
-    top: 5.9%;
+    left: 3.2%;
+    right: 1.9%;
+    top: 5.7%;
     bottom: 16.4%;
     display: flex;
     align-items: stretch;
-    gap: 0.9%;
+    gap: 0.15%;
 }
 
 .echoes-battle-panel__roster-menu {
-    flex: 0 0 16.2%;
+    flex: 0 0 16.6%;
     background: url("./assets/characterstab/rostermenu.png") center / contain no-repeat;
 }
 
@@ -207,9 +207,9 @@
 
 .echoes-battle-panel__no-character {
     position: absolute;
-    top: 14.8%;
-    left: 4.7%;
-    width: 14.2%;
+    top: 16.9%;
+    left: 6.2%;
+    width: 13.1%;
     aspect-ratio: 356 / 491;
     background: url("./assets/characterstab/nocharacter.png") center / contain no-repeat;
 }
