@@ -642,7 +642,9 @@
                                 aria-label="Toggle tray button"
                                 aria-pressed="false"
                                 title="Toggle tray button"
-                            ></button>
+                            >
+                                <span class="echoes-battle-panel__tray-icon" aria-hidden="true"></span>
+                            </button>
                         </div>
                     </div>
                 </div>
