@@ -17,6 +17,7 @@
     const state = {
         isOpen: false,
         activeScreen: 'main-menu',
+        debugBattle: null,
         audioEnabled: false,
         audioUnlocked: false,
         audioUnlockPromise: null,
@@ -40,6 +41,7 @@
         mainMenu: null,
         characterSelect: null,
         combatScreen: null,
+        combatContent: null,
         combatTrayButton: null,
         characterTrayButton: null,
     };
@@ -54,6 +56,681 @@
             ? new window.webkitAudioContext()
             : null;
     const audioBuffers = new Map();
+    const DEBUG_FIGHT_TEMPLATE = {
+        hero: {
+            id: 'debug-sinner',
+            name: 'Debug Sinner',
+            level: 34,
+            maxHp: 172,
+            sp: 0,
+            speedRange: [3, 7],
+            defenseLevel: 34,
+            resistances: {
+                slash: 1,
+                pierce: 0.75,
+                blunt: 1.25,
+            },
+            skills: [
+                {
+                    id: 'frontal-assault',
+                    name: 'Frontal Assault',
+                    basePower: 4,
+                    coinPower: 3,
+                    coinCount: 2,
+                    damageType: 'slash',
+                    sinAffinity: 'wrath',
+                    offenseLevel: 2,
+                    description: 'Balanced opener with reliable clash power.',
+                },
+                {
+                    id: 'piercing-line',
+                    name: 'Piercing Line',
+                    basePower: 3,
+                    coinPower: 4,
+                    coinCount: 2,
+                    damageType: 'pierce',
+                    sinAffinity: 'gloom',
+                    offenseLevel: 1,
+                    description: 'Spikier clash roll that punishes weak pierce resistance.',
+                },
+                {
+                    id: 'crushing-verdict',
+                    name: 'Crushing Verdict',
+                    basePower: 6,
+                    coinPower: 2,
+                    coinCount: 3,
+                    damageType: 'blunt',
+                    sinAffinity: 'pride',
+                    offenseLevel: 0,
+                    description: 'Heavy three-coin skill for strong one-sided follow-up.',
+                },
+            ],
+        },
+        enemy: {
+            id: 'training-drone',
+            name: 'Training Drone',
+            level: 32,
+            maxHp: 196,
+            sp: 0,
+            speedRange: [2, 6],
+            defenseLevel: 31,
+            resistances: {
+                slash: 1.5,
+                pierce: 1,
+                blunt: 0.75,
+            },
+            skills: [
+                {
+                    id: 'saw-sweep',
+                    name: 'Saw Sweep',
+                    basePower: 4,
+                    coinPower: 2,
+                    coinCount: 2,
+                    damageType: 'slash',
+                    sinAffinity: 'wrath',
+                    offenseLevel: 1,
+                    description: 'Standard slash pattern used for early clash checks.',
+                },
+                {
+                    id: 'nail-launcher',
+                    name: 'Nail Launcher',
+                    basePower: 3,
+                    coinPower: 3,
+                    coinCount: 2,
+                    damageType: 'pierce',
+                    sinAffinity: 'envy',
+                    offenseLevel: 2,
+                    description: 'Fast pierce burst with higher ceiling.',
+                },
+                {
+                    id: 'impact-ram',
+                    name: 'Impact Ram',
+                    basePower: 5,
+                    coinPower: 2,
+                    coinCount: 3,
+                    damageType: 'blunt',
+                    sinAffinity: 'sloth',
+                    offenseLevel: 0,
+                    description: 'Slow, heavy blunt skill for longer clashes.',
+                },
+            ],
+        },
+    };
+
+    function createBattleUnit(template) {
+        return {
+            ...template,
+            hp: template.maxHp,
+            sp: template.sp,
+            speed: 0,
+            resistances: { ...template.resistances },
+            skills: template.skills.map((skill) => ({ ...skill })),
+        };
+    }
+
+    function createDebugBattleState() {
+        const battle = {
+            turn: 0,
+            phase: 'setup',
+            winner: null,
+            selectedSkillId: null,
+            enemySkillId: null,
+            lastResolution: null,
+            log: [],
+            hero: createBattleUnit(DEBUG_FIGHT_TEMPLATE.hero),
+            enemy: createBattleUnit(DEBUG_FIGHT_TEMPLATE.enemy),
+        };
+
+        startDebugBattleTurn(battle);
+        return battle;
+    }
+
+    function getDebugBattle() {
+        if (!state.debugBattle) {
+            state.debugBattle = createDebugBattleState();
+        }
+
+        return state.debugBattle;
+    }
+
+    function pushBattleLog(battle, message) {
+        battle.log.push(message);
+        if (battle.log.length > 36) {
+            battle.log = battle.log.slice(-36);
+        }
+    }
+
+    function randomInt(min, max) {
+        return Math.floor(Math.random() * ((max - min) + 1)) + min;
+    }
+
+    function getSkillById(unit, skillId) {
+        return unit.skills.find((skill) => skill.id === skillId) || null;
+    }
+
+    function pickEnemySkillId(battle) {
+        const skillIndex = (battle.turn - 1) % battle.enemy.skills.length;
+        return battle.enemy.skills[skillIndex].id;
+    }
+
+    function getCoinHeadChance(unit) {
+        return clamp(50 + unit.sp, 5, 95);
+    }
+
+    function getSkillOffenseLevel(unit, skill) {
+        return Math.max(1, unit.level + (skill.offenseLevel || 0));
+    }
+
+    function getDefenseLevel(unit) {
+        return Math.max(1, unit.defenseLevel || unit.level);
+    }
+
+    function getClashLevelBonus(unit, skill, opponent, opponentSkill) {
+        const levelDifference = getSkillOffenseLevel(unit, skill) - getSkillOffenseLevel(opponent, opponentSkill);
+        return levelDifference > 0 ? Math.floor(levelDifference / 3) : 0;
+    }
+
+    function flipCoins(unit, skill, coinCount) {
+        const flips = [];
+        let power = skill.basePower;
+        const headChance = getCoinHeadChance(unit);
+
+        for (let index = 0; index < coinCount; index += 1) {
+            const isHeads = Math.random() * 100 < headChance;
+            flips.push(isHeads);
+            if (isHeads) {
+                power += skill.coinPower;
+            }
+        }
+
+        return { flips, power };
+    }
+
+    function formatCoinFlips(flips) {
+        return flips.map((isHeads) => (isHeads ? 'H' : 'T')).join(' ');
+    }
+
+    function adjustSanity(unit, amount) {
+        unit.sp = clamp(unit.sp + amount, -45, 45);
+    }
+
+    function getResistanceMultiplier(unit, damageType) {
+        return unit.resistances[damageType] || 1;
+    }
+
+    function getDamageModifier(attacker, skill, defender) {
+        const levelDifference = getSkillOffenseLevel(attacker, skill) - getDefenseLevel(defender);
+        return 1 + (levelDifference / (Math.abs(levelDifference) + 25));
+    }
+
+    function calculateHitDamage(attacker, skill, defender, finalPower) {
+        const resistance = getResistanceMultiplier(defender, skill.damageType);
+        const damageModifier = getDamageModifier(attacker, skill, defender);
+        return Math.max(1, Math.round(finalPower * resistance * damageModifier));
+    }
+
+    function resolveDebugClash(battle, heroSkill, enemySkill) {
+        let heroCoins = heroSkill.coinCount;
+        let enemyCoins = enemySkill.coinCount;
+        let repeatedTieCount = 0;
+        const rounds = [];
+
+        while (heroCoins > 0 && enemyCoins > 0) {
+            const heroRoll = flipCoins(battle.hero, heroSkill, heroCoins);
+            const enemyRoll = flipCoins(battle.enemy, enemySkill, enemyCoins);
+            const heroPower = heroRoll.power + getClashLevelBonus(battle.hero, heroSkill, battle.enemy, enemySkill);
+            const enemyPower = enemyRoll.power + getClashLevelBonus(battle.enemy, enemySkill, battle.hero, heroSkill);
+
+            if (heroPower === enemyPower) {
+                repeatedTieCount += 1;
+                rounds.push({
+                    result: 'tie',
+                    heroCoins,
+                    enemyCoins,
+                    heroPower,
+                    enemyPower,
+                    heroFlips: heroRoll.flips,
+                    enemyFlips: enemyRoll.flips,
+                });
+
+                if (repeatedTieCount >= 6) {
+                    if (battle.hero.speed >= battle.enemy.speed) {
+                        enemyCoins -= 1;
+                        rounds.push({
+                            result: 'hero-speed-break',
+                            heroCoins,
+                            enemyCoins,
+                            heroPower,
+                            enemyPower,
+                            heroFlips: heroRoll.flips,
+                            enemyFlips: enemyRoll.flips,
+                        });
+                    } else {
+                        heroCoins -= 1;
+                        rounds.push({
+                            result: 'enemy-speed-break',
+                            heroCoins,
+                            enemyCoins,
+                            heroPower,
+                            enemyPower,
+                            heroFlips: heroRoll.flips,
+                            enemyFlips: enemyRoll.flips,
+                        });
+                    }
+                    repeatedTieCount = 0;
+                }
+
+                continue;
+            }
+
+            repeatedTieCount = 0;
+
+            if (heroPower > enemyPower) {
+                enemyCoins -= 1;
+                rounds.push({
+                    result: 'hero-win',
+                    heroCoins,
+                    enemyCoins,
+                    heroPower,
+                    enemyPower,
+                    heroFlips: heroRoll.flips,
+                    enemyFlips: enemyRoll.flips,
+                });
+            } else {
+                heroCoins -= 1;
+                rounds.push({
+                    result: 'enemy-win',
+                    heroCoins,
+                    enemyCoins,
+                    heroPower,
+                    enemyPower,
+                    heroFlips: heroRoll.flips,
+                    enemyFlips: enemyRoll.flips,
+                });
+            }
+        }
+
+        return {
+            rounds,
+            winner: heroCoins > 0 ? 'hero' : 'enemy',
+            heroRemainingCoins: heroCoins,
+            enemyRemainingCoins: enemyCoins,
+        };
+    }
+
+    function resolveOneSidedAttack(attacker, skill, defender, remainingCoins) {
+        const hits = [];
+
+        for (let coinIndex = 0; coinIndex < remainingCoins; coinIndex += 1) {
+            const flip = flipCoins(attacker, skill, 1);
+            const finalPower = flip.power;
+            const damage = calculateHitDamage(attacker, skill, defender, finalPower);
+
+            defender.hp = clamp(defender.hp - damage, 0, defender.maxHp);
+            hits.push({
+                finalPower,
+                damage,
+                isHeads: flip.flips[0],
+                targetHp: defender.hp,
+            });
+
+            if (defender.hp <= 0) {
+                break;
+            }
+        }
+
+        return hits;
+    }
+
+    function startDebugBattleTurn(battle) {
+        if (battle.winner) {
+            return;
+        }
+
+        battle.turn += 1;
+        battle.phase = 'select';
+        battle.selectedSkillId = null;
+        battle.enemySkillId = pickEnemySkillId(battle);
+        battle.lastResolution = null;
+        battle.hero.speed = randomInt(...battle.hero.speedRange);
+        battle.enemy.speed = randomInt(...battle.enemy.speedRange);
+
+        const enemySkill = getSkillById(battle.enemy, battle.enemySkillId);
+        pushBattleLog(
+            battle,
+            `Turn ${battle.turn} starts. ${battle.hero.name} rolls ${battle.hero.speed} Speed, ${battle.enemy.name} rolls ${battle.enemy.speed}.`,
+        );
+        pushBattleLog(battle, `${battle.enemy.name} prepares ${enemySkill.name}.`);
+    }
+
+    function selectDebugSkill(skillId) {
+        const battle = getDebugBattle();
+        if (battle.phase !== 'select' || battle.winner) {
+            return;
+        }
+
+        battle.selectedSkillId = skillId;
+        renderCombatScreen();
+    }
+
+    function resolveDebugTurn() {
+        const battle = getDebugBattle();
+        if (battle.phase !== 'select' || !battle.selectedSkillId || battle.winner) {
+            return;
+        }
+
+        const heroSkill = getSkillById(battle.hero, battle.selectedSkillId);
+        const enemySkill = getSkillById(battle.enemy, battle.enemySkillId);
+        if (!heroSkill || !enemySkill) {
+            return;
+        }
+
+        pushBattleLog(
+            battle,
+            `${battle.hero.name} uses ${heroSkill.name}. ${battle.enemy.name} answers with ${enemySkill.name}.`,
+        );
+
+        const clash = resolveDebugClash(battle, heroSkill, enemySkill);
+        clash.rounds.forEach((round, index) => {
+            if (round.result === 'tie') {
+                pushBattleLog(
+                    battle,
+                    `Clash ${index + 1}: tie at ${round.heroPower} (${formatCoinFlips(round.heroFlips)} vs ${formatCoinFlips(round.enemyFlips)}).`,
+                );
+                return;
+            }
+
+            if (round.result === 'hero-speed-break' || round.result === 'enemy-speed-break') {
+                const speedWinner = round.result === 'hero-speed-break' ? battle.hero.name : battle.enemy.name;
+                pushBattleLog(battle, `Repeated tie: ${speedWinner} breaks it with the higher Speed value.`);
+                return;
+            }
+
+            const roundWinner = round.result === 'hero-win' ? battle.hero.name : battle.enemy.name;
+            const roundLoser = round.result === 'hero-win' ? battle.enemy.name : battle.hero.name;
+            const winnerPower = round.result === 'hero-win' ? round.heroPower : round.enemyPower;
+            const loserPower = round.result === 'hero-win' ? round.enemyPower : round.heroPower;
+            pushBattleLog(
+                battle,
+                `Clash ${index + 1}: ${roundWinner} wins ${winnerPower} to ${loserPower}, breaking a Coin from ${roundLoser}.`,
+            );
+        });
+
+        const clashWinnerUnit = clash.winner === 'hero' ? battle.hero : battle.enemy;
+        const clashLoserUnit = clash.winner === 'hero' ? battle.enemy : battle.hero;
+        const attackSkill = clash.winner === 'hero' ? heroSkill : enemySkill;
+        const remainingCoins = clash.winner === 'hero' ? clash.heroRemainingCoins : clash.enemyRemainingCoins;
+
+        adjustSanity(clashWinnerUnit, 5);
+        adjustSanity(clashLoserUnit, -5);
+        pushBattleLog(
+            battle,
+            `${clashWinnerUnit.name} wins the clash, gains 5 SP, and attacks one-sided with ${remainingCoins} remaining Coin${remainingCoins === 1 ? '' : 's'}.`,
+        );
+
+        const hits = resolveOneSidedAttack(clashWinnerUnit, attackSkill, clashLoserUnit, remainingCoins);
+        let totalDamage = 0;
+
+        hits.forEach((hit, index) => {
+            totalDamage += hit.damage;
+            pushBattleLog(
+                battle,
+                `Hit ${index + 1}: ${hit.isHeads ? 'Heads' : 'Tails'} for Power ${hit.finalPower}, dealing ${hit.damage} ${attackSkill.damageType} damage.`,
+            );
+        });
+
+        if (clashLoserUnit.hp <= 0) {
+            battle.winner = clash.winner;
+            battle.phase = 'ended';
+            pushBattleLog(battle, `${clashLoserUnit.name} falls. ${clashWinnerUnit.name} wins the debug fight.`);
+        } else {
+            battle.phase = 'resolved';
+        }
+
+        battle.lastResolution = {
+            clashWinner: clash.winner,
+            actingUnitName: clashWinnerUnit.name,
+            targetUnitName: clashLoserUnit.name,
+            actingSkillName: attackSkill.name,
+            totalDamage,
+            remainingCoins,
+        };
+
+        renderCombatScreen();
+    }
+
+    function advanceDebugBattleTurn() {
+        const battle = getDebugBattle();
+        if (battle.phase !== 'resolved' || battle.winner) {
+            return;
+        }
+
+        startDebugBattleTurn(battle);
+        renderCombatScreen();
+    }
+
+    function resetDebugBattle() {
+        state.debugBattle = createDebugBattleState();
+        renderCombatScreen();
+    }
+
+    function formatResistanceValue(value) {
+        return `x${value.toFixed(2).replace(/\.00$/, '')}`;
+    }
+
+    function getPhaseLabel(battle) {
+        if (battle.winner === 'hero') {
+            return 'Victory';
+        }
+        if (battle.winner === 'enemy') {
+            return 'Defeat';
+        }
+        if (battle.phase === 'resolved') {
+            return 'Turn Resolved';
+        }
+        return 'Skill Select';
+    }
+
+    function getWinnerLabel(battle) {
+        if (battle.winner === 'hero') {
+            return `${battle.hero.name} wins`;
+        }
+        if (battle.winner === 'enemy') {
+            return `${battle.enemy.name} wins`;
+        }
+        return 'Focused Debug Fight';
+    }
+
+    function getSkillPowerLabel(skill) {
+        return `${skill.basePower} + ${skill.coinPower} x ${skill.coinCount}`;
+    }
+
+    function renderBattleUnitCard(unit, side) {
+        const hpPercent = (unit.hp / unit.maxHp) * 100;
+        const speedRangeLabel = `${unit.speedRange[0]}-${unit.speedRange[1]}`;
+        const resistanceMarkup = ['slash', 'pierce', 'blunt']
+            .map((type) => `
+                <div class="echoes-battle-panel__combat-resistance">
+                    <span>${type}</span>
+                    <strong>${formatResistanceValue(unit.resistances[type])}</strong>
+                </div>
+            `)
+            .join('');
+
+        return `
+            <section class="echoes-battle-panel__combat-unit echoes-battle-panel__combat-unit--${side}">
+                <div class="echoes-battle-panel__combat-unit-header">
+                    <span class="echoes-battle-panel__combat-unit-label">${side === 'hero' ? 'Hero' : 'Enemy'}</span>
+                    <strong>${unit.name}</strong>
+                </div>
+                <div class="echoes-battle-panel__combat-meter">
+                    <div class="echoes-battle-panel__combat-meter-row">
+                        <span>HP ${unit.hp} / ${unit.maxHp}</span>
+                        <span>SP ${unit.sp}</span>
+                    </div>
+                    <div class="echoes-battle-panel__combat-meter-bar">
+                        <span style="width: ${hpPercent}%"></span>
+                    </div>
+                </div>
+                <div class="echoes-battle-panel__combat-stats">
+                    <div><span>Speed</span><strong>${unit.speed}</strong></div>
+                    <div><span>Range</span><strong>${speedRangeLabel}</strong></div>
+                    <div><span>Level</span><strong>${unit.level}</strong></div>
+                    <div><span>Def</span><strong>${getDefenseLevel(unit)}</strong></div>
+                </div>
+                <div class="echoes-battle-panel__combat-resistances">
+                    ${resistanceMarkup}
+                </div>
+            </section>
+        `;
+    }
+
+    function renderCombatScreen() {
+        if (!elements.combatContent) {
+            return;
+        }
+
+        const battle = getDebugBattle();
+        const enemySkill = getSkillById(battle.enemy, battle.enemySkillId);
+        const selectedSkill = getSkillById(battle.hero, battle.selectedSkillId);
+        const logMarkup = battle.log
+            .slice(-10)
+            .reverse()
+            .map((entry) => `<li>${entry}</li>`)
+            .join('');
+        const heroSkillMarkup = battle.hero.skills.map((skill) => {
+            const isSelected = battle.selectedSkillId === skill.id;
+            const isDisabled = battle.phase !== 'select' || Boolean(battle.winner);
+
+            return `
+                <button
+                    class="echoes-battle-panel__combat-skill${isSelected ? ' is-selected' : ''}"
+                    type="button"
+                    data-action="select-skill"
+                    data-skill-id="${skill.id}"
+                    ${isDisabled ? 'disabled' : ''}
+                >
+                    <div class="echoes-battle-panel__combat-skill-header">
+                        <strong>${skill.name}</strong>
+                        <span>${skill.damageType}</span>
+                    </div>
+                    <div class="echoes-battle-panel__combat-skill-power">${getSkillPowerLabel(skill)}</div>
+                    <div class="echoes-battle-panel__combat-skill-meta">
+                        <span>${skill.sinAffinity}</span>
+                        <span>Off ${getSkillOffenseLevel(battle.hero, skill)}</span>
+                    </div>
+                    <p>${skill.description}</p>
+                </button>
+            `;
+        }).join('');
+
+        elements.combatContent.innerHTML = `
+            <div class="echoes-battle-panel__combat-debug">
+                <div class="echoes-battle-panel__combat-toolbar">
+                    <div class="echoes-battle-panel__combat-pills">
+                        <span class="echoes-battle-panel__combat-pill">Turn ${battle.turn}</span>
+                        <span class="echoes-battle-panel__combat-pill">${getPhaseLabel(battle)}</span>
+                        <span class="echoes-battle-panel__combat-pill">Wiki-inspired prototype</span>
+                    </div>
+                    <div class="echoes-battle-panel__combat-controls">
+                        <button
+                            class="echoes-battle-panel__combat-button"
+                            type="button"
+                            data-action="resolve-turn"
+                            ${battle.phase !== 'select' || !battle.selectedSkillId || battle.winner ? 'disabled' : ''}
+                        >
+                            Resolve Turn
+                        </button>
+                        <button
+                            class="echoes-battle-panel__combat-button"
+                            type="button"
+                            data-action="next-turn"
+                            ${battle.phase !== 'resolved' || battle.winner ? 'disabled' : ''}
+                        >
+                            Next Turn
+                        </button>
+                        <button
+                            class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost"
+                            type="button"
+                            data-action="reset-fight"
+                        >
+                            Reset Fight
+                        </button>
+                    </div>
+                </div>
+
+                <div class="echoes-battle-panel__combat-arena">
+                    ${renderBattleUnitCard(battle.hero, 'hero')}
+                    <section class="echoes-battle-panel__combat-center">
+                        <div class="echoes-battle-panel__combat-intent">
+                            <span>Enemy Intent</span>
+                            <strong>${enemySkill?.name || 'Unknown'}</strong>
+                            <small>${enemySkill ? getSkillPowerLabel(enemySkill) : ''}</small>
+                        </div>
+                        <div class="echoes-battle-panel__combat-summary">
+                            <span>${getWinnerLabel(battle)}</span>
+                            <strong>${selectedSkill ? selectedSkill.name : 'Choose a hero skill to begin.'}</strong>
+                            <small>
+                                ${battle.lastResolution
+                                    ? `${battle.lastResolution.actingUnitName} used ${battle.lastResolution.actingSkillName} for ${battle.lastResolution.totalDamage} total damage.`
+                                    : 'Flow: Speed roll -> Clash until one side loses all Coins -> winner attacks with remaining Coins.'}
+                            </small>
+                        </div>
+                    </section>
+                    ${renderBattleUnitCard(battle.enemy, 'enemy')}
+                </div>
+
+                <div class="echoes-battle-panel__combat-lower">
+                    <section class="echoes-battle-panel__combat-skills">
+                        <div class="echoes-battle-panel__combat-section-heading">
+                            <span>Hero Skills</span>
+                            <strong>${selectedSkill ? `Selected: ${selectedSkill.name}` : 'Select one skill'}</strong>
+                        </div>
+                        <div class="echoes-battle-panel__combat-skill-grid">
+                            ${heroSkillMarkup}
+                        </div>
+                    </section>
+
+                    <section class="echoes-battle-panel__combat-log">
+                        <div class="echoes-battle-panel__combat-section-heading">
+                            <span>Battle Log</span>
+                            <strong>Latest events</strong>
+                        </div>
+                        <ol>
+                            ${logMarkup}
+                        </ol>
+                    </section>
+                </div>
+            </div>
+        `;
+    }
+
+    function handleCombatContentClick(event) {
+        const actionTarget = event.target.closest('[data-action]');
+        if (!actionTarget) {
+            return;
+        }
+
+        const { action, skillId } = actionTarget.dataset;
+        if (action === 'select-skill' && skillId) {
+            selectDebugSkill(skillId);
+            return;
+        }
+
+        if (action === 'resolve-turn') {
+            resolveDebugTurn();
+            return;
+        }
+
+        if (action === 'next-turn') {
+            advanceDebugBattleTurn();
+            return;
+        }
+
+        if (action === 'reset-fight') {
+            resetDebugBattle();
+        }
+    }
 
     function configureAudio(audio, volume) {
         audio.preload = 'auto';
@@ -592,6 +1269,7 @@
 
         state.activeScreen = 'combat';
         syncPanelState();
+        renderCombatScreen();
     }
 
     function handleTrayButtonHover(event) {
@@ -729,6 +1407,7 @@
         elements.mainMenu = root.querySelector('.echoes-battle-panel__main-menu');
         elements.characterSelect = root.querySelector('.echoes-battle-panel__character-select');
         elements.combatScreen = root.querySelector('.echoes-battle-panel__combat-screen');
+        elements.combatContent = root.querySelector('.echoes-battle-panel__combat-content');
         elements.combatTrayButton = root.querySelector('.echoes-battle-panel__tray-button--combat');
         elements.characterTrayButton = root.querySelector('.echoes-battle-panel__tray-button--characters');
 
@@ -744,6 +1423,7 @@
         elements.fullscreenButton.addEventListener('click', toggleScreenFullscreen);
         elements.combatTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.combatTrayButton.addEventListener('click', handleCombatTrayButtonClick);
+        elements.combatContent.addEventListener('click', handleCombatContentClick);
         elements.characterTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.characterTrayButton.addEventListener('click', handleCharacterTrayButtonClick);
         document.addEventListener('keydown', handleKeydown);
@@ -763,6 +1443,8 @@
         document.addEventListener('touchstart', handleAudioUnlockGesture, true);
         document.addEventListener('click', handleAudioUnlockGesture, true);
         createBattleInterface();
+        state.debugBattle = createDebugBattleState();
+        renderCombatScreen();
         preloadAudio();
         syncPanelState();
 
@@ -770,6 +1452,7 @@
             openBattlePanel,
             closeBattlePanel,
             toggleBattlePanel,
+            resetDebugBattle,
         };
     }
 
