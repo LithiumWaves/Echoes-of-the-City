@@ -61,24 +61,42 @@
 
     async function ensureBattleModuleLoaded() {
         if (window.EchoesOfTheCityBattle?.createDebugBattleController) {
+            // #region debug-point A:battle-module-already-present
+            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"A",location:"index.js:ensureBattleModuleLoaded",msg:"[DEBUG] Battle module already present on window",data:{hasFactory:true},ts:Date.now()})}).catch(()=>{});
+            // #endregion
             return;
         }
 
         if (!state.battleModulePromise) {
             state.battleModulePromise = (async () => {
                 const scriptUrl = resolveExtensionUrl(BATTLE_SCRIPT_RELATIVE_PATH);
+                // #region debug-point A:battle-module-fetch-start
+                fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"A",location:"index.js:ensureBattleModuleLoaded",msg:"[DEBUG] Fetching extracted battle module",data:{scriptUrl},ts:Date.now()})}).catch(()=>{});
+                // #endregion
                 const response = await fetch(scriptUrl);
                 if (!response.ok) {
+                    // #region debug-point A:battle-module-fetch-failed
+                    fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"A",location:"index.js:ensureBattleModuleLoaded",msg:"[DEBUG] Battle module fetch failed",data:{status:response.status,scriptUrl},ts:Date.now()})}).catch(()=>{});
+                    // #endregion
                     throw new Error(`Failed to fetch battle module: ${response.status}`);
                 }
 
                 const scriptSource = await response.text();
+                // #region debug-point B:battle-module-eval-start
+                fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"B",location:"index.js:ensureBattleModuleLoaded",msg:"[DEBUG] Evaluating extracted battle module",data:{sourceLength:scriptSource.length},ts:Date.now()})}).catch(()=>{});
+                // #endregion
                 window.eval(`${scriptSource}\n//# sourceURL=${scriptUrl}`);
 
+                // #region debug-point B:battle-module-eval-finished
+                fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"B",location:"index.js:ensureBattleModuleLoaded",msg:"[DEBUG] Extracted battle module evaluated",data:{hasFactory:Boolean(window.EchoesOfTheCityBattle?.createDebugBattleController)},ts:Date.now()})}).catch(()=>{});
+                // #endregion
                 if (!window.EchoesOfTheCityBattle?.createDebugBattleController) {
                     throw new Error('Battle module did not expose a controller factory.');
                 }
             })().catch((error) => {
+                // #region debug-point B:battle-module-load-catch
+                fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"B",location:"index.js:ensureBattleModuleLoaded",msg:"[DEBUG] Battle module load rejected",data:{name:error?.name||null,message:error?.message||String(error)},ts:Date.now()})}).catch(()=>{});
+                // #endregion
                 state.battleModulePromise = null;
                 throw error;
             });
@@ -94,12 +112,18 @@
 
         await ensureBattleModuleLoaded();
 
+        // #region debug-point C:controller-create-start
+        fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"C",location:"index.js:initializeCombatController",msg:"[DEBUG] Creating debug battle controller",data:{hasMountElement:Boolean(elements.combatContent)},ts:Date.now()})}).catch(()=>{});
+        // #endregion
         state.combatController = window.EchoesOfTheCityBattle.createDebugBattleController({
             mountElement: elements.combatContent,
             clamp,
             resolveAssetUrl: resolveExtensionUrl,
         });
 
+        // #region debug-point C:controller-create-finished
+        fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"C",location:"index.js:initializeCombatController",msg:"[DEBUG] Debug battle controller created",data:{hasController:Boolean(state.combatController)},ts:Date.now()})}).catch(()=>{});
+        // #endregion
         state.combatController.render();
     }
 
@@ -845,6 +869,9 @@
         try {
             await initializeCombatController();
         } catch (error) {
+            // #region debug-point E:combat-init-catch
+            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"E",location:"index.js:initialize",msg:"[DEBUG] Combat controller initialization failed",data:{name:error?.name||null,message:error?.message||String(error),stack:error?.stack||null},ts:Date.now()})}).catch(()=>{});
+            // #endregion
             console.debug(`${EXTENSION_ID}: combat module initialization skipped.`, error);
             renderCombatLoadError();
         }

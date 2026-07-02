@@ -124,6 +124,9 @@
 
     function createDebugBattleController(options) {
         const { mountElement, clamp, resolveAssetUrl } = options;
+        // #region debug-point C:controller-factory-entry
+        fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"C",location:"battle/debugBattle.js:createDebugBattleController",msg:"[DEBUG] Entered debug battle controller factory",data:{hasMountElement:Boolean(mountElement)},ts:Date.now()})}).catch(()=>{});
+        // #endregion
         let battle = createDebugBattleState();
 
         function createBattleUnit(template) {
@@ -155,6 +158,9 @@
                 enemy: createBattleUnit(DEBUG_FIGHT_TEMPLATE.enemy),
             };
 
+            // #region debug-point D:create-debug-battle-state
+            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"D",location:"battle/debugBattle.js:createDebugBattleState",msg:"[DEBUG] Created initial battle object before first turn start",data:{turn:nextBattle.turn,hero:nextBattle.hero.name,enemy:nextBattle.enemy.name},ts:Date.now()})}).catch(()=>{});
+            // #endregion
             startDebugBattleTurn(nextBattle);
             return nextBattle;
         }
@@ -175,6 +181,9 @@
         }
 
         function pickEnemySkillId() {
+            // #region debug-point D:pick-enemy-skill-id-entry
+            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"D",location:"battle/debugBattle.js:pickEnemySkillId",msg:"[DEBUG] Entered pickEnemySkillId",data:{note:"About to read controller battle state"},ts:Date.now()})}).catch(()=>{});
+            // #endregion
             const skillIndex = (battle.turn - 1) % battle.enemy.skills.length;
             return battle.enemy.skills[skillIndex].id;
         }
@@ -353,6 +362,9 @@
                 return;
             }
 
+            // #region debug-point D:start-turn-entry
+            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"D",location:"battle/debugBattle.js:startDebugBattleTurn",msg:"[DEBUG] Starting initial debug battle turn",data:{turn:currentBattle.turn,heroSpeedRange:currentBattle.hero.speedRange,enemySpeedRange:currentBattle.enemy.speedRange},ts:Date.now()})}).catch(()=>{});
+            // #endregion
             currentBattle.turn += 1;
             currentBattle.phase = 'select';
             currentBattle.selectedSkillId = null;
