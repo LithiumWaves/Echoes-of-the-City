@@ -269,7 +269,7 @@
 }
 
 .echoes-battle-panel__combat-arena {
-    grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.78fr) minmax(0, 1fr);
+    grid-template-columns: minmax(13rem, 0.78fr) minmax(20rem, 1.5fr) minmax(13rem, 0.78fr);
     align-items: stretch;
 }
 
@@ -289,13 +289,13 @@
 .echoes-battle-panel__combat-unit,
 .echoes-battle-panel__combat-center {
     padding: 0.9rem 1rem;
-    min-height: 11.5rem;
+    min-height: 16rem;
 }
 
 .echoes-battle-panel__combat-unit {
     display: grid;
-    grid-template-rows: auto auto auto 1fr;
-    gap: 0.8rem;
+    grid-template-rows: auto minmax(6rem, 8.5rem) auto auto 1fr;
+    gap: 0.65rem;
 }
 
 .echoes-battle-panel__combat-unit-header,
@@ -327,6 +327,24 @@
 .echoes-battle-panel__combat-meter {
     display: grid;
     gap: 0.35rem;
+}
+
+.echoes-battle-panel__combat-unit-sprite {
+    position: relative;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 0.8rem;
+    background:
+        radial-gradient(circle at center, rgba(255, 147, 64, 0.16), transparent 54%),
+        rgba(255, 255, 255, 0.03);
+}
+
+.echoes-battle-panel__combat-unit-sprite img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.28));
 }
 
 .echoes-battle-panel__combat-meter-row,
@@ -395,24 +413,217 @@
 
 .echoes-battle-panel__combat-center {
     display: grid;
-    gap: 0.75rem;
-    align-content: center;
+    gap: 0.65rem;
+    align-content: stretch;
 }
 
-.echoes-battle-panel__combat-intent,
-.echoes-battle-panel__combat-summary {
+.echoes-battle-panel__combat-stage {
     display: grid;
-    gap: 0.35rem;
-    padding: 0.8rem 0.9rem;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    height: 100%;
+}
+
+.echoes-battle-panel__combat-stage-head {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.echoes-battle-panel__combat-stage-skill,
+.echoes-battle-panel__combat-stage-burst,
+.echoes-battle-panel__combat-round,
+.echoes-battle-panel__combat-hit,
+.echoes-battle-panel__combat-hits-empty {
+    padding: 0.7rem 0.8rem;
     border-radius: 0.75rem;
     background: rgba(255, 255, 255, 0.04);
 }
 
-.echoes-battle-panel__combat-intent small,
-.echoes-battle-panel__combat-summary small {
+.echoes-battle-panel__combat-stage-skill {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.echoes-battle-panel__combat-stage-skill--enemy {
+    text-align: right;
+}
+
+.echoes-battle-panel__combat-stage-skill span,
+.echoes-battle-panel__combat-stage-burst span,
+.echoes-battle-panel__combat-round-index,
+.echoes-battle-panel__combat-hit span {
+    color: rgba(255, 207, 161, 0.72);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.echoes-battle-panel__combat-stage-skill strong,
+.echoes-battle-panel__combat-stage-burst strong {
+    font-size: 0.9rem;
+    color: #fff0de;
+    line-height: 1.3;
+}
+
+.echoes-battle-panel__combat-stage-skill small,
+.echoes-battle-panel__combat-stage-burst small {
     color: #e6bc93;
     font-size: 0.76rem;
     line-height: 1.4;
+}
+
+.echoes-battle-panel__combat-stage-actors {
+    position: relative;
+    min-height: 9rem;
+    border-radius: 0.9rem;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at center, rgba(255, 153, 70, 0.18), transparent 30%),
+        linear-gradient(180deg, rgba(42, 21, 12, 0.58), rgba(11, 8, 8, 0.44));
+}
+
+.echoes-battle-panel__combat-actor {
+    position: absolute;
+    bottom: 0;
+    width: 37%;
+    height: 100%;
+    display: grid;
+    place-items: end center;
+}
+
+.echoes-battle-panel__combat-actor img {
+    max-width: 100%;
+    max-height: 92%;
+    object-fit: contain;
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.32));
+}
+
+.echoes-battle-panel__combat-actor--hero {
+    left: 4%;
+}
+
+.echoes-battle-panel__combat-actor--enemy {
+    right: 4%;
+}
+
+.echoes-battle-panel__combat-stage.is-resolving .echoes-battle-panel__combat-actor--hero.is-clashing {
+    animation: echoes-clash-hero 680ms cubic-bezier(0.2, 0.75, 0.22, 1) both;
+}
+
+.echoes-battle-panel__combat-stage.is-resolving .echoes-battle-panel__combat-actor--enemy.is-clashing {
+    animation: echoes-clash-enemy 680ms cubic-bezier(0.2, 0.75, 0.22, 1) both;
+}
+
+.echoes-battle-panel__combat-stage-burst {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 10rem;
+    text-align: center;
+    backdrop-filter: blur(3px);
+    border: 1px solid rgba(255, 188, 132, 0.15);
+}
+
+.echoes-battle-panel__combat-rounds {
+    display: grid;
+    gap: 0.5rem;
+    max-height: 13.2rem;
+    overflow: auto;
+    padding-right: 0.2rem;
+}
+
+.echoes-battle-panel__combat-round {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.55rem;
+}
+
+.echoes-battle-panel__combat-round--speed-break,
+.echoes-battle-panel__combat-round--empty {
+    grid-template-columns: auto minmax(0, 1fr);
+}
+
+.echoes-battle-panel__combat-round-summary,
+.echoes-battle-panel__combat-round-versus {
+    color: #f2d1ae;
+    font-size: 0.74rem;
+    text-align: center;
+}
+
+.echoes-battle-panel__combat-round-side {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.echoes-battle-panel__combat-round-side--enemy {
+    justify-content: flex-end;
+}
+
+.echoes-battle-panel__combat-round-power {
+    min-width: 2rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff0de;
+    text-align: center;
+}
+
+.echoes-battle-panel__combat-round-coins {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.echoes-battle-panel__combat-coin {
+    min-width: 3.2rem;
+    padding: 0.3rem 0.42rem;
+    border-radius: 999px;
+    display: grid;
+    justify-items: center;
+    gap: 0.12rem;
+    border: 1px solid rgba(255, 188, 132, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.echoes-battle-panel__combat-coin span,
+.echoes-battle-panel__combat-coin strong {
+    font-size: 0.62rem;
+    line-height: 1.1;
+}
+
+.echoes-battle-panel__combat-coin strong {
+    color: #fff0de;
+}
+
+.echoes-battle-panel__combat-coin.is-heads {
+    background: rgba(182, 101, 42, 0.28);
+    border-color: rgba(255, 188, 132, 0.3);
+}
+
+.echoes-battle-panel__combat-coin.is-tails {
+    opacity: 0.72;
+}
+
+.echoes-battle-panel__combat-hits {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: 0.45rem;
+}
+
+.echoes-battle-panel__combat-hit {
+    display: grid;
+    gap: 0.15rem;
+}
+
+.echoes-battle-panel__combat-hit strong,
+.echoes-battle-panel__combat-hits-empty {
+    color: #fff0de;
+    font-size: 0.82rem;
 }
 
 .echoes-battle-panel__combat-lower {
@@ -434,6 +645,8 @@
 }
 
 .echoes-battle-panel__combat-skill {
+    position: relative;
+    overflow: hidden;
     border: 1px solid rgba(255, 190, 135, 0.18);
     border-radius: 0.85rem;
     padding: 0.8rem 0.85rem;
@@ -442,6 +655,22 @@
     text-align: left;
     cursor: pointer;
     transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.echoes-battle-panel__combat-skill-border {
+    position: absolute;
+    inset: 0;
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    opacity: 0.42;
+    pointer-events: none;
+    mix-blend-mode: screen;
+}
+
+.echoes-battle-panel__combat-skill > *:not(.echoes-battle-panel__combat-skill-border) {
+    position: relative;
+    z-index: 1;
 }
 
 .echoes-battle-panel__combat-skill:hover:not(:disabled) {
@@ -501,6 +730,30 @@
 
 .echoes-battle-panel__combat-log li::marker {
     color: rgba(255, 195, 140, 0.68);
+}
+
+@keyframes echoes-clash-hero {
+    0% {
+        transform: translateX(0) scale(1);
+    }
+    55% {
+        transform: translateX(88%) scale(1.05);
+    }
+    100% {
+        transform: translateX(44%) scale(1.02);
+    }
+}
+
+@keyframes echoes-clash-enemy {
+    0% {
+        transform: translateX(0) scale(1);
+    }
+    55% {
+        transform: translateX(-88%) scale(1.05);
+    }
+    100% {
+        transform: translateX(-44%) scale(1.02);
+    }
 }
 
 .echoes-battle-panel__character-layout {

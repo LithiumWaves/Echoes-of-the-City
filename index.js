@@ -58,100 +58,122 @@
     const audioBuffers = new Map();
     const DEBUG_FIGHT_TEMPLATE = {
         hero: {
-            id: 'debug-sinner',
-            name: 'Debug Sinner',
-            level: 34,
-            maxHp: 172,
+            id: 'vergilius',
+            name: 'Vergilius',
+            level: 50,
+            maxHp: 392,
             sp: 0,
-            speedRange: [3, 7],
-            defenseLevel: 34,
+            speedRange: [4, 8],
+            defenseLevel: 50,
             resistances: {
                 slash: 1,
-                pierce: 0.75,
-                blunt: 1.25,
+                pierce: 1,
+                blunt: 1,
+            },
+            sprites: {
+                idle: 'assets/debugsprites/Vergilius_Idle_Sprite.png',
+                moving: 'assets/debugsprites/Vergilius_Moving_Sprite.png',
+                hurt: 'assets/debugsprites/Vergilius_Hurt_Sprite.png',
+                guard: 'assets/debugsprites/Vergilius_Guard_Sprite.png',
+                evade: 'assets/debugsprites/Vergilius_Evade_Sprite.png',
+                skills: {
+                    'heated-puncture': 'assets/debugsprites/Vergilius_Skill_1.gif',
+                    'scorching-incision': 'assets/debugsprites/Vergilius_Skill_2.gif',
+                    'following-the-flow': 'assets/debugsprites/Vergilius_Skill_3.gif',
+                },
             },
             skills: [
                 {
-                    id: 'frontal-assault',
-                    name: 'Frontal Assault',
-                    basePower: 4,
-                    coinPower: 3,
-                    coinCount: 2,
-                    damageType: 'slash',
-                    sinAffinity: 'wrath',
-                    offenseLevel: 2,
-                    description: 'Balanced opener with reliable clash power.',
-                },
-                {
-                    id: 'piercing-line',
-                    name: 'Piercing Line',
-                    basePower: 3,
-                    coinPower: 4,
-                    coinCount: 2,
-                    damageType: 'pierce',
-                    sinAffinity: 'gloom',
-                    offenseLevel: 1,
-                    description: 'Spikier clash roll that punishes weak pierce resistance.',
-                },
-                {
-                    id: 'crushing-verdict',
-                    name: 'Crushing Verdict',
-                    basePower: 6,
+                    id: 'heated-puncture',
+                    name: 'Heated Puncture',
+                    basePower: 14,
                     coinPower: 2,
                     coinCount: 3,
-                    damageType: 'blunt',
-                    sinAffinity: 'pride',
+                    damageType: 'slash',
                     offenseLevel: 0,
-                    description: 'Heavy three-coin skill for strong one-sided follow-up.',
+                    borderPath: 'assets/skillborders/Wrath1.png',
+                    description: 'Skill 1. A three-coin slash opener for stable clashes.',
+                },
+                {
+                    id: 'scorching-incision',
+                    name: 'Scorching Incision',
+                    basePower: 15,
+                    coinPower: 2,
+                    coinCount: 3,
+                    damageType: 'slash',
+                    offenseLevel: 1,
+                    borderPath: 'assets/skillborders/Wrath2.png',
+                    description: 'Skill 2. Slightly stronger clash line with the same coin spread.',
+                },
+                {
+                    id: 'following-the-flow',
+                    name: 'Following the Flow',
+                    basePower: 18,
+                    coinPower: 2,
+                    coinCount: 3,
+                    damageType: 'slash',
+                    offenseLevel: 2,
+                    borderPath: 'assets/skillborders/Wrath3.png',
+                    description: 'Skill 3. Highest base clash option for the current debug duel.',
                 },
             ],
         },
         enemy: {
-            id: 'training-drone',
-            name: 'Training Drone',
-            level: 32,
-            maxHp: 196,
+            id: 'ring-nursefather-hong-lu',
+            name: 'The Ring Nursefather Hong Lu',
+            level: 50,
+            maxHp: 428,
             sp: 0,
-            speedRange: [2, 6],
-            defenseLevel: 31,
+            speedRange: [3, 7],
+            defenseLevel: 50,
             resistances: {
-                slash: 1.5,
+                slash: 1,
                 pierce: 1,
-                blunt: 0.75,
+                blunt: 1,
+            },
+            sprites: {
+                idle: 'assets/debugsprites/The_House_of_Spiders_The_Ring_Nursefather_Hong_Lu_Idle_Animation.gif',
+                moving: 'assets/debugsprites/The_House_of_Spiders_The_Ring_Nursefather_Hong_Lu_Moving_Sprite.png',
+                hurt: 'assets/debugsprites/The_House_of_Spiders_The_Ring_Nursefather_Hong_Lu_Hurt_Sprite.png',
+                skills: {
+                    anatomize: 'assets/debugsprites/The_House_of_Spiders_The_Ring_Nursefather_Hong_Lu_Skill_1.gif',
+                    'gather-ingredient-blood-bathed-objet': 'assets/debugsprites/The_House_of_Spiders_The_Ring_Nursefather_Hong_Lu_Skill_2.gif',
+                    'tibias-melody': 'assets/debugsprites/The_House_of_Spiders_The_Ring_Nursefather_Hong_Lu_Skill_3.gif',
+                },
             },
             skills: [
                 {
-                    id: 'saw-sweep',
-                    name: 'Saw Sweep',
-                    basePower: 4,
-                    coinPower: 2,
+                    id: 'anatomize',
+                    name: 'Anatomize',
+                    basePower: 6,
+                    coinPower: 6,
                     coinCount: 2,
                     damageType: 'slash',
-                    sinAffinity: 'wrath',
-                    offenseLevel: 1,
-                    description: 'Standard slash pattern used for early clash checks.',
-                },
-                {
-                    id: 'nail-launcher',
-                    name: 'Nail Launcher',
-                    basePower: 3,
-                    coinPower: 3,
-                    coinCount: 2,
-                    damageType: 'pierce',
-                    sinAffinity: 'envy',
-                    offenseLevel: 2,
-                    description: 'Fast pierce burst with higher ceiling.',
-                },
-                {
-                    id: 'impact-ram',
-                    name: 'Impact Ram',
-                    basePower: 5,
-                    coinPower: 2,
-                    coinCount: 3,
-                    damageType: 'blunt',
-                    sinAffinity: 'sloth',
                     offenseLevel: 0,
-                    description: 'Slow, heavy blunt skill for longer clashes.',
+                    borderPath: 'assets/skillborders/Envy1.png',
+                    description: 'Skill 1. Two heavy-value coins with a much lower base floor.',
+                },
+                {
+                    id: 'gather-ingredient-blood-bathed-objet',
+                    name: 'Gather Ingredient Blood-bathed Objet',
+                    basePower: 7,
+                    coinPower: 7,
+                    coinCount: 2,
+                    damageType: 'slash',
+                    offenseLevel: 1,
+                    borderPath: 'assets/skillborders/Envy2.png',
+                    description: 'Skill 2. Similar structure, but the coin ceiling rises even harder.',
+                },
+                {
+                    id: 'tibias-melody',
+                    name: "Tibia's Melody Anatomization of the Unatomized by the Anatomized",
+                    basePower: 10,
+                    coinPower: 4,
+                    coinCount: 4,
+                    damageType: 'slash',
+                    offenseLevel: 2,
+                    borderPath: 'assets/skillborders/Envy3.png',
+                    description: 'Skill 3. Long four-coin clash route for extended back-and-forths.',
                 },
             ],
         },
@@ -164,6 +186,10 @@
             sp: template.sp,
             speed: 0,
             resistances: { ...template.resistances },
+            sprites: {
+                ...template.sprites,
+                skills: { ...template.sprites.skills },
+            },
             skills: template.skills.map((skill) => ({ ...skill })),
         };
     }
@@ -176,6 +202,7 @@
             selectedSkillId: null,
             enemySkillId: null,
             lastResolution: null,
+            clashPresentation: null,
             log: [],
             hero: createBattleUnit(DEBUG_FIGHT_TEMPLATE.hero),
             enemy: createBattleUnit(DEBUG_FIGHT_TEMPLATE.enemy),
@@ -206,6 +233,10 @@
 
     function getSkillById(unit, skillId) {
         return unit.skills.find((skill) => skill.id === skillId) || null;
+    }
+
+    function getAssetUrl(relativePath) {
+        return resolveExtensionUrl(relativePath);
     }
 
     function pickEnemySkillId(battle) {
@@ -392,6 +423,7 @@
         battle.selectedSkillId = null;
         battle.enemySkillId = pickEnemySkillId(battle);
         battle.lastResolution = null;
+        battle.clashPresentation = null;
         battle.hero.speed = randomInt(...battle.hero.speedRange);
         battle.enemy.speed = randomInt(...battle.enemy.speedRange);
 
@@ -495,6 +527,15 @@
             totalDamage,
             remainingCoins,
         };
+        battle.clashPresentation = {
+            heroSkillId: heroSkill.id,
+            enemySkillId: enemySkill.id,
+            clashWinner: clash.winner,
+            rounds: clash.rounds,
+            hits,
+            totalDamage,
+            attackSkillId: attackSkill.id,
+        };
 
         renderCombatScreen();
     }
@@ -542,12 +583,155 @@
     }
 
     function getSkillPowerLabel(skill) {
-        return `${skill.basePower} + ${skill.coinPower} x ${skill.coinCount}`;
+        return `Base ${skill.basePower} | Coin +${skill.coinPower} | ${skill.coinCount} Coins`;
+    }
+
+    function getCompactSkillPowerLabel(skill) {
+        return `${skill.basePower} +${skill.coinPower} (${skill.coinCount} Coins)`;
+    }
+
+    function getUnitCardSprite(unit) {
+        if (unit.hp <= 0 && unit.sprites.hurt) {
+            return getAssetUrl(unit.sprites.hurt);
+        }
+
+        return getAssetUrl(unit.sprites.idle);
+    }
+
+    function getActorSprite(unit, skillId, stateLabel) {
+        if (stateLabel === 'moving' && unit.sprites.moving) {
+            return getAssetUrl(unit.sprites.moving);
+        }
+
+        if (stateLabel === 'hurt' && unit.sprites.hurt) {
+            return getAssetUrl(unit.sprites.hurt);
+        }
+
+        if (stateLabel === 'skill' && skillId && unit.sprites.skills[skillId]) {
+            return getAssetUrl(unit.sprites.skills[skillId]);
+        }
+
+        return getAssetUrl(unit.sprites.idle);
+    }
+
+    function renderCoinTrack(flips, side) {
+        return flips.map((isHeads, index) => `
+            <span class="echoes-battle-panel__combat-coin echoes-battle-panel__combat-coin--${side} ${isHeads ? 'is-heads' : 'is-tails'}">
+                <span>${index + 1}</span>
+                <strong>${isHeads ? 'Heads' : 'Tails'}</strong>
+            </span>
+        `).join('');
+    }
+
+    function renderClashRound(round, index) {
+        if (round.result === 'hero-speed-break' || round.result === 'enemy-speed-break') {
+            const winnerLabel = round.result === 'hero-speed-break' ? 'Vergilius' : 'Hong Lu';
+            return `
+                <div class="echoes-battle-panel__combat-round echoes-battle-panel__combat-round--speed-break">
+                    <span class="echoes-battle-panel__combat-round-index">Tie Break</span>
+                    <div class="echoes-battle-panel__combat-round-summary">${winnerLabel} breaks the repeated tie with Speed.</div>
+                </div>
+            `;
+        }
+
+        const resultLabel = round.result === 'tie'
+            ? 'Tie'
+            : round.result === 'hero-win'
+                ? 'Vergilius wins'
+                : 'Hong Lu wins';
+
+        return `
+            <div class="echoes-battle-panel__combat-round">
+                <span class="echoes-battle-panel__combat-round-index">Clash ${index + 1}</span>
+                <div class="echoes-battle-panel__combat-round-side echoes-battle-panel__combat-round-side--hero">
+                    <div class="echoes-battle-panel__combat-round-power">${round.heroPower}</div>
+                    <div class="echoes-battle-panel__combat-round-coins">${renderCoinTrack(round.heroFlips, 'hero')}</div>
+                </div>
+                <div class="echoes-battle-panel__combat-round-versus">${resultLabel}</div>
+                <div class="echoes-battle-panel__combat-round-side echoes-battle-panel__combat-round-side--enemy">
+                    <div class="echoes-battle-panel__combat-round-coins">${renderCoinTrack(round.enemyFlips, 'enemy')}</div>
+                    <div class="echoes-battle-panel__combat-round-power">${round.enemyPower}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderOneSidedHits(presentation) {
+        if (!presentation?.hits?.length) {
+            return '<div class="echoes-battle-panel__combat-hits-empty">Resolve a turn to populate clash results.</div>';
+        }
+
+        return presentation.hits.map((hit, index) => `
+            <div class="echoes-battle-panel__combat-hit">
+                <span>Hit ${index + 1}</span>
+                <strong>${hit.isHeads ? 'Heads' : 'Tails'}</strong>
+                <span>Power ${hit.finalPower}</span>
+                <span>${hit.damage} damage</span>
+            </div>
+        `).join('');
+    }
+
+    function renderClashStage(battle, selectedSkill, enemySkill) {
+        const presentation = battle.clashPresentation;
+        const heroSkillId = presentation?.heroSkillId || selectedSkill?.id || null;
+        const enemySkillId = presentation?.enemySkillId || enemySkill?.id || null;
+        const heroActorState = presentation ? 'skill' : selectedSkill ? 'moving' : 'idle';
+        const enemyActorState = presentation ? (presentation.clashWinner === 'enemy' ? 'skill' : 'hurt') : 'idle';
+        const heroActorImage = getActorSprite(battle.hero, heroSkillId, heroActorState);
+        const enemyActorImage = getActorSprite(
+            battle.enemy,
+            enemySkillId,
+            presentation ? (presentation.clashWinner === 'hero' ? 'hurt' : 'skill') : 'idle',
+        );
+        const roundMarkup = presentation?.rounds?.length
+            ? presentation.rounds.map((round, index) => renderClashRound(round, index)).join('')
+            : '<div class="echoes-battle-panel__combat-round echoes-battle-panel__combat-round--empty">Select a Vergilius skill and resolve the turn to run the clash.</div>';
+
+        return `
+            <section class="echoes-battle-panel__combat-center">
+                <div class="echoes-battle-panel__combat-stage${presentation ? ' is-resolving' : ''}">
+                    <div class="echoes-battle-panel__combat-stage-head">
+                        <div class="echoes-battle-panel__combat-stage-skill">
+                            <span>Vergilius</span>
+                            <strong>${selectedSkill?.name || 'No skill selected'}</strong>
+                            <small>${selectedSkill ? getCompactSkillPowerLabel(selectedSkill) : 'Pick one of the three skills below.'}</small>
+                        </div>
+                        <div class="echoes-battle-panel__combat-stage-skill echoes-battle-panel__combat-stage-skill--enemy">
+                            <span>Enemy Intent</span>
+                            <strong>${enemySkill?.name || 'Unknown'}</strong>
+                            <small>${enemySkill ? getCompactSkillPowerLabel(enemySkill) : ''}</small>
+                        </div>
+                    </div>
+
+                    <div class="echoes-battle-panel__combat-stage-actors">
+                        <div class="echoes-battle-panel__combat-actor echoes-battle-panel__combat-actor--hero${presentation ? ' is-clashing' : ''}">
+                            <img src="${heroActorImage}" alt="${battle.hero.name}">
+                        </div>
+                        <div class="echoes-battle-panel__combat-stage-burst">
+                            <span>${presentation ? `${presentation.clashWinner === 'hero' ? 'Vergilius' : 'Hong Lu'} won the clash` : 'Awaiting clash'}</span>
+                            <strong>${presentation ? `${presentation.totalDamage} total damage` : 'Focused debug encounter'}</strong>
+                        </div>
+                        <div class="echoes-battle-panel__combat-actor echoes-battle-panel__combat-actor--enemy${presentation ? ' is-clashing' : ''}">
+                            <img src="${enemyActorImage}" alt="${battle.enemy.name}">
+                        </div>
+                    </div>
+
+                    <div class="echoes-battle-panel__combat-rounds">
+                        ${roundMarkup}
+                    </div>
+
+                    <div class="echoes-battle-panel__combat-hits">
+                        ${renderOneSidedHits(presentation)}
+                    </div>
+                </div>
+            </section>
+        `;
     }
 
     function renderBattleUnitCard(unit, side) {
         const hpPercent = (unit.hp / unit.maxHp) * 100;
         const speedRangeLabel = `${unit.speedRange[0]}-${unit.speedRange[1]}`;
+        const unitSprite = getUnitCardSprite(unit);
         const resistanceMarkup = ['slash', 'pierce', 'blunt']
             .map((type) => `
                 <div class="echoes-battle-panel__combat-resistance">
@@ -562,6 +746,9 @@
                 <div class="echoes-battle-panel__combat-unit-header">
                     <span class="echoes-battle-panel__combat-unit-label">${side === 'hero' ? 'Hero' : 'Enemy'}</span>
                     <strong>${unit.name}</strong>
+                </div>
+                <div class="echoes-battle-panel__combat-unit-sprite">
+                    <img src="${unitSprite}" alt="${unit.name}">
                 </div>
                 <div class="echoes-battle-panel__combat-meter">
                     <div class="echoes-battle-panel__combat-meter-row">
@@ -601,6 +788,7 @@
         const heroSkillMarkup = battle.hero.skills.map((skill) => {
             const isSelected = battle.selectedSkillId === skill.id;
             const isDisabled = battle.phase !== 'select' || Boolean(battle.winner);
+            const borderUrl = getAssetUrl(skill.borderPath);
 
             return `
                 <button
@@ -610,13 +798,14 @@
                     data-skill-id="${skill.id}"
                     ${isDisabled ? 'disabled' : ''}
                 >
+                    <span class="echoes-battle-panel__combat-skill-border" style="background-image: url('${borderUrl}')"></span>
                     <div class="echoes-battle-panel__combat-skill-header">
                         <strong>${skill.name}</strong>
                         <span>${skill.damageType}</span>
                     </div>
                     <div class="echoes-battle-panel__combat-skill-power">${getSkillPowerLabel(skill)}</div>
                     <div class="echoes-battle-panel__combat-skill-meta">
-                        <span>${skill.sinAffinity}</span>
+                        <span>Slash Skill</span>
                         <span>Off ${getSkillOffenseLevel(battle.hero, skill)}</span>
                     </div>
                     <p>${skill.description}</p>
@@ -661,22 +850,7 @@
 
                 <div class="echoes-battle-panel__combat-arena">
                     ${renderBattleUnitCard(battle.hero, 'hero')}
-                    <section class="echoes-battle-panel__combat-center">
-                        <div class="echoes-battle-panel__combat-intent">
-                            <span>Enemy Intent</span>
-                            <strong>${enemySkill?.name || 'Unknown'}</strong>
-                            <small>${enemySkill ? getSkillPowerLabel(enemySkill) : ''}</small>
-                        </div>
-                        <div class="echoes-battle-panel__combat-summary">
-                            <span>${getWinnerLabel(battle)}</span>
-                            <strong>${selectedSkill ? selectedSkill.name : 'Choose a hero skill to begin.'}</strong>
-                            <small>
-                                ${battle.lastResolution
-                                    ? `${battle.lastResolution.actingUnitName} used ${battle.lastResolution.actingSkillName} for ${battle.lastResolution.totalDamage} total damage.`
-                                    : 'Flow: Speed roll -> Clash until one side loses all Coins -> winner attacks with remaining Coins.'}
-                            </small>
-                        </div>
-                    </section>
+                    ${renderClashStage(battle, selectedSkill, enemySkill)}
                     ${renderBattleUnitCard(battle.enemy, 'enemy')}
                 </div>
 
