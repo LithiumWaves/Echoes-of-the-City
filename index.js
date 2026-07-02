@@ -16,7 +16,7 @@
 
     const state = {
         isOpen: false,
-        isCharacterSelectOpen: false,
+        activeScreen: 'main-menu',
         audioEnabled: false,
         audioUnlocked: false,
         audioUnlockPromise: null,
@@ -37,7 +37,11 @@
         closeButton: null,
         fullscreenButton: null,
         screen: null,
-        trayButton: null,
+        mainMenu: null,
+        characterSelect: null,
+        combatScreen: null,
+        combatTrayButton: null,
+        characterTrayButton: null,
     };
 
     const hoverAudio = new Audio();
@@ -411,10 +415,19 @@
             return;
         }
 
+        const isCharacterSelectOpen = state.activeScreen === 'character-select';
+        const isCombatScreenOpen = state.activeScreen === 'combat';
+
         elements.root.classList.toggle('is-open', state.isOpen);
-        elements.root.classList.toggle('is-character-select', state.isCharacterSelectOpen);
+        elements.root.classList.toggle('is-character-select', isCharacterSelectOpen);
+        elements.root.classList.toggle('is-combat-screen', isCombatScreenOpen);
         elements.button.setAttribute('aria-expanded', String(state.isOpen));
         elements.panel.setAttribute('aria-hidden', String(!state.isOpen));
+        elements.mainMenu?.setAttribute('aria-hidden', String(state.activeScreen !== 'main-menu'));
+        elements.characterSelect?.setAttribute('aria-hidden', String(!isCharacterSelectOpen));
+        elements.combatScreen?.setAttribute('aria-hidden', String(!isCombatScreenOpen));
+        elements.characterTrayButton?.setAttribute('aria-pressed', String(isCharacterSelectOpen));
+        elements.combatTrayButton?.setAttribute('aria-pressed', String(isCombatScreenOpen));
     }
 
     function syncThemePlayback() {
@@ -547,24 +560,45 @@
         updateLayoutPosition();
     }
 
-    async function handleTrayButtonClick() {
+    async function handleCharacterTrayButtonClick() {
         await unlockAudioPlayback();
+
+        if (state.activeScreen === 'character-select') {
+            return;
+        }
+
         playSound('click');
 
-        if (!elements.trayButton) {
+        if (!elements.characterTrayButton) {
             return;
         }
 
-        if (state.isCharacterSelectOpen) {
-            return;
-        }
-
-        state.isCharacterSelectOpen = true;
-        elements.trayButton.setAttribute('aria-pressed', 'true');
+        state.activeScreen = 'character-select';
         syncPanelState();
     }
 
-    function handleTrayButtonHover() {
+    async function handleCombatTrayButtonClick() {
+        await unlockAudioPlayback();
+
+        if (state.activeScreen === 'combat') {
+            return;
+        }
+
+        playSound('click');
+
+        if (!elements.combatTrayButton) {
+            return;
+        }
+
+        state.activeScreen = 'combat';
+        syncPanelState();
+    }
+
+    function handleTrayButtonHover(event) {
+        if (event.currentTarget?.getAttribute('aria-pressed') === 'true') {
+            return;
+        }
+
         playSound('hover', { requireAudioEnabled: true });
     }
 
@@ -652,9 +686,24 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="echoes-battle-panel__combat-screen" aria-hidden="true">
+                            <div class="echoes-battle-panel__combat-content"></div>
+                        </div>
                         <div class="echoes-battle-panel__tray" aria-hidden="true">
                             <button
-                                class="echoes-battle-panel__tray-button"
+                                class="echoes-battle-panel__tray-button echoes-battle-panel__tray-button--combat"
+                                type="button"
+                                aria-label="Open combat screen"
+                                aria-pressed="false"
+                                title="Open combat screen"
+                            >
+                                <span
+                                    class="echoes-battle-panel__tray-icon echoes-battle-panel__tray-icon--combat"
+                                    aria-hidden="true"
+                                ></span>
+                            </button>
+                            <button
+                                class="echoes-battle-panel__tray-button echoes-battle-panel__tray-button--characters"
                                 type="button"
                                 aria-label="Open character select"
                                 aria-pressed="false"
@@ -677,7 +726,11 @@
         elements.closeButton = root.querySelector('.echoes-battle-panel__close');
         elements.fullscreenButton = root.querySelector('.echoes-battle-panel__fullscreen');
         elements.screen = root.querySelector('.echoes-battle-panel__screen');
-        elements.trayButton = root.querySelector('.echoes-battle-panel__tray-button');
+        elements.mainMenu = root.querySelector('.echoes-battle-panel__main-menu');
+        elements.characterSelect = root.querySelector('.echoes-battle-panel__character-select');
+        elements.combatScreen = root.querySelector('.echoes-battle-panel__combat-screen');
+        elements.combatTrayButton = root.querySelector('.echoes-battle-panel__tray-button--combat');
+        elements.characterTrayButton = root.querySelector('.echoes-battle-panel__tray-button--characters');
 
         syncAssetUrls();
         elements.button.addEventListener('mouseenter', handleLauncherHover);
@@ -689,8 +742,10 @@
         elements.backdrop.addEventListener('click', closeBattlePanel);
         elements.closeButton.addEventListener('click', handleCloseClick);
         elements.fullscreenButton.addEventListener('click', toggleScreenFullscreen);
-        elements.trayButton.addEventListener('mouseenter', handleTrayButtonHover);
-        elements.trayButton.addEventListener('click', handleTrayButtonClick);
+        elements.combatTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
+        elements.combatTrayButton.addEventListener('click', handleCombatTrayButtonClick);
+        elements.characterTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
+        elements.characterTrayButton.addEventListener('click', handleCharacterTrayButtonClick);
         document.addEventListener('keydown', handleKeydown);
         window.addEventListener('resize', handleResize);
 
