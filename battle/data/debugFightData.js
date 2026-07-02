@@ -36,6 +36,9 @@
                     coinCount: 3,
                     damageType: 'slash',
                     offenseLevel: 0,
+                    effects: [
+                        { trigger: 'onHit', type: 'applyStatus', statusId: 'burn', potency: 3, count: 1 },
+                    ],
                     borderPath: 'assets/skillborders/Wrath1.png',
                     description: 'Skill 1. A three-coin slash opener for stable clashes.',
                 },
@@ -47,6 +50,9 @@
                     coinCount: 3,
                     damageType: 'slash',
                     offenseLevel: 1,
+                    effects: [
+                        { trigger: 'onHit', type: 'applyStatus', statusId: 'burn', potency: 4, count: 1 },
+                    ],
                     borderPath: 'assets/skillborders/Wrath2.png',
                     description: 'Skill 2. Slightly stronger clash line with the same coin spread.',
                 },
@@ -58,6 +64,9 @@
                     coinCount: 3,
                     damageType: 'slash',
                     offenseLevel: 2,
+                    effects: [
+                        { trigger: 'onHit', type: 'applyStatus', statusId: 'burn', potency: 5, count: 2 },
+                    ],
                     borderPath: 'assets/skillborders/Wrath3.png',
                     description: 'Skill 3. Highest base clash option for the current debug duel.',
                 },

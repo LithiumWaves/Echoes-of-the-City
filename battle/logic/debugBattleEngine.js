@@ -115,10 +115,37 @@
             if (type === 'hit_resolved') {
                 return `Hit ${data.index}: ${data.coinFace} for Power ${data.finalPower}, dealing ${data.damage} ${data.damageType} damage.`;
             }
+            if (type === 'status_applied') {
+                if (data.statusId === 'protection') {
+                    return `${data.unitName} gains Protection ${data.count}.`;
+                }
+                return `${data.unitName} gains ${data.statusId} ${data.potency}/${data.count}.`;
+            }
+            if (type === 'status_changed') {
+                if (data.statusId === 'protection') {
+                    return `${data.unitName} Protection ${data.previousCount} → ${data.nextCount}.`;
+                }
+                return `${data.unitName} ${data.statusId} ${data.previousPotency}/${data.previousCount} → ${data.nextPotency}/${data.nextCount}.`;
+            }
+            if (type === 'status_triggered') {
+                if (data.statusId === 'burn') {
+                    return `${data.unitName} takes ${data.damage} fixed damage from Burn.`;
+                }
+                if (data.statusId === 'bleed') {
+                    return `${data.unitName} takes ${data.damage} fixed damage from Bleed.`;
+                }
+                return `${data.unitName} takes ${data.damage} fixed damage from ${data.statusId}.`;
+            }
+            if (type === 'status_expired') {
+                return `${data.unitName} ${data.statusId} expired.`;
+            }
             if (type === 'unit_defeated') {
                 return `${data.unitName} falls.`;
             }
             if (type === 'battle_ended') {
+                if (data.winner === 'draw') {
+                    return 'Battle ends in a draw.';
+                }
                 return `${data.winnerName} wins the debug fight.`;
             }
 
@@ -169,6 +196,205 @@
             return unit.skills.find((skill) => skill.id === skillId) || null;
         }
 
+        function getStatus(unit, statusId) {
+            const statuses = Array.isArray(unit.statuses) ? unit.statuses : [];
+            return statuses.find((status) => status?.id === statusId) || null;
+        }
+
+        function removeStatus(unit, statusId) {
+            unit.statuses = (Array.isArray(unit.statuses) ? unit.statuses : []).filter((status) => status?.id !== statusId);
+        }
+
+        function clampStatusValue(value, max) {
+            return clamp(typeof value === 'number' ? value : 0, 0, max);
+        }
+
+        function applyStatus(targetBattle, unit, statusId, payload) {
+            const potencyDelta = typeof payload?.potency === 'number' ? payload.potency : 0;
+            const countDelta = typeof payload?.count === 'number' ? payload.count : 0;
+
+            if (statusId === 'protection') {
+                const existing = getStatus(unit, statusId);
+                const previousCount = existing?.count || 0;
+                const nextCount = clampStatusValue(previousCount + countDelta, 10);
+                if (!existing) {
+                    const status = { id: 'protection', count: nextCount, potency: 0, expiresAtTurn: targetBattle.turn };
+                    unit.statuses.push(status);
+                    emitEvent(targetBattle, 'status_applied', {
+                        unitId: unit.id,
+                        unitName: unit.name,
+                        statusId: 'protection',
+                        count: status.count,
+                    });
+                    return status;
+                }
+
+                existing.count = nextCount;
+                existing.expiresAtTurn = targetBattle.turn;
+                emitEvent(targetBattle, 'status_changed', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    statusId: 'protection',
+                    previousCount,
+                    nextCount,
+                });
+                return existing;
+            }
+
+            const maxPotency = 99;
+            const maxCount = 99;
+            const existing = getStatus(unit, statusId);
+            const previousPotency = existing?.potency || 0;
+            const previousCount = existing?.count || 0;
+            const nextPotency = clampStatusValue(previousPotency + potencyDelta, maxPotency);
+            const nextCount = clampStatusValue(previousCount + countDelta, maxCount);
+
+            if (!existing) {
+                const status = { id: statusId, potency: nextPotency, count: nextCount };
+                unit.statuses.push(status);
+                emitEvent(targetBattle, 'status_applied', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    statusId,
+                    potency: status.potency,
+                    count: status.count,
+                });
+                return status;
+            }
+
+            existing.potency = nextPotency;
+            existing.count = nextCount;
+            emitEvent(targetBattle, 'status_changed', {
+                unitId: unit.id,
+                unitName: unit.name,
+                statusId,
+                previousPotency,
+                previousCount,
+                nextPotency,
+                nextCount,
+            });
+            return existing;
+        }
+
+        function applyFixedDamage(targetBattle, unit, statusId, damage) {
+            const appliedDamage = clampStatusValue(damage, 9999);
+            if (appliedDamage <= 0) {
+                return 0;
+            }
+
+            unit.hp = clamp(unit.hp - appliedDamage, 0, unit.maxHp);
+            emitEvent(targetBattle, 'status_triggered', {
+                unitId: unit.id,
+                unitName: unit.name,
+                statusId,
+                damage: appliedDamage,
+                hp: unit.hp,
+            });
+            return appliedDamage;
+        }
+
+        function applySkillEffects(targetBattle, trigger, attacker, defender, skill) {
+            const effects = Array.isArray(skill?.effects) ? skill.effects : [];
+            effects.forEach((effect) => {
+                if (effect?.trigger !== trigger) {
+                    return;
+                }
+
+                if (effect.type === 'applyStatus' && effect.statusId) {
+                    applyStatus(targetBattle, defender, effect.statusId, {
+                        potency: effect.potency,
+                        count: effect.count,
+                    });
+                    invokeHooks(attacker, 'statusInflicted', { battle: targetBattle, unit: attacker, opponent: defender, skill, statusId: effect.statusId });
+                    invokeHooks(defender, 'statusReceived', { battle: targetBattle, unit: defender, opponent: attacker, skill, statusId: effect.statusId });
+                }
+            });
+        }
+
+        function processBurnAtTurnEnd(targetBattle, unit) {
+            const burn = getStatus(unit, 'burn');
+            if (!burn || burn.count <= 0 || burn.potency <= 0 || unit.hp <= 0) {
+                return;
+            }
+
+            const previousCount = burn.count;
+            applyFixedDamage(targetBattle, unit, 'burn', burn.potency);
+            burn.count = clampStatusValue(burn.count - 1, 99);
+            emitEvent(targetBattle, 'status_changed', {
+                unitId: unit.id,
+                unitName: unit.name,
+                statusId: 'burn',
+                previousPotency: burn.potency,
+                previousCount,
+                nextPotency: burn.potency,
+                nextCount: burn.count,
+            });
+            if (burn.count <= 0) {
+                removeStatus(unit, 'burn');
+                emitEvent(targetBattle, 'status_expired', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    statusId: 'burn',
+                });
+            }
+        }
+
+        function expireProtectionAtTurnEnd(targetBattle, unit) {
+            const protection = getStatus(unit, 'protection');
+            if (!protection || protection.count <= 0) {
+                return;
+            }
+
+            removeStatus(unit, 'protection');
+            emitEvent(targetBattle, 'status_expired', {
+                unitId: unit.id,
+                unitName: unit.name,
+                statusId: 'protection',
+            });
+        }
+
+        function finalizeBattleOnDeaths(targetBattle) {
+            if (targetBattle.winner) {
+                return;
+            }
+
+            const heroDead = targetBattle.hero.hp <= 0;
+            const enemyDead = targetBattle.enemy.hp <= 0;
+
+            if (!heroDead && !enemyDead) {
+                return;
+            }
+
+            targetBattle.phase = 'ended';
+
+            if (heroDead && enemyDead) {
+                targetBattle.winner = 'draw';
+                emitEvent(targetBattle, 'unit_defeated', { unitId: targetBattle.hero.id, unitName: targetBattle.hero.name });
+                emitEvent(targetBattle, 'unit_defeated', { unitId: targetBattle.enemy.id, unitName: targetBattle.enemy.name });
+                emitEvent(targetBattle, 'battle_ended', { winner: 'draw', winnerName: 'Draw' });
+                return;
+            }
+
+            if (enemyDead) {
+                targetBattle.winner = 'hero';
+                emitEvent(targetBattle, 'unit_defeated', { unitId: targetBattle.enemy.id, unitName: targetBattle.enemy.name });
+                emitEvent(targetBattle, 'battle_ended', { winner: 'hero', winnerId: targetBattle.hero.id, winnerName: targetBattle.hero.name });
+                return;
+            }
+
+            targetBattle.winner = 'enemy';
+            emitEvent(targetBattle, 'unit_defeated', { unitId: targetBattle.hero.id, unitName: targetBattle.hero.name });
+            emitEvent(targetBattle, 'battle_ended', { winner: 'enemy', winnerId: targetBattle.enemy.id, winnerName: targetBattle.enemy.name });
+        }
+
+        function processEndOfTurnStatuses(targetBattle) {
+            processBurnAtTurnEnd(targetBattle, targetBattle.hero);
+            processBurnAtTurnEnd(targetBattle, targetBattle.enemy);
+            expireProtectionAtTurnEnd(targetBattle, targetBattle.hero);
+            expireProtectionAtTurnEnd(targetBattle, targetBattle.enemy);
+            finalizeBattleOnDeaths(targetBattle);
+        }
+
         function pickEnemySkillId(currentBattle) {
             const skillIndex = (currentBattle.turn - 1) % currentBattle.enemy.skills.length;
             return currentBattle.enemy.skills[skillIndex].id;
@@ -191,12 +417,44 @@
             return levelDifference > 0 ? Math.floor(levelDifference / 3) : 0;
         }
 
-        function flipCoins(unit, skill, coinCount) {
+        function triggerBleedOnCoinRoll(targetBattle, unit) {
+            const bleed = getStatus(unit, 'bleed');
+            if (!bleed || bleed.count <= 0 || bleed.potency <= 0 || unit.hp <= 0) {
+                return;
+            }
+
+            const previousCount = bleed.count;
+            applyFixedDamage(targetBattle, unit, 'bleed', bleed.potency);
+            bleed.count = clampStatusValue(bleed.count - 1, 99);
+            emitEvent(targetBattle, 'status_changed', {
+                unitId: unit.id,
+                unitName: unit.name,
+                statusId: 'bleed',
+                previousPotency: bleed.potency,
+                previousCount,
+                nextPotency: bleed.potency,
+                nextCount: bleed.count,
+            });
+            if (bleed.count <= 0) {
+                removeStatus(unit, 'bleed');
+                emitEvent(targetBattle, 'status_expired', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    statusId: 'bleed',
+                });
+            }
+        }
+
+        function flipCoins(targetBattle, unit, skill, coinCount) {
             const flips = [];
             let power = skill.basePower;
             const headChance = getCoinHeadChance(unit);
 
             for (let index = 0; index < coinCount; index += 1) {
+                triggerBleedOnCoinRoll(targetBattle, unit);
+                if (unit.hp <= 0) {
+                    break;
+                }
                 const isHeads = Math.random() * 100 < headChance;
                 flips.push(isHeads);
                 if (isHeads) {
@@ -229,7 +487,13 @@
         function calculateHitDamage(attacker, skill, defender, finalPower) {
             const resistance = getResistanceMultiplier(defender, skill.damageType);
             const damageModifier = getDamageModifier(attacker, skill, defender);
-            return Math.max(1, Math.round(finalPower * resistance * damageModifier));
+            const rawDamage = Math.max(1, Math.round(finalPower * resistance * damageModifier));
+            const protection = getStatus(defender, 'protection');
+            if (protection?.count > 0) {
+                const reduction = clampStatusValue(protection.count, 10) * 0.1;
+                return Math.max(0, Math.round(rawDamage * (1 - reduction)));
+            }
+            return rawDamage;
         }
 
         function resolveDebugClash(targetBattle, heroSkill, enemySkill) {
@@ -245,8 +509,8 @@
                 roundIndex += 1;
                 const heroCoinsBefore = heroCoins;
                 const enemyCoinsBefore = enemyCoins;
-                const heroRoll = flipCoins(heroUnit, heroSkill, heroCoins);
-                const enemyRoll = flipCoins(enemyUnit, enemySkill, enemyCoins);
+                const heroRoll = flipCoins(targetBattle, heroUnit, heroSkill, heroCoins);
+                const enemyRoll = flipCoins(targetBattle, enemyUnit, enemySkill, enemyCoins);
                 const heroPower = heroRoll.power + getClashLevelBonus(heroUnit, heroSkill, enemyUnit, enemySkill);
                 const enemyPower = enemyRoll.power + getClashLevelBonus(enemyUnit, enemySkill, heroUnit, heroSkill);
 
@@ -407,7 +671,7 @@
             const hits = [];
 
             for (let coinIndex = 0; coinIndex < remainingCoins; coinIndex += 1) {
-                const flip = flipCoins(attacker, skill, 1);
+                const flip = flipCoins(targetBattle, attacker, skill, 1);
                 const finalPower = flip.power;
                 const damage = calculateHitDamage(attacker, skill, defender, finalPower);
                 const previousHp = defender.hp;
@@ -439,6 +703,7 @@
                 invokeHooks(defender, 'hitTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, finalPower, damage });
                 invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, damage });
                 invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, damage });
+                applySkillEffects(targetBattle, 'onHit', attacker, defender, skill);
 
                 if (defender.hp <= 0) {
                     break;
@@ -619,6 +884,7 @@
 
             invokeHooks(battle.hero, 'turnEnd', { battle, unit: battle.hero, opponent: battle.enemy });
             invokeHooks(battle.enemy, 'turnEnd', { battle, unit: battle.enemy, opponent: battle.hero });
+            processEndOfTurnStatuses(battle);
             return true;
         }
 
