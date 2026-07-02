@@ -866,8 +866,14 @@
         document.addEventListener('touchstart', handleAudioUnlockGesture, true);
         document.addEventListener('click', handleAudioUnlockGesture, true);
         createBattleInterface();
+        // #region debug-point E:interface-created
+        fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"post-fix",hypothesisId:"E",location:"index.js:initialize",msg:"[DEBUG] Battle interface shell created",data:{hasRoot:Boolean(elements.root),hasButton:Boolean(elements.button),hasPanel:Boolean(elements.panel)},ts:Date.now()})}).catch(()=>{});
+        // #endregion
         try {
             await initializeCombatController();
+            // #region debug-point E:combat-init-finished
+            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"post-fix",hypothesisId:"E",location:"index.js:initialize",msg:"[DEBUG] Combat controller initialization finished",data:{hasCombatController:Boolean(state.combatController)},ts:Date.now()})}).catch(()=>{});
+            // #endregion
         } catch (error) {
             // #region debug-point E:combat-init-catch
             fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"post-fix",hypothesisId:"E",location:"index.js:initialize",msg:"[DEBUG] Combat controller initialization failed",data:{name:error?.name||null,message:error?.message||String(error),stack:error?.stack||null},ts:Date.now()})}).catch(()=>{});
@@ -876,7 +882,13 @@
             renderCombatLoadError();
         }
         preloadAudio();
+        // #region debug-point E:audio-preloaded
+        fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"post-fix",hypothesisId:"E",location:"index.js:initialize",msg:"[DEBUG] Audio preload triggered",data:{audioCount:4},ts:Date.now()})}).catch(()=>{});
+        // #endregion
         syncPanelState();
+        // #region debug-point E:sync-panel-state-finished
+        fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"post-fix",hypothesisId:"E",location:"index.js:initialize",msg:"[DEBUG] Panel state synced",data:{isOpen:state.isOpen,activeScreen:state.activeScreen,buttonConnected:Boolean(elements.button?.isConnected)},ts:Date.now()})}).catch(()=>{});
+        // #endregion
 
         window.EchoesOfTheCity = {
             openBattlePanel,
@@ -884,6 +896,9 @@
             toggleBattlePanel,
             resetDebugBattle,
         };
+        // #region debug-point E:initialize-complete
+        fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"post-fix",hypothesisId:"E",location:"index.js:initialize",msg:"[DEBUG] Extension initialize completed",data:{hasWindowApi:Boolean(window.EchoesOfTheCity),buttonConnected:Boolean(elements.button?.isConnected)},ts:Date.now()})}).catch(()=>{});
+        // #endregion
     }
 
     if (document.readyState === 'loading') {
