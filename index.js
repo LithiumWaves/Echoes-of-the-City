@@ -19,6 +19,7 @@
         isOpen: false,
         activeScreen: 'main-menu',
         combatController: null,
+        battleModulePromise: null,
         audioEnabled: false,
         audioUnlocked: false,
         audioUnlockPromise: null,
@@ -63,36 +64,27 @@
             return;
         }
 
-        const scriptUrl = resolveExtensionUrl(BATTLE_SCRIPT_RELATIVE_PATH);
-        const existingScript = document.querySelector(`script[data-echoes-battle-module="true"][src="${scriptUrl}"]`);
+        if (!state.battleModulePromise) {
+            state.battleModulePromise = (async () => {
+                const scriptUrl = resolveExtensionUrl(BATTLE_SCRIPT_RELATIVE_PATH);
+                const response = await fetch(scriptUrl);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch battle module: ${response.status}`);
+                }
 
-        if (existingScript) {
-            if (existingScript.dataset.loaded === 'true') {
-                return;
-            }
+                const scriptSource = await response.text();
+                window.eval(`${scriptSource}\n//# sourceURL=${scriptUrl}`);
 
-            await new Promise((resolve, reject) => {
-                existingScript.addEventListener('load', resolve, { once: true });
-                existingScript.addEventListener('error', () => reject(new Error('Failed to load battle module.')), { once: true });
-            });
-        } else {
-            await new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = scriptUrl;
-                script.async = false;
-                script.dataset.echoesBattleModule = 'true';
-                script.addEventListener('load', () => {
-                    script.dataset.loaded = 'true';
-                    resolve();
-                }, { once: true });
-                script.addEventListener('error', () => reject(new Error('Failed to load battle module.')), { once: true });
-                (document.head || document.documentElement).appendChild(script);
+                if (!window.EchoesOfTheCityBattle?.createDebugBattleController) {
+                    throw new Error('Battle module did not expose a controller factory.');
+                }
+            })().catch((error) => {
+                state.battleModulePromise = null;
+                throw error;
             });
         }
 
-        if (!window.EchoesOfTheCityBattle?.createDebugBattleController) {
-            throw new Error('Battle module did not expose a controller factory.');
-        }
+        await state.battleModulePromise;
     }
 
     async function initializeCombatController() {
