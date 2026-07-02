@@ -125,7 +125,7 @@
     function createDebugBattleController(options) {
         const { mountElement, clamp, resolveAssetUrl } = options;
         // #region debug-point C:controller-factory-entry
-        fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"C",location:"battle/debugBattle.js:createDebugBattleController",msg:"[DEBUG] Entered debug battle controller factory",data:{hasMountElement:Boolean(mountElement)},ts:Date.now()})}).catch(()=>{});
+        fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"post-fix",hypothesisId:"C",location:"battle/debugBattle.js:createDebugBattleController",msg:"[DEBUG] Entered debug battle controller factory",data:{hasMountElement:Boolean(mountElement)},ts:Date.now()})}).catch(()=>{});
         // #endregion
         let battle = createDebugBattleState();
 
@@ -159,16 +159,16 @@
             };
 
             // #region debug-point D:create-debug-battle-state
-            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"D",location:"battle/debugBattle.js:createDebugBattleState",msg:"[DEBUG] Created initial battle object before first turn start",data:{turn:nextBattle.turn,hero:nextBattle.hero.name,enemy:nextBattle.enemy.name},ts:Date.now()})}).catch(()=>{});
+            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"post-fix",hypothesisId:"D",location:"battle/debugBattle.js:createDebugBattleState",msg:"[DEBUG] Created initial battle object before first turn start",data:{turn:nextBattle.turn,hero:nextBattle.hero.name,enemy:nextBattle.enemy.name},ts:Date.now()})}).catch(()=>{});
             // #endregion
             startDebugBattleTurn(nextBattle);
             return nextBattle;
         }
 
-        function pushBattleLog(message) {
-            battle.log.push(message);
-            if (battle.log.length > 36) {
-                battle.log = battle.log.slice(-36);
+        function pushBattleLog(targetBattle, message) {
+            targetBattle.log.push(message);
+            if (targetBattle.log.length > 36) {
+                targetBattle.log = targetBattle.log.slice(-36);
             }
         }
 
@@ -180,12 +180,12 @@
             return unit.skills.find((skill) => skill.id === skillId) || null;
         }
 
-        function pickEnemySkillId() {
+        function pickEnemySkillId(currentBattle) {
             // #region debug-point D:pick-enemy-skill-id-entry
-            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"D",location:"battle/debugBattle.js:pickEnemySkillId",msg:"[DEBUG] Entered pickEnemySkillId",data:{note:"About to read controller battle state"},ts:Date.now()})}).catch(()=>{});
+            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"post-fix",hypothesisId:"D",location:"battle/debugBattle.js:pickEnemySkillId",msg:"[DEBUG] Entered pickEnemySkillId",data:{turn:currentBattle.turn,enemySkillCount:currentBattle.enemy.skills.length},ts:Date.now()})}).catch(()=>{});
             // #endregion
-            const skillIndex = (battle.turn - 1) % battle.enemy.skills.length;
-            return battle.enemy.skills[skillIndex].id;
+            const skillIndex = (currentBattle.turn - 1) % currentBattle.enemy.skills.length;
+            return currentBattle.enemy.skills[skillIndex].id;
         }
 
         function getCoinHeadChance(unit) {
@@ -363,12 +363,12 @@
             }
 
             // #region debug-point D:start-turn-entry
-            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"pre-fix",hypothesisId:"D",location:"battle/debugBattle.js:startDebugBattleTurn",msg:"[DEBUG] Starting initial debug battle turn",data:{turn:currentBattle.turn,heroSpeedRange:currentBattle.hero.speedRange,enemySpeedRange:currentBattle.enemy.speedRange},ts:Date.now()})}).catch(()=>{});
+            fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"combat-module-error",runId:"post-fix",hypothesisId:"D",location:"battle/debugBattle.js:startDebugBattleTurn",msg:"[DEBUG] Starting initial debug battle turn",data:{turn:currentBattle.turn,heroSpeedRange:currentBattle.hero.speedRange,enemySpeedRange:currentBattle.enemy.speedRange},ts:Date.now()})}).catch(()=>{});
             // #endregion
             currentBattle.turn += 1;
             currentBattle.phase = 'select';
             currentBattle.selectedSkillId = null;
-            currentBattle.enemySkillId = pickEnemySkillId();
+            currentBattle.enemySkillId = pickEnemySkillId(currentBattle);
             currentBattle.lastResolution = null;
             currentBattle.clashPresentation = null;
             currentBattle.hero.speed = randomInt(...currentBattle.hero.speedRange);
@@ -376,9 +376,10 @@
 
             const enemySkill = getSkillById(currentBattle.enemy, currentBattle.enemySkillId);
             pushBattleLog(
+                currentBattle,
                 `Turn ${currentBattle.turn} starts. ${currentBattle.hero.name} rolls ${currentBattle.hero.speed} Speed, ${currentBattle.enemy.name} rolls ${currentBattle.enemy.speed}.`,
             );
-            pushBattleLog(`${currentBattle.enemy.name} prepares ${enemySkill.name}.`);
+            pushBattleLog(currentBattle, `${currentBattle.enemy.name} prepares ${enemySkill.name}.`);
         }
 
         function selectDebugSkill(skillId) {
@@ -401,18 +402,18 @@
                 return;
             }
 
-            pushBattleLog(`${battle.hero.name} uses ${heroSkill.name}. ${battle.enemy.name} answers with ${enemySkill.name}.`);
+            pushBattleLog(battle, `${battle.hero.name} uses ${heroSkill.name}. ${battle.enemy.name} answers with ${enemySkill.name}.`);
 
             const clash = resolveDebugClash(heroSkill, enemySkill);
             clash.rounds.forEach((round, index) => {
                 if (round.result === 'tie') {
-                    pushBattleLog(`Clash ${index + 1}: tie at ${round.heroPower} (${formatCoinFlips(round.heroFlips)} vs ${formatCoinFlips(round.enemyFlips)}).`);
+                    pushBattleLog(battle, `Clash ${index + 1}: tie at ${round.heroPower} (${formatCoinFlips(round.heroFlips)} vs ${formatCoinFlips(round.enemyFlips)}).`);
                     return;
                 }
 
                 if (round.result === 'hero-speed-break' || round.result === 'enemy-speed-break') {
                     const speedWinner = round.result === 'hero-speed-break' ? battle.hero.name : battle.enemy.name;
-                    pushBattleLog(`Repeated tie: ${speedWinner} breaks it with the higher Speed value.`);
+                    pushBattleLog(battle, `Repeated tie: ${speedWinner} breaks it with the higher Speed value.`);
                     return;
                 }
 
@@ -420,7 +421,7 @@
                 const roundLoser = round.result === 'hero-win' ? battle.enemy.name : battle.hero.name;
                 const winnerPower = round.result === 'hero-win' ? round.heroPower : round.enemyPower;
                 const loserPower = round.result === 'hero-win' ? round.enemyPower : round.heroPower;
-                pushBattleLog(`Clash ${index + 1}: ${roundWinner} wins ${winnerPower} to ${loserPower}, breaking a Coin from ${roundLoser}.`);
+                pushBattleLog(battle, `Clash ${index + 1}: ${roundWinner} wins ${winnerPower} to ${loserPower}, breaking a Coin from ${roundLoser}.`);
             });
 
             const clashWinnerUnit = clash.winner === 'hero' ? battle.hero : battle.enemy;
@@ -430,20 +431,20 @@
 
             adjustSanity(clashWinnerUnit, 5);
             adjustSanity(clashLoserUnit, -5);
-            pushBattleLog(`${clashWinnerUnit.name} wins the clash, gains 5 SP, and attacks one-sided with ${remainingCoins} remaining Coin${remainingCoins === 1 ? '' : 's'}.`);
+            pushBattleLog(battle, `${clashWinnerUnit.name} wins the clash, gains 5 SP, and attacks one-sided with ${remainingCoins} remaining Coin${remainingCoins === 1 ? '' : 's'}.`);
 
             const hits = resolveOneSidedAttack(clashWinnerUnit, attackSkill, clashLoserUnit, remainingCoins);
             let totalDamage = 0;
 
             hits.forEach((hit, index) => {
                 totalDamage += hit.damage;
-                pushBattleLog(`Hit ${index + 1}: ${hit.isHeads ? 'Heads' : 'Tails'} for Power ${hit.finalPower}, dealing ${hit.damage} ${attackSkill.damageType} damage.`);
+                pushBattleLog(battle, `Hit ${index + 1}: ${hit.isHeads ? 'Heads' : 'Tails'} for Power ${hit.finalPower}, dealing ${hit.damage} ${attackSkill.damageType} damage.`);
             });
 
             if (clashLoserUnit.hp <= 0) {
                 battle.winner = clash.winner;
                 battle.phase = 'ended';
-                pushBattleLog(`${clashLoserUnit.name} falls. ${clashWinnerUnit.name} wins the debug fight.`);
+                pushBattleLog(battle, `${clashLoserUnit.name} falls. ${clashWinnerUnit.name} wins the debug fight.`);
             } else {
                 battle.phase = 'resolved';
             }
