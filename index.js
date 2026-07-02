@@ -7,7 +7,12 @@
     const PANEL_GAP = 24;
     const DRAG_THRESHOLD = 6;
     const PANEL_ASPECT_RATIO = 1640 / 4120;
-    const BATTLE_SCRIPT_RELATIVE_PATH = 'battle/debugBattle.js';
+    const BATTLE_SCRIPT_RELATIVE_PATHS = [
+        'battle/data/debugFightData.js',
+        'battle/logic/debugBattleEngine.js',
+        'battle/render/debugBattleRenderer.js',
+        'battle/debugBattle.js',
+    ];
     const ASSET_RELATIVE_PATHS = {
         hover: 'audio/battlewindow/hovermechanical.wav',
         click: 'audio/battlewindow/buttonclick.wav',
@@ -66,14 +71,16 @@
 
         if (!state.battleModulePromise) {
             state.battleModulePromise = (async () => {
-                const scriptUrl = resolveExtensionUrl(BATTLE_SCRIPT_RELATIVE_PATH);
-                const response = await fetch(scriptUrl);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch battle module: ${response.status}`);
-                }
+                for (const relativePath of BATTLE_SCRIPT_RELATIVE_PATHS) {
+                    const scriptUrl = resolveExtensionUrl(relativePath);
+                    const response = await fetch(scriptUrl);
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch battle module: ${response.status}`);
+                    }
 
-                const scriptSource = await response.text();
-                window.eval(`${scriptSource}\n//# sourceURL=${scriptUrl}`);
+                    const scriptSource = await response.text();
+                    window.eval(`${scriptSource}\n//# sourceURL=${scriptUrl}`);
+                }
 
                 if (!window.EchoesOfTheCityBattle?.createDebugBattleController) {
                     throw new Error('Battle module did not expose a controller factory.');
