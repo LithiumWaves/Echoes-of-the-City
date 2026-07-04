@@ -908,29 +908,26 @@
 
 .echoes-battle-panel__combat-skill-grid {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.45rem;
+    grid-template-columns: repeat(auto-fit, minmax(4.6rem, 1fr));
+    gap: 0.5rem;
     margin-top: 0.55rem;
-    max-height: 15rem;
-    overflow: auto;
-    padding-right: 0.2rem;
+    align-items: start;
 }
 
 .echoes-battle-panel__combat-skill {
     position: relative;
     overflow: hidden;
     border: 1px solid rgba(255, 190, 135, 0.18);
-    border-radius: 0.7rem;
-    padding: 0.55rem 0.75rem;
-    background: rgba(255, 255, 255, 0.04);
+    border-radius: 0.65rem;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.03);
     color: inherit;
-    text-align: left;
+    text-align: center;
     cursor: grab;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
     align-items: center;
-    gap: 0.65rem;
-    min-height: 0;
+    justify-content: center;
+    min-height: 4rem;
     transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
 }
 
@@ -973,39 +970,24 @@
     box-shadow: inset 0 0 0 1px rgba(255, 182, 101, 0.18);
 }
 
-.echoes-battle-panel__combat-skill-main {
-    min-width: 0;
-}
-
-.echoes-battle-panel__combat-skill-header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.65rem;
-}
-
-.echoes-battle-panel__combat-skill-header strong,
-.echoes-battle-panel__combat-skill-power {
-    font-size: 0.8rem;
+.echoes-battle-panel__combat-skill-rank {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0 0.5rem;
+    border-radius: 999px;
+    background: rgba(18, 9, 5, 0.58);
+    border: 1px solid rgba(255, 190, 135, 0.28);
     color: #fff0de;
-}
-
-.echoes-battle-panel__combat-skill-header span,
-.echoes-battle-panel__combat-skill-meta span {
-    color: #e6bc93;
-    font-size: 0.64rem;
+    font-size: 0.84rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-}
-
-.echoes-battle-panel__combat-skill-power {
-    margin-top: 0.18rem;
-}
-
-.echoes-battle-panel__combat-skill-meta {
-    display: grid;
-    justify-items: end;
-    gap: 0.08rem;
-    text-align: right;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
 }
 
 .echoes-battle-panel__combat-log {

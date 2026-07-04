@@ -77,6 +77,14 @@
             return `${skill.basePower} ${skill.coinPower >= 0 ? '+' : ''}${skill.coinPower} (${skill.coinCount} Coins)`;
         }
 
+        function escapeAttribute(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
         function getSkillOffenseLevel(unit, skill) {
             return Math.max(1, unit.level + (skill.offenseLevel || 0));
         }
@@ -467,10 +475,20 @@
             }
 
             const unit = getUnitById(battle, activePlayerSlot.unitId);
-            return unit.skills.map((skill) => {
+            const sharedBorderPath = unit.id === 'bamboo-hatted-kim'
+                ? 'assets/skillborders/Pride1.png'
+                : 'assets/skillborders/Wrath1.png';
+
+            return unit.skills.map((skill, index) => {
                 const isSelected = activePlayerSlot.selectedSkillId === skill.id;
                 const isDisabled = battle.phase !== 'select' || Boolean(battle.winner);
-                const borderUrl = resolveAssetUrl(skill.borderPath);
+                const borderUrl = resolveAssetUrl(sharedBorderPath);
+                const tooltipText = escapeAttribute([
+                    skill.name,
+                    `${skill.damageType.toUpperCase()} | ${getSkillPowerLabel(skill)}`,
+                    `Offense ${getSkillOffenseLevel(unit, skill)}`,
+                    skill.description,
+                ].join('\n'));
 
                 return `
                     <button
@@ -481,20 +499,12 @@
                         data-skill-id="${skill.id}"
                         draggable="${isDisabled ? 'false' : 'true'}"
                         data-drag-skill="true"
+                        title="${tooltipText}"
+                        aria-label="${tooltipText}"
                         ${isDisabled ? 'disabled' : ''}
                     >
                         <span class="echoes-battle-panel__combat-skill-border" style="background-image: url('${borderUrl}')"></span>
-                        <div class="echoes-battle-panel__combat-skill-main">
-                            <div class="echoes-battle-panel__combat-skill-header">
-                                <strong>${skill.name}</strong>
-                                <span>${skill.damageType}</span>
-                            </div>
-                            <div class="echoes-battle-panel__combat-skill-power">${getSkillPowerLabel(skill)}</div>
-                        </div>
-                        <div class="echoes-battle-panel__combat-skill-meta">
-                            <span>Assign</span>
-                            <span>Off ${getSkillOffenseLevel(unit, skill)}</span>
-                        </div>
+                        <span class="echoes-battle-panel__combat-skill-rank">S${index + 1}</span>
                     </button>
                 `;
             }).join('');
@@ -517,9 +527,9 @@
                         <span>Assignment</span>
                         <strong>${activePlayerSlot?.selectedSkillId
                             ? `${getSkillById(getUnitById(battle, activePlayerSlot.unitId), activePlayerSlot.selectedSkillId).name} -> Enemy Slot ${getSlotById(battle, activePlayerSlot.targetSlotId)?.index + 1 || '?'}`
-                            : 'Pick a compact skill button, then drag or click-target as needed'}</strong>
+                            : 'Pick a border button, then drag it onto an enemy slot'}</strong>
                     </div>
-                    <div class="echoes-battle-panel__combat-target-empty">Skills are now condensed into compact buttons so the full tray stays visible.</div>
+                    <div class="echoes-battle-panel__combat-target-empty">Hover a skill border to inspect it. Drag it onto an enemy slot to assign it.</div>
                     <div class="echoes-battle-panel__combat-skill-grid">
                         ${renderSkillCards(battle, activePlayerSlot)}
                     </div>
