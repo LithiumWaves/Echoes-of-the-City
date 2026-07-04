@@ -12,6 +12,14 @@
             sinking: 'assets/statuseffects/keywordstatus/Sinking.png',
             tremor: 'assets/statuseffects/keywordstatus/Tremor.png',
         };
+        const countOnlyStatuses = new Set([
+            'protection',
+            'paralyze',
+            'plus_coin_boost',
+            'plus_coin_drop',
+            'minus_coin_boost',
+            'minus_coin_drop',
+        ]);
 
         function getAllUnits(battle) {
             return [...battle.playerUnits, ...battle.enemyUnits];
@@ -62,11 +70,11 @@
         }
 
         function getSkillPowerLabel(skill) {
-            return `Base ${skill.basePower} | Coin +${skill.coinPower} | ${skill.coinCount} Coins`;
+            return `Base ${skill.basePower} | Coin ${skill.coinPower >= 0 ? '+' : ''}${skill.coinPower} | ${skill.coinCount} Coins`;
         }
 
         function getCompactSkillPowerLabel(skill) {
-            return `${skill.basePower} +${skill.coinPower} (${skill.coinCount} Coins)`;
+            return `${skill.basePower} ${skill.coinPower >= 0 ? '+' : ''}${skill.coinPower} (${skill.coinCount} Coins)`;
         }
 
         function getSkillOffenseLevel(unit, skill) {
@@ -83,7 +91,12 @@
                 burn: 'Burn',
                 protection: 'Protection',
                 charge: 'Charge',
+                paralyze: 'Paralyze',
                 poise: 'Poise',
+                plus_coin_boost: 'Plus Coin Boost',
+                plus_coin_drop: 'Plus Coin Drop',
+                minus_coin_boost: 'Minus Coin Boost',
+                minus_coin_drop: 'Minus Coin Drop',
                 rupture: 'Rupture',
                 sinking: 'Sinking',
                 tremor: 'Tremor',
@@ -99,7 +112,7 @@
                     return false;
                 }
 
-                if (status.id === 'protection') {
+                if (countOnlyStatuses.has(status.id)) {
                     return (status.count || 0) > 0;
                 }
 
@@ -203,7 +216,7 @@
                 const statusLabel = getStatusLabel(status.id);
                 const iconPath = keywordStatusIconPaths[status.id];
                 const iconUrl = iconPath ? resolveAssetUrl(iconPath) : '';
-                const valueMarkup = status.id === 'protection'
+                const valueMarkup = countOnlyStatuses.has(status.id)
                     ? `
                         <span class="echoes-battle-panel__combat-status-value echoes-battle-panel__combat-status-value--count">
                             ${status.count}
