@@ -28,9 +28,26 @@
                 return;
             }
 
-            const { action, skillId } = actionTarget.dataset;
+            const {
+                action,
+                skillId,
+                slotId,
+                targetSlotId,
+            } = actionTarget.dataset;
+            if (action === 'select-slot' && slotId) {
+                engine.selectSlot(slotId);
+                render();
+                return;
+            }
+
+            if (action === 'select-target' && slotId && targetSlotId) {
+                engine.selectTarget(targetSlotId, slotId);
+                render();
+                return;
+            }
+
             if (action === 'select-skill' && skillId) {
-                engine.selectSkill(skillId);
+                engine.selectSkill(skillId, slotId);
                 render();
                 return;
             }

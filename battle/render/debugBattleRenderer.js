@@ -13,21 +13,52 @@
             tremor: 'assets/statuseffects/keywordstatus/Tremor.png',
         };
 
+        function getAllUnits(battle) {
+            return [...battle.playerUnits, ...battle.enemyUnits];
+        }
+
+        function getAllSlots(battle) {
+            return [...battle.playerSlots, ...battle.enemySlots];
+        }
+
+        function getSlotsForSide(battle, side) {
+            return side === 'enemy' ? battle.enemySlots : battle.playerSlots;
+        }
+
+        function getUnitById(battle, unitId) {
+            return getAllUnits(battle).find((unit) => unit.id === unitId) || null;
+        }
+
+        function getSlotById(battle, slotId) {
+            return getAllSlots(battle).find((slot) => slot.id === slotId) || null;
+        }
+
+        function getSkillById(unit, skillId) {
+            return unit.skills.find((skill) => skill.id === skillId) || null;
+        }
+
+        function getActivePlayerSlot(battle) {
+            return getSlotById(battle, battle.activePlayerSlotId) || battle.playerSlots[0] || null;
+        }
+
         function formatResistanceValue(value) {
             return `x${value.toFixed(2).replace(/\.00$/, '')}`;
         }
 
         function getPhaseLabel(battle) {
-            if (battle.winner === 'hero') {
+            if (battle.winner === 'player') {
                 return 'Victory';
             }
             if (battle.winner === 'enemy') {
                 return 'Defeat';
             }
+            if (battle.winner === 'draw') {
+                return 'Draw';
+            }
             if (battle.phase === 'resolved') {
                 return 'Turn Resolved';
             }
-            return 'Skill Select';
+            return 'Assignment';
         }
 
         function getSkillPowerLabel(skill) {
@@ -36,10 +67,6 @@
 
         function getCompactSkillPowerLabel(skill) {
             return `${skill.basePower} +${skill.coinPower} (${skill.coinCount} Coins)`;
-        }
-
-        function getSkillById(unit, skillId) {
-            return unit.skills.find((skill) => skill.id === skillId) || null;
         }
 
         function getSkillOffenseLevel(unit, skill) {
@@ -113,9 +140,9 @@
             `).join('');
         }
 
-        function renderClashRound(round, index) {
-            if (round.result === 'hero-speed-break' || round.result === 'enemy-speed-break') {
-                const winnerLabel = round.result === 'hero-speed-break' ? 'Vergilius' : 'Hong Lu';
+        function renderClashRound(presentation, round, index) {
+            if (round.result === 'left-speed-break' || round.result === 'right-speed-break') {
+                const winnerLabel = round.result === 'left-speed-break' ? presentation.leftUnitName : presentation.rightUnitName;
                 return `
                     <div class="echoes-battle-panel__combat-round echoes-battle-panel__combat-round--speed-break">
                         <span class="echoes-battle-panel__combat-round-index">Tie Break</span>
@@ -126,21 +153,21 @@
 
             const resultLabel = round.result === 'tie'
                 ? 'Tie'
-                : round.result === 'hero-win'
-                    ? 'Vergilius wins'
-                    : 'Hong Lu wins';
+                : round.result === 'left-win'
+                    ? `${presentation.leftUnitName} wins`
+                    : `${presentation.rightUnitName} wins`;
 
             return `
                 <div class="echoes-battle-panel__combat-round">
                     <span class="echoes-battle-panel__combat-round-index">Clash ${index + 1}</span>
                     <div class="echoes-battle-panel__combat-round-side echoes-battle-panel__combat-round-side--hero">
-                        <div class="echoes-battle-panel__combat-round-power">${round.heroPower}</div>
-                        <div class="echoes-battle-panel__combat-round-coins">${renderCoinTrack(round.heroFlips, 'hero')}</div>
+                        <div class="echoes-battle-panel__combat-round-power">${round.leftPower}</div>
+                        <div class="echoes-battle-panel__combat-round-coins">${renderCoinTrack(round.leftFlips, 'hero')}</div>
                     </div>
                     <div class="echoes-battle-panel__combat-round-versus">${resultLabel}</div>
                     <div class="echoes-battle-panel__combat-round-side echoes-battle-panel__combat-round-side--enemy">
-                        <div class="echoes-battle-panel__combat-round-coins">${renderCoinTrack(round.enemyFlips, 'enemy')}</div>
-                        <div class="echoes-battle-panel__combat-round-power">${round.enemyPower}</div>
+                        <div class="echoes-battle-panel__combat-round-coins">${renderCoinTrack(round.rightFlips, 'enemy')}</div>
+                        <div class="echoes-battle-panel__combat-round-power">${round.rightPower}</div>
                     </div>
                 </div>
             `;
@@ -159,62 +186,6 @@
                     <span>${hit.damage} damage</span>
                 </div>
             `).join('');
-        }
-
-        function renderClashStage(battle, selectedSkill, enemySkill) {
-            const presentation = battle.clashPresentation;
-            const heroSkillId = presentation?.heroSkillId || selectedSkill?.id || null;
-            const enemySkillId = presentation?.enemySkillId || enemySkill?.id || null;
-            const heroActorState = presentation ? 'skill' : selectedSkill ? 'moving' : 'idle';
-            const heroActorImage = getActorSprite(battle.hero, heroSkillId, heroActorState);
-            const enemyActorImage = getActorSprite(
-                battle.enemy,
-                enemySkillId,
-                presentation ? (presentation.clashWinner === 'hero' ? 'hurt' : 'skill') : 'idle',
-            );
-            const roundMarkup = presentation?.rounds?.length
-                ? presentation.rounds.map((round, index) => renderClashRound(round, index)).join('')
-                : '<div class="echoes-battle-panel__combat-round echoes-battle-panel__combat-round--empty">Select a Vergilius skill and resolve the turn to run the clash.</div>';
-
-            return `
-                <section class="echoes-battle-panel__combat-center">
-                    <div class="echoes-battle-panel__combat-stage${presentation ? ' is-resolving' : ''}">
-                        <div class="echoes-battle-panel__combat-stage-head">
-                            <div class="echoes-battle-panel__combat-stage-skill">
-                                <span>Vergilius</span>
-                                <strong>${selectedSkill?.name || 'No skill selected'}</strong>
-                                <small>${selectedSkill ? getCompactSkillPowerLabel(selectedSkill) : 'Pick one of the three skills below.'}</small>
-                            </div>
-                            <div class="echoes-battle-panel__combat-stage-skill echoes-battle-panel__combat-stage-skill--enemy">
-                                <span>Enemy Intent</span>
-                                <strong>${enemySkill?.name || 'Unknown'}</strong>
-                                <small>${enemySkill ? getCompactSkillPowerLabel(enemySkill) : ''}</small>
-                            </div>
-                        </div>
-
-                        <div class="echoes-battle-panel__combat-stage-actors">
-                            <div class="echoes-battle-panel__combat-actor echoes-battle-panel__combat-actor--hero${presentation ? ' is-clashing' : ''}">
-                                <img src="${heroActorImage}" alt="${battle.hero.name}">
-                            </div>
-                            <div class="echoes-battle-panel__combat-stage-burst">
-                                <span>${presentation ? `${presentation.clashWinner === 'hero' ? 'Vergilius' : 'Hong Lu'} won the clash` : 'Awaiting clash'}</span>
-                                <strong>${presentation ? `${presentation.totalDamage} total damage` : 'Focused debug encounter'}</strong>
-                            </div>
-                            <div class="echoes-battle-panel__combat-actor echoes-battle-panel__combat-actor--enemy${presentation ? ' is-clashing' : ''}">
-                                <img src="${enemyActorImage}" alt="${battle.enemy.name}">
-                            </div>
-                        </div>
-
-                        <div class="echoes-battle-panel__combat-rounds">
-                            ${roundMarkup}
-                        </div>
-
-                        <div class="echoes-battle-panel__combat-hits">
-                            ${renderOneSidedHits(presentation)}
-                        </div>
-                    </div>
-                </section>
-            `;
         }
 
         function renderStatusStrip(unit) {
@@ -273,10 +244,11 @@
             `;
         }
 
-        function renderBattleUnitCard(unit, side) {
+        function renderBattleUnitCard(battle, unit, slot, side) {
             const hpPercent = (unit.hp / unit.maxHp) * 100;
             const speedRangeLabel = `${unit.speedRange[0]}-${unit.speedRange[1]}`;
             const unitSprite = getUnitCardSprite(unit);
+            const assignedSkill = slot?.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
             const resistanceMarkup = ['slash', 'pierce', 'blunt']
                 .map((type) => `
                     <div class="echoes-battle-panel__combat-resistance">
@@ -289,7 +261,7 @@
             return `
                 <section class="echoes-battle-panel__combat-unit echoes-battle-panel__combat-unit--${side}">
                     <div class="echoes-battle-panel__combat-unit-header">
-                        <span class="echoes-battle-panel__combat-unit-label">${side === 'hero' ? 'Hero' : 'Enemy'}</span>
+                        <span class="echoes-battle-panel__combat-unit-label">${side === 'player' ? `Player ${slot.index + 1}` : `Enemy ${slot.index + 1}`}</span>
                         <strong>${unit.name}</strong>
                     </div>
                     <div class="echoes-battle-panel__combat-unit-sprite">
@@ -305,10 +277,20 @@
                         </div>
                     </div>
                     <div class="echoes-battle-panel__combat-stats">
-                        <div><span>Speed</span><strong>${unit.speed}</strong></div>
+                        <div><span>Speed</span><strong>${slot.speed}</strong></div>
                         <div><span>Range</span><strong>${speedRangeLabel}</strong></div>
                         <div><span>Level</span><strong>${unit.level}</strong></div>
                         <div><span>Def</span><strong>${getDefenseLevel(unit)}</strong></div>
+                    </div>
+                    <div class="echoes-battle-panel__combat-slot-summary">
+                        <div>
+                            <span>Assigned</span>
+                            <strong>${assignedSkill?.name || (side === 'enemy' ? 'Auto' : 'Not set')}</strong>
+                        </div>
+                        <div>
+                            <span>Target</span>
+                            <strong>${slot.targetSlotId ? getSlotById(battle, slot.targetSlotId)?.index + 1 : '-'}</strong>
+                        </div>
                     </div>
                     ${renderStatusStrip(unit)}
                     <div class="echoes-battle-panel__combat-resistances">
@@ -318,20 +300,182 @@
             `;
         }
 
-        function render(battle) {
-            if (!mountElement) {
-                return;
+        function renderTeamColumn(battle, side) {
+            const slots = getSlotsForSide(battle, side);
+            const cards = slots.map((slot) => {
+                const unit = getUnitById(battle, slot.unitId);
+                return renderBattleUnitCard(battle, unit, slot, side);
+            }).join('');
+
+            return `<div class="echoes-battle-panel__combat-team-column">${cards}</div>`;
+        }
+
+        function renderQueuePreview(battle) {
+            const queueIds = battle.phase === 'resolved' && battle.resolutionQueue.length
+                ? battle.resolutionQueue
+                : battle.speedOrder;
+
+            if (!queueIds.length) {
+                return '<div class="echoes-battle-panel__combat-queue-empty">Queue unavailable.</div>';
             }
 
-            const enemySkill = getSkillById(battle.enemy, battle.enemySkillId);
-            const selectedSkill = getSkillById(battle.hero, battle.selectedSkillId);
-            const logMarkup = battle.log
-                .slice(-10)
-                .reverse()
-                .map((entry) => `<li>${entry}</li>`)
-                .join('');
-            const heroSkillMarkup = battle.hero.skills.map((skill) => {
-                const isSelected = battle.selectedSkillId === skill.id;
+            return queueIds.map((slotId, index) => {
+                const slot = getSlotById(battle, slotId);
+                const unit = getUnitById(battle, slot.unitId);
+                return `
+                    <div class="echoes-battle-panel__combat-queue-item">
+                        <span>${index + 1}</span>
+                        <strong>${unit.name}</strong>
+                        <small>${slot.speed} Speed</small>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderClashStage(battle) {
+            const presentation = battle.clashPresentation;
+            const activePlayerSlot = getActivePlayerSlot(battle);
+            const targetSlot = activePlayerSlot?.targetSlotId ? getSlotById(battle, activePlayerSlot.targetSlotId) : null;
+            const activePlayerUnit = activePlayerSlot ? getUnitById(battle, activePlayerSlot.unitId) : null;
+            const targetUnit = targetSlot ? getUnitById(battle, targetSlot.unitId) : null;
+            const selectedSkill = activePlayerSlot?.selectedSkillId ? getSkillById(activePlayerUnit, activePlayerSlot.selectedSkillId) : null;
+            const enemySkillId = targetSlot?.intentSkillId || targetSlot?.selectedSkillId || null;
+            const enemySkill = targetUnit && enemySkillId ? getSkillById(targetUnit, enemySkillId) : null;
+            const leftUnit = presentation
+                ? (presentation.leftSlotId ? getUnitById(battle, getSlotById(battle, presentation.leftSlotId).unitId) : activePlayerUnit)
+                : activePlayerUnit;
+            const rightUnit = presentation
+                ? (presentation.rightSlotId ? getUnitById(battle, getSlotById(battle, presentation.rightSlotId).unitId) : targetUnit)
+                : targetUnit;
+            const leftActorImage = leftUnit
+                ? getActorSprite(leftUnit, presentation?.leftSkillId || selectedSkill?.id || null, presentation ? 'skill' : selectedSkill ? 'moving' : 'idle')
+                : '';
+            const rightActorImage = rightUnit
+                ? getActorSprite(
+                    rightUnit,
+                    presentation?.rightSkillId || enemySkill?.id || null,
+                    presentation ? (presentation.winnerSide === 'left' ? 'hurt' : 'skill') : 'idle',
+                )
+                : '';
+            const roundMarkup = presentation?.rounds?.length
+                ? presentation.rounds.map((round, index) => renderClashRound(presentation, round, index)).join('')
+                : '<div class="echoes-battle-panel__combat-round echoes-battle-panel__combat-round--empty">Assign player slots, pick targets, and resolve the turn to run the queue.</div>';
+
+            return `
+                <section class="echoes-battle-panel__combat-center">
+                    <div class="echoes-battle-panel__combat-stage${presentation ? ' is-resolving' : ''}">
+                        <div class="echoes-battle-panel__combat-stage-head">
+                            <div class="echoes-battle-panel__combat-stage-skill">
+                                <span>${leftUnit?.name || 'Player Slot'}</span>
+                                <strong>${presentation ? presentation.leftSkillName : selectedSkill?.name || 'No skill assigned'}</strong>
+                                <small>${presentation
+                                    ? (presentation.leftSkillId ? getCompactSkillPowerLabel(getSkillById(leftUnit, presentation.leftSkillId)) : 'No clash')
+                                    : selectedSkill ? getCompactSkillPowerLabel(selectedSkill) : 'Select a slot, assign a skill, then point it at an enemy slot.'}</small>
+                            </div>
+                            <div class="echoes-battle-panel__combat-stage-skill echoes-battle-panel__combat-stage-skill--enemy">
+                                <span>${rightUnit?.name || 'Enemy Slot'}</span>
+                                <strong>${presentation ? presentation.rightSkillName : enemySkill?.name || 'No target selected'}</strong>
+                                <small>${presentation
+                                    ? (presentation.rightSkillId ? getCompactSkillPowerLabel(getSkillById(rightUnit, presentation.rightSkillId)) : 'No clash')
+                                    : enemySkill ? getCompactSkillPowerLabel(enemySkill) : 'Choose an opposing slot to set up a clash.'}</small>
+                            </div>
+                        </div>
+
+                        <div class="echoes-battle-panel__combat-stage-actors">
+                            <div class="echoes-battle-panel__combat-actor echoes-battle-panel__combat-actor--hero${presentation ? ' is-clashing' : ''}">
+                                ${leftActorImage ? `<img src="${leftActorImage}" alt="${leftUnit?.name || 'Player'}">` : ''}
+                            </div>
+                            <div class="echoes-battle-panel__combat-stage-burst">
+                                <span>${presentation
+                                    ? presentation.engagementType === 'clash'
+                                        ? `${presentation.winnerSide === 'left' ? presentation.leftUnitName : presentation.rightUnitName} won the clash`
+                                        : `${presentation.winnerSide === 'left' ? presentation.leftUnitName : presentation.rightUnitName} attacked one-sided`
+                                    : 'Awaiting resolution'}</span>
+                                <strong>${presentation ? `${presentation.totalDamage} total damage` : 'Speed order drives slot resolution'}</strong>
+                            </div>
+                            <div class="echoes-battle-panel__combat-actor echoes-battle-panel__combat-actor--enemy${presentation ? ' is-clashing' : ''}">
+                                ${rightActorImage ? `<img src="${rightActorImage}" alt="${rightUnit?.name || 'Enemy'}">` : ''}
+                            </div>
+                        </div>
+
+                        <div class="echoes-battle-panel__combat-queue">
+                            ${renderQueuePreview(battle)}
+                        </div>
+
+                        <div class="echoes-battle-panel__combat-rounds">
+                            ${roundMarkup}
+                        </div>
+
+                        <div class="echoes-battle-panel__combat-hits">
+                            ${renderOneSidedHits(presentation)}
+                        </div>
+                    </div>
+                </section>
+            `;
+        }
+
+        function renderPlayerSlotCard(battle, slot, isActive) {
+            const unit = getUnitById(battle, slot.unitId);
+            const selectedSkill = slot.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
+            const targetLabel = slot.targetSlotId
+                ? getSlotById(battle, slot.targetSlotId)?.index + 1
+                : '-';
+
+            return `
+                <button
+                    class="echoes-battle-panel__combat-slot-card${isActive ? ' is-active' : ''}${slot.resolved ? ' is-resolved' : ''}"
+                    type="button"
+                    data-action="select-slot"
+                    data-slot-id="${slot.id}"
+                    ${battle.phase !== 'select' ? 'disabled' : ''}
+                >
+                    <div class="echoes-battle-panel__combat-slot-card-head">
+                        <span>${unit.name}</span>
+                        <strong>Slot ${slot.index + 1}</strong>
+                    </div>
+                    <div class="echoes-battle-panel__combat-slot-card-body">
+                        <span>Speed ${slot.speed}</span>
+                        <span>${selectedSkill?.name || 'No skill assigned'}</span>
+                        <span>Target ${targetLabel}</span>
+                    </div>
+                </button>
+            `;
+        }
+
+        function renderTargetButtons(battle, activePlayerSlot) {
+            if (!activePlayerSlot) {
+                return '<div class="echoes-battle-panel__combat-target-empty">No player slot available.</div>';
+            }
+
+            return battle.enemySlots.map((slot) => {
+                const unit = getUnitById(battle, slot.unitId);
+                const isSelected = activePlayerSlot.targetSlotId === slot.id;
+                const isDisabled = !getUnitById(battle, slot.unitId) || unit.hp <= 0 || battle.phase !== 'select';
+                return `
+                    <button
+                        class="echoes-battle-panel__combat-target-button${isSelected ? ' is-selected' : ''}"
+                        type="button"
+                        data-action="select-target"
+                        data-slot-id="${activePlayerSlot.id}"
+                        data-target-slot-id="${slot.id}"
+                        ${isDisabled ? 'disabled' : ''}
+                    >
+                        <span>Enemy Slot ${slot.index + 1}</span>
+                        <strong>${unit.name}</strong>
+                        <small>${slot.speed} Speed</small>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function renderSkillCards(battle, activePlayerSlot) {
+            if (!activePlayerSlot) {
+                return '<div class="echoes-battle-panel__combat-target-empty">No player slot available.</div>';
+            }
+
+            const unit = getUnitById(battle, activePlayerSlot.unitId);
+            return unit.skills.map((skill) => {
+                const isSelected = activePlayerSlot.selectedSkillId === skill.id;
                 const isDisabled = battle.phase !== 'select' || Boolean(battle.winner);
                 const borderUrl = resolveAssetUrl(skill.borderPath);
 
@@ -340,6 +484,7 @@
                         class="echoes-battle-panel__combat-skill${isSelected ? ' is-selected' : ''}"
                         type="button"
                         data-action="select-skill"
+                        data-slot-id="${activePlayerSlot.id}"
                         data-skill-id="${skill.id}"
                         ${isDisabled ? 'disabled' : ''}
                     >
@@ -350,13 +495,56 @@
                         </div>
                         <div class="echoes-battle-panel__combat-skill-power">${getSkillPowerLabel(skill)}</div>
                         <div class="echoes-battle-panel__combat-skill-meta">
-                            <span>Slash Skill</span>
-                            <span>Off ${getSkillOffenseLevel(battle.hero, skill)}</span>
+                            <span>${unit.name}</span>
+                            <span>Off ${getSkillOffenseLevel(unit, skill)}</span>
                         </div>
                         <p>${skill.description}</p>
                     </button>
                 `;
             }).join('');
+        }
+
+        function renderPlanningSection(battle) {
+            const activePlayerSlot = getActivePlayerSlot(battle);
+            const slotGridMarkup = battle.playerSlots.map((slot) => renderPlayerSlotCard(battle, slot, activePlayerSlot?.id === slot.id)).join('');
+
+            return `
+                <section class="echoes-battle-panel__combat-skills">
+                    <div class="echoes-battle-panel__combat-section-heading">
+                        <span>Skill Slots</span>
+                        <strong>${activePlayerSlot ? `Active: Slot ${activePlayerSlot.index + 1}` : 'No player slot available'}</strong>
+                    </div>
+                    <div class="echoes-battle-panel__combat-slot-grid">
+                        ${slotGridMarkup}
+                    </div>
+                    <div class="echoes-battle-panel__combat-section-heading echoes-battle-panel__combat-section-heading--sub">
+                        <span>Targeting</span>
+                        <strong>${activePlayerSlot?.targetSlotId ? `Enemy Slot ${getSlotById(battle, activePlayerSlot.targetSlotId)?.index + 1}` : 'Choose a target slot'}</strong>
+                    </div>
+                    <div class="echoes-battle-panel__combat-target-grid">
+                        ${renderTargetButtons(battle, activePlayerSlot)}
+                    </div>
+                    <div class="echoes-battle-panel__combat-section-heading echoes-battle-panel__combat-section-heading--sub">
+                        <span>Assigned Skill</span>
+                        <strong>${activePlayerSlot?.selectedSkillId ? getSkillById(getUnitById(battle, activePlayerSlot.unitId), activePlayerSlot.selectedSkillId).name : 'Choose a skill'}</strong>
+                    </div>
+                    <div class="echoes-battle-panel__combat-skill-grid">
+                        ${renderSkillCards(battle, activePlayerSlot)}
+                    </div>
+                </section>
+            `;
+        }
+
+        function render(battle) {
+            if (!mountElement) {
+                return;
+            }
+
+            const logMarkup = battle.log
+                .slice(-12)
+                .reverse()
+                .map((entry) => `<li>${entry}</li>`)
+                .join('');
 
             mountElement.innerHTML = `
                 <div class="echoes-battle-panel__combat-debug">
@@ -364,14 +552,14 @@
                         <div class="echoes-battle-panel__combat-pills">
                             <span class="echoes-battle-panel__combat-pill">Turn ${battle.turn}</span>
                             <span class="echoes-battle-panel__combat-pill">${getPhaseLabel(battle)}</span>
-                            <span class="echoes-battle-panel__combat-pill">Wiki-inspired prototype</span>
+                            <span class="echoes-battle-panel__combat-pill">Speed-ordered slot prototype</span>
                         </div>
                         <div class="echoes-battle-panel__combat-controls">
                             <button
                                 class="echoes-battle-panel__combat-button"
                                 type="button"
                                 data-action="resolve-turn"
-                                ${battle.phase !== 'select' || !battle.selectedSkillId || battle.winner ? 'disabled' : ''}
+                                ${battle.phase !== 'select' || battle.winner ? 'disabled' : ''}
                             >
                                 Resolve Turn
                             </button>
@@ -394,22 +582,13 @@
                     </div>
 
                     <div class="echoes-battle-panel__combat-arena">
-                        ${renderBattleUnitCard(battle.hero, 'hero')}
-                        ${renderClashStage(battle, selectedSkill, enemySkill)}
-                        ${renderBattleUnitCard(battle.enemy, 'enemy')}
+                        ${renderTeamColumn(battle, 'player')}
+                        ${renderClashStage(battle)}
+                        ${renderTeamColumn(battle, 'enemy')}
                     </div>
 
                     <div class="echoes-battle-panel__combat-lower">
-                        <section class="echoes-battle-panel__combat-skills">
-                            <div class="echoes-battle-panel__combat-section-heading">
-                                <span>Hero Skills</span>
-                                <strong>${selectedSkill ? `Selected: ${selectedSkill.name}` : 'Select one skill'}</strong>
-                            </div>
-                            <div class="echoes-battle-panel__combat-skill-grid">
-                                ${heroSkillMarkup}
-                            </div>
-                        </section>
-
+                        ${renderPlanningSection(battle)}
                         <section class="echoes-battle-panel__combat-log">
                             <div class="echoes-battle-panel__combat-section-heading">
                                 <span>Battle Log</span>
