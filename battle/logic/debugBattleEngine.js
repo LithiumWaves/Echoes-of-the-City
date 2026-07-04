@@ -1118,6 +1118,7 @@
         }
 
         function createClashPresentation(leftSlot, rightSlot, leftUnit, rightUnit, leftSkill, rightSkill, clashResult, hits, totalDamage, winnerSide) {
+            const decisiveRound = [...clashResult.rounds].reverse().find((round) => round.result !== 'tie') || clashResult.rounds[clashResult.rounds.length - 1] || null;
             return {
                 engagementType: 'clash',
                 leftSlotId: leftSlot.id,
@@ -1138,10 +1139,13 @@
                 })),
                 hits,
                 totalDamage,
+                leftDisplayPower: decisiveRound?.leftPower || 0,
+                rightDisplayPower: decisiveRound?.rightPower || 0,
             };
         }
 
         function createOneSidedPresentation(attackerSlot, defenderSlot, attacker, defender, skill, hits, totalDamage) {
+            const openingHit = hits[0] || null;
             return {
                 engagementType: 'one-sided',
                 leftSlotId: attackerSlot.side === 'player' ? attackerSlot.id : defenderSlot.id,
@@ -1156,6 +1160,8 @@
                 rounds: [],
                 hits,
                 totalDamage,
+                leftDisplayPower: attackerSlot.side === 'player' ? (openingHit?.finalPower || 0) : 0,
+                rightDisplayPower: attackerSlot.side === 'enemy' ? (openingHit?.finalPower || 0) : 0,
             };
         }
 
@@ -1270,6 +1276,7 @@
                 totalDamage,
                 clashResult.winnerSide,
             );
+            targetBattle.resolutionHistory.push(targetBattle.clashPresentation);
             targetBattle.lastResolution = {
                 engagementType: 'clash',
                 actingUnitName: clashWinnerUnit.name,
@@ -1303,6 +1310,7 @@
             }
 
             targetBattle.clashPresentation = createOneSidedPresentation(actingSlot, targetSlot, actingUnit, targetUnit, actingSkill, hits, totalDamage);
+            targetBattle.resolutionHistory.push(targetBattle.clashPresentation);
             targetBattle.lastResolution = {
                 engagementType: 'one-sided',
                 actingUnitName: actingUnit.name,
@@ -1439,6 +1447,7 @@
                 resolutionQueue: [],
                 lastResolution: null,
                 clashPresentation: null,
+                resolutionHistory: [],
             };
 
             emitEvent(nextBattle, 'battle_started', {
@@ -1459,6 +1468,7 @@
             targetBattle.lastResolution = null;
             targetBattle.clashPresentation = null;
             targetBattle.resolutionQueue = [];
+            targetBattle.resolutionHistory = [];
 
             emitEvent(targetBattle, 'turn_started', {
                 turn: targetBattle.turn,

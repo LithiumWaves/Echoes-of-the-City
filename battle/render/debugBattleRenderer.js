@@ -239,7 +239,10 @@
                     </span>
                     <span class="echoes-battle-panel__field-name">${unit.name}</span>
                     <span class="echoes-battle-panel__field-state">${stateLabel}</span>
-                    <span class="echoes-battle-panel__field-hp">HP ${unit.hp}/${unit.maxHp}</span>
+                    <span class="echoes-battle-panel__field-vitals">
+                        <span class="echoes-battle-panel__field-hp">HP ${unit.hp}/${unit.maxHp}</span>
+                        <span class="echoes-battle-panel__field-sp">SP ${unit.sp}</span>
+                    </span>
                     ${renderMiniStatuses(unit)}
                 </button>
             `;
@@ -285,6 +288,35 @@
             `;
         }
 
+        function renderResolutionBadges(battle) {
+            const presentation = battle.clashPresentation;
+            if (!presentation || battle.phase !== 'resolved') {
+                return '';
+            }
+
+            const leftSlot = getSlotById(battle, presentation.leftSlotId);
+            const rightSlot = getSlotById(battle, presentation.rightSlotId);
+            if (!leftSlot || !rightSlot) {
+                return '';
+            }
+
+            const leftPosition = getFieldPosition(leftSlot.side, leftSlot.index);
+            const rightPosition = getFieldPosition(rightSlot.side, rightSlot.index);
+            const leftWinner = presentation.winnerSide === 'left';
+            const rightWinner = presentation.winnerSide === 'right';
+
+            return `
+                <div class="echoes-battle-panel__resolution-badge echoes-battle-panel__resolution-badge--left${leftWinner ? ' is-winner' : ''}" style="left: ${leftPosition.x - 3}%; top: ${leftPosition.y - 24}%;">
+                    <strong>${presentation.leftDisplayPower || 0}</strong>
+                    <span>${presentation.leftUnitName}</span>
+                </div>
+                <div class="echoes-battle-panel__resolution-badge echoes-battle-panel__resolution-badge--right${rightWinner ? ' is-winner' : ''}" style="left: ${rightPosition.x + 3}%; top: ${rightPosition.y - 24}%;">
+                    <strong>${presentation.rightDisplayPower || 0}</strong>
+                    <span>${presentation.rightUnitName}</span>
+                </div>
+            `;
+        }
+
         function renderResolutionCard(battle, activePlayerSlot) {
             const presentation = battle.clashPresentation;
 
@@ -317,6 +349,40 @@
                     </div>
                 </div>
             `;
+        }
+
+        function renderResolutionFeed(battle) {
+            const history = Array.isArray(battle.resolutionHistory) ? battle.resolutionHistory : [];
+            if (!history.length) {
+                return '<div class="echoes-battle-panel__planner-empty">Resolve the turn to see every clash and attack in order.</div>';
+            }
+
+            return history.map((entry, index) => {
+                const actorNames = `${entry.leftUnitName} vs ${entry.rightUnitName}`;
+                const detail = entry.engagementType === 'clash'
+                    ? `${entry.leftSkillName} vs ${entry.rightSkillName}`
+                    : entry.leftSkillId
+                        ? `${entry.leftUnitName} used ${entry.leftSkillName}`
+                        : `${entry.rightUnitName} used ${entry.rightSkillName}`;
+                const exchangeCount = entry.engagementType === 'clash'
+                    ? `${entry.rounds.length} clash rounds`
+                    : `${entry.hits.length} hit${entry.hits.length === 1 ? '' : 's'}`;
+
+                return `
+                    <div class="echoes-battle-panel__resolution-feed-card">
+                        <span class="echoes-battle-panel__resolution-feed-index">${index + 1}</span>
+                        <div class="echoes-battle-panel__resolution-feed-main">
+                            <strong>${actorNames}</strong>
+                            <small>${detail}</small>
+                        </div>
+                        <div class="echoes-battle-panel__resolution-feed-side">
+                            <span>${entry.engagementType === 'clash' ? 'Clash' : 'Attack'}</span>
+                            <strong>${entry.totalDamage}</strong>
+                            <small>${exchangeCount}</small>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         function renderQueueTrack(battle) {
@@ -458,6 +524,7 @@
                     <div class="echoes-battle-panel__combat-stage-area">
                         ${renderTargetOverlay(battle, activePlayerSlot)}
                         ${renderResolutionCard(battle, activePlayerSlot)}
+                        ${renderResolutionBadges(battle)}
                         ${playerMarkup}
                         ${enemyMarkup}
                     </div>
@@ -505,11 +572,14 @@
 
                     <aside class="echoes-battle-panel__planner-lane echoes-battle-panel__planner-lane--queue">
                         <div class="echoes-battle-panel__planner-heading">
-                            <span>Speed Order</span>
+                            <span>Resolution</span>
                             <strong>${getPhaseLabel(battle)}</strong>
                         </div>
                         <div class="echoes-battle-panel__queue-track">
                             ${renderQueueTrack(battle)}
+                        </div>
+                        <div class="echoes-battle-panel__resolution-feed">
+                            ${renderResolutionFeed(battle)}
                         </div>
                         <ol class="echoes-battle-panel__planner-log">
                             ${logMarkup}

@@ -1148,6 +1148,39 @@
     stroke-width: 1.55;
 }
 
+.echoes-battle-panel__resolution-badge {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    min-width: 3.2rem;
+    padding: 0.25rem 0.38rem;
+    border-radius: 0.55rem;
+    border: 1px solid rgba(255, 191, 132, 0.18);
+    background: rgba(14, 11, 10, 0.82);
+    text-align: center;
+    z-index: 4;
+    pointer-events: none;
+}
+
+.echoes-battle-panel__resolution-badge strong {
+    display: block;
+    color: #fff0de;
+    font-size: 1.55rem;
+    line-height: 1;
+}
+
+.echoes-battle-panel__resolution-badge span {
+    display: block;
+    margin-top: 0.08rem;
+    color: rgba(255, 220, 183, 0.72);
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.echoes-battle-panel__resolution-badge.is-winner strong {
+    color: #ffe1ae;
+}
+
 .echoes-battle-panel__combat-result-card {
     position: absolute;
     left: 50%;
@@ -1272,7 +1305,7 @@
 
 .echoes-battle-panel__field-name,
 .echoes-battle-panel__field-state,
-.echoes-battle-panel__field-hp {
+.echoes-battle-panel__field-vitals {
     display: block;
     position: relative;
     z-index: 1;
@@ -1292,10 +1325,20 @@
 }
 
 .echoes-battle-panel__field-state,
-.echoes-battle-panel__field-hp {
+.echoes-battle-panel__field-vitals {
     margin-top: 0.12rem;
     color: #e0b988;
     font-size: 0.64rem;
+}
+
+.echoes-battle-panel__field-vitals {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.echoes-battle-panel__field-sp {
+    color: #a9d2ff;
 }
 
 .echoes-battle-panel__field-statuses {
@@ -1530,12 +1573,67 @@
 .echoes-battle-panel__planner-log {
     margin: 0.6rem 0 0;
     padding-left: 1.1rem;
-    max-height: 5.4rem;
+    max-height: 3.8rem;
     overflow: auto;
 }
 
 .echoes-battle-panel__planner-log li + li {
     margin-top: 0.3rem;
+}
+
+.echoes-battle-panel__resolution-feed {
+    display: grid;
+    gap: 0.45rem;
+    margin-top: 0.6rem;
+    max-height: 8rem;
+    overflow: auto;
+}
+
+.echoes-battle-panel__resolution-feed-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.5rem 0.55rem;
+    border-radius: 0.68rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 193, 131, 0.12);
+}
+
+.echoes-battle-panel__resolution-feed-index {
+    width: 1.55rem;
+    height: 1.55rem;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(83, 49, 21, 0.92), rgba(24, 15, 10, 0.94));
+    color: #ffe0bc;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.echoes-battle-panel__resolution-feed-main {
+    min-width: 0;
+}
+
+.echoes-battle-panel__resolution-feed-main strong,
+.echoes-battle-panel__resolution-feed-side strong {
+    display: block;
+    color: #fff0de;
+    font-size: 0.8rem;
+}
+
+.echoes-battle-panel__resolution-feed-main small,
+.echoes-battle-panel__resolution-feed-side span,
+.echoes-battle-panel__resolution-feed-side small {
+    display: block;
+    color: rgba(255, 220, 183, 0.72);
+    font-size: 0.64rem;
+    line-height: 1.35;
+}
+
+.echoes-battle-panel__resolution-feed-side {
+    text-align: right;
 }
 
 @media (max-width: 1180px) {
