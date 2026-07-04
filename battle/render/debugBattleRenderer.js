@@ -484,16 +484,17 @@
                         ${isDisabled ? 'disabled' : ''}
                     >
                         <span class="echoes-battle-panel__combat-skill-border" style="background-image: url('${borderUrl}')"></span>
-                        <div class="echoes-battle-panel__combat-skill-header">
-                            <strong>${skill.name}</strong>
-                            <span>${skill.damageType}</span>
+                        <div class="echoes-battle-panel__combat-skill-main">
+                            <div class="echoes-battle-panel__combat-skill-header">
+                                <strong>${skill.name}</strong>
+                                <span>${skill.damageType}</span>
+                            </div>
+                            <div class="echoes-battle-panel__combat-skill-power">${getSkillPowerLabel(skill)}</div>
                         </div>
-                        <div class="echoes-battle-panel__combat-skill-power">${getSkillPowerLabel(skill)}</div>
                         <div class="echoes-battle-panel__combat-skill-meta">
-                            <span>${unit.name}</span>
+                            <span>Assign</span>
                             <span>Off ${getSkillOffenseLevel(unit, skill)}</span>
                         </div>
-                        <p>${skill.description}</p>
                     </button>
                 `;
             }).join('');
@@ -516,9 +517,9 @@
                         <span>Assignment</span>
                         <strong>${activePlayerSlot?.selectedSkillId
                             ? `${getSkillById(getUnitById(battle, activePlayerSlot.unitId), activePlayerSlot.selectedSkillId).name} -> Enemy Slot ${getSlotById(battle, activePlayerSlot.targetSlotId)?.index + 1 || '?'}`
-                            : 'Drag a skill onto an enemy slot'}</strong>
+                            : 'Pick a compact skill button, then drag or click-target as needed'}</strong>
                     </div>
-                    <div class="echoes-battle-panel__combat-target-empty">Drag a skill card onto an enemy unit card to assign both the skill and its target.</div>
+                    <div class="echoes-battle-panel__combat-target-empty">Skills are now condensed into compact buttons so the full tray stays visible.</div>
                     <div class="echoes-battle-panel__combat-skill-grid">
                         ${renderSkillCards(battle, activePlayerSlot)}
                     </div>
