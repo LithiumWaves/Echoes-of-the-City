@@ -3,6 +3,15 @@
 
     battleModules.createDebugBattleRenderer = function createDebugBattleRenderer(options) {
         const { mountElement, resolveAssetUrl } = options;
+        const keywordStatusIconPaths = {
+            bleed: 'assets/statuseffects/keywordstatus/Bleed.png',
+            burn: 'assets/statuseffects/keywordstatus/Burn.png',
+            charge: 'assets/statuseffects/keywordstatus/Charge.png',
+            poise: 'assets/statuseffects/keywordstatus/Poise.png',
+            rupture: 'assets/statuseffects/keywordstatus/Rupture.png',
+            sinking: 'assets/statuseffects/keywordstatus/Sinking.png',
+            tremor: 'assets/statuseffects/keywordstatus/Tremor.png',
+        };
 
         function formatResistanceValue(value) {
             return `x${value.toFixed(2).replace(/\.00$/, '')}`;
@@ -39,6 +48,36 @@
 
         function getDefenseLevel(unit) {
             return Math.max(1, unit.defenseLevel || unit.level);
+        }
+
+        function getStatusLabel(statusId) {
+            const labels = {
+                bleed: 'Bleed',
+                burn: 'Burn',
+                protection: 'Protection',
+                charge: 'Charge',
+                poise: 'Poise',
+                rupture: 'Rupture',
+                sinking: 'Sinking',
+                tremor: 'Tremor',
+            };
+
+            return labels[statusId] || statusId;
+        }
+
+        function getRenderableStatuses(unit) {
+            const statuses = Array.isArray(unit.statuses) ? unit.statuses : [];
+            return statuses.filter((status) => {
+                if (!status?.id) {
+                    return false;
+                }
+
+                if (status.id === 'protection') {
+                    return (status.count || 0) > 0;
+                }
+
+                return (status.potency || 0) > 0 || (status.count || 0) > 0;
+            });
         }
 
         function getUnitCardSprite(unit) {
@@ -178,6 +217,62 @@
             `;
         }
 
+        function renderStatusStrip(unit) {
+            const statuses = getRenderableStatuses(unit);
+            if (!statuses.length) {
+                return `
+                    <div class="echoes-battle-panel__combat-statuses echoes-battle-panel__combat-statuses--empty">
+                        <span class="echoes-battle-panel__combat-statuses-label">Keywords</span>
+                        <span class="echoes-battle-panel__combat-statuses-empty">No active effects</span>
+                    </div>
+                `;
+            }
+
+            const statusMarkup = statuses.map((status) => {
+                const statusLabel = getStatusLabel(status.id);
+                const iconPath = keywordStatusIconPaths[status.id];
+                const iconUrl = iconPath ? resolveAssetUrl(iconPath) : '';
+                const valueMarkup = status.id === 'protection'
+                    ? `
+                        <span class="echoes-battle-panel__combat-status-value echoes-battle-panel__combat-status-value--count">
+                            ${status.count}
+                        </span>
+                    `
+                    : `
+                        <span class="echoes-battle-panel__combat-status-value echoes-battle-panel__combat-status-value--potency">
+                            ${status.potency || 0}
+                        </span>
+                        <span class="echoes-battle-panel__combat-status-divider">/</span>
+                        <span class="echoes-battle-panel__combat-status-value echoes-battle-panel__combat-status-value--count">
+                            ${status.count || 0}
+                        </span>
+                    `;
+
+                return `
+                    <div class="echoes-battle-panel__combat-status" title="${statusLabel}">
+                        <div class="echoes-battle-panel__combat-status-icon${iconUrl ? '' : ' is-fallback'}">
+                            ${iconUrl
+                                ? `<img src="${iconUrl}" alt="${statusLabel}">`
+                                : `<span>${statusLabel.slice(0, 2).toUpperCase()}</span>`}
+                        </div>
+                        <div class="echoes-battle-panel__combat-status-data">
+                            <span class="echoes-battle-panel__combat-status-name">${statusLabel}</span>
+                            <span class="echoes-battle-panel__combat-status-numbers">${valueMarkup}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="echoes-battle-panel__combat-statuses">
+                    <span class="echoes-battle-panel__combat-statuses-label">Keywords</span>
+                    <div class="echoes-battle-panel__combat-status-list">
+                        ${statusMarkup}
+                    </div>
+                </div>
+            `;
+        }
+
         function renderBattleUnitCard(unit, side) {
             const hpPercent = (unit.hp / unit.maxHp) * 100;
             const speedRangeLabel = `${unit.speedRange[0]}-${unit.speedRange[1]}`;
@@ -215,6 +310,7 @@
                         <div><span>Level</span><strong>${unit.level}</strong></div>
                         <div><span>Def</span><strong>${getDefenseLevel(unit)}</strong></div>
                     </div>
+                    ${renderStatusStrip(unit)}
                     <div class="echoes-battle-panel__combat-resistances">
                         ${resistanceMarkup}
                     </div>

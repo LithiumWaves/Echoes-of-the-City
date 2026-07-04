@@ -294,7 +294,7 @@
 
 .echoes-battle-panel__combat-unit {
     display: grid;
-    grid-template-rows: auto minmax(6rem, 8.5rem) auto auto 1fr;
+    grid-template-rows: auto minmax(6rem, 8.5rem) auto auto auto 1fr;
     gap: 0.65rem;
 }
 
@@ -403,6 +403,105 @@
 .echoes-battle-panel__combat-resistance strong {
     font-size: 0.84rem;
     color: #fff0de;
+}
+
+.echoes-battle-panel__combat-statuses {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.echoes-battle-panel__combat-statuses-label {
+    color: rgba(255, 213, 178, 0.62);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+}
+
+.echoes-battle-panel__combat-statuses--empty {
+    align-content: start;
+}
+
+.echoes-battle-panel__combat-statuses-empty {
+    color: rgba(236, 199, 161, 0.7);
+    font-size: 0.76rem;
+}
+
+.echoes-battle-panel__combat-status-list {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.echoes-battle-panel__combat-status {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.45rem 0.55rem;
+    border-radius: 0.55rem;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.echoes-battle-panel__combat-status-icon {
+    width: 2rem;
+    height: 2rem;
+    display: grid;
+    place-items: center;
+    border-radius: 0.4rem;
+    background: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+}
+
+.echoes-battle-panel__combat-status-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.echoes-battle-panel__combat-status-icon.is-fallback {
+    background: linear-gradient(180deg, rgba(255, 157, 90, 0.26), rgba(93, 43, 24, 0.4));
+    color: #fff0de;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.echoes-battle-panel__combat-status-data {
+    min-width: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.65rem;
+}
+
+.echoes-battle-panel__combat-status-name {
+    min-width: 0;
+    color: #fff0de;
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.echoes-battle-panel__combat-status-numbers {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.15rem;
+    color: #ffd6b0;
+    flex-shrink: 0;
+}
+
+.echoes-battle-panel__combat-status-value {
+    color: #fff0de;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.echoes-battle-panel__combat-status-value--potency {
+    font-size: 0.95rem;
+}
+
+.echoes-battle-panel__combat-status-value--count,
+.echoes-battle-panel__combat-status-divider {
+    font-size: 0.74rem;
 }
 
 .echoes-battle-panel__combat-resistances {
