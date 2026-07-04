@@ -58,6 +58,18 @@
                 return;
             }
 
+            if (action === 'select-target' && targetSlotId) {
+                const activeState = engine.getState();
+                const activeSlotId = slotId || activeState.activePlayerSlotId;
+                if (!activeSlotId) {
+                    return;
+                }
+
+                engine.selectTarget(targetSlotId, activeSlotId);
+                render();
+                return;
+            }
+
             if (action === 'resolve-turn') {
                 engine.resolveTurn();
                 render();
@@ -157,7 +169,7 @@
             clearDropTargetState();
             dragAssignment = null;
             mountElement
-                ?.querySelectorAll('.echoes-battle-panel__combat-skill.is-dragging')
+                ?.querySelectorAll('.echoes-battle-panel__planner-skill.is-dragging, .echoes-battle-panel__combat-skill.is-dragging')
                 .forEach((element) => element.classList.remove('is-dragging'));
         }
 
