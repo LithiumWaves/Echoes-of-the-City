@@ -249,6 +249,7 @@
             const speedRangeLabel = `${unit.speedRange[0]}-${unit.speedRange[1]}`;
             const unitSprite = getUnitCardSprite(unit);
             const assignedSkill = slot?.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
+            const isDropTarget = side === 'enemy' && battle.phase === 'select' && unit.hp > 0;
             const resistanceMarkup = ['slash', 'pierce', 'blunt']
                 .map((type) => `
                     <div class="echoes-battle-panel__combat-resistance">
@@ -259,7 +260,10 @@
                 .join('');
 
             return `
-                <section class="echoes-battle-panel__combat-unit echoes-battle-panel__combat-unit--${side}">
+                <section
+                    class="echoes-battle-panel__combat-unit echoes-battle-panel__combat-unit--${side}${isDropTarget ? ' echoes-battle-panel__combat-unit--drop-target' : ''}"
+                    ${isDropTarget ? `data-drop-target="enemy-slot" data-target-slot-id="${slot.id}"` : ''}
+                >
                     <div class="echoes-battle-panel__combat-unit-header">
                         <span class="echoes-battle-panel__combat-unit-label">${side === 'player' ? `Player ${slot.index + 1}` : `Enemy ${slot.index + 1}`}</span>
                         <strong>${unit.name}</strong>
@@ -284,12 +288,14 @@
                     </div>
                     <div class="echoes-battle-panel__combat-slot-summary">
                         <div>
-                            <span>Assigned</span>
+                            <span>${side === 'enemy' ? 'Intent' : 'Assigned'}</span>
                             <strong>${assignedSkill?.name || (side === 'enemy' ? 'Auto' : 'Not set')}</strong>
                         </div>
                         <div>
-                            <span>Target</span>
-                            <strong>${slot.targetSlotId ? getSlotById(battle, slot.targetSlotId)?.index + 1 : '-'}</strong>
+                            <span>${side === 'enemy' ? 'Drag' : 'Target'}</span>
+                            <strong>${side === 'enemy'
+                                ? 'Drop skill here'
+                                : slot.targetSlotId ? getSlotById(battle, slot.targetSlotId)?.index + 1 : '-'}</strong>
                         </div>
                     </div>
                     ${renderStatusStrip(unit)}
@@ -442,32 +448,6 @@
             `;
         }
 
-        function renderTargetButtons(battle, activePlayerSlot) {
-            if (!activePlayerSlot) {
-                return '<div class="echoes-battle-panel__combat-target-empty">No player slot available.</div>';
-            }
-
-            return battle.enemySlots.map((slot) => {
-                const unit = getUnitById(battle, slot.unitId);
-                const isSelected = activePlayerSlot.targetSlotId === slot.id;
-                const isDisabled = !getUnitById(battle, slot.unitId) || unit.hp <= 0 || battle.phase !== 'select';
-                return `
-                    <button
-                        class="echoes-battle-panel__combat-target-button${isSelected ? ' is-selected' : ''}"
-                        type="button"
-                        data-action="select-target"
-                        data-slot-id="${activePlayerSlot.id}"
-                        data-target-slot-id="${slot.id}"
-                        ${isDisabled ? 'disabled' : ''}
-                    >
-                        <span>Enemy Slot ${slot.index + 1}</span>
-                        <strong>${unit.name}</strong>
-                        <small>${slot.speed} Speed</small>
-                    </button>
-                `;
-            }).join('');
-        }
-
         function renderSkillCards(battle, activePlayerSlot) {
             if (!activePlayerSlot) {
                 return '<div class="echoes-battle-panel__combat-target-empty">No player slot available.</div>';
@@ -486,6 +466,8 @@
                         data-action="select-skill"
                         data-slot-id="${activePlayerSlot.id}"
                         data-skill-id="${skill.id}"
+                        draggable="${isDisabled ? 'false' : 'true'}"
+                        data-drag-skill="true"
                         ${isDisabled ? 'disabled' : ''}
                     >
                         <span class="echoes-battle-panel__combat-skill-border" style="background-image: url('${borderUrl}')"></span>
@@ -518,16 +500,12 @@
                         ${slotGridMarkup}
                     </div>
                     <div class="echoes-battle-panel__combat-section-heading echoes-battle-panel__combat-section-heading--sub">
-                        <span>Targeting</span>
-                        <strong>${activePlayerSlot?.targetSlotId ? `Enemy Slot ${getSlotById(battle, activePlayerSlot.targetSlotId)?.index + 1}` : 'Choose a target slot'}</strong>
+                        <span>Assignment</span>
+                        <strong>${activePlayerSlot?.selectedSkillId
+                            ? `${getSkillById(getUnitById(battle, activePlayerSlot.unitId), activePlayerSlot.selectedSkillId).name} -> Enemy Slot ${getSlotById(battle, activePlayerSlot.targetSlotId)?.index + 1 || '?'}`
+                            : 'Drag a skill onto an enemy slot'}</strong>
                     </div>
-                    <div class="echoes-battle-panel__combat-target-grid">
-                        ${renderTargetButtons(battle, activePlayerSlot)}
-                    </div>
-                    <div class="echoes-battle-panel__combat-section-heading echoes-battle-panel__combat-section-heading--sub">
-                        <span>Assigned Skill</span>
-                        <strong>${activePlayerSlot?.selectedSkillId ? getSkillById(getUnitById(battle, activePlayerSlot.unitId), activePlayerSlot.selectedSkillId).name : 'Choose a skill'}</strong>
-                    </div>
+                    <div class="echoes-battle-panel__combat-target-empty">Drag a skill card onto an enemy unit card to assign both the skill and its target.</div>
                     <div class="echoes-battle-panel__combat-skill-grid">
                         ${renderSkillCards(battle, activePlayerSlot)}
                     </div>

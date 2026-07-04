@@ -293,6 +293,25 @@
         0 10px 28px rgba(0, 0, 0, 0.22);
 }
 
+.echoes-battle-panel__combat-unit--drop-target {
+    transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease, background 140ms ease;
+}
+
+.echoes-battle-panel__combat-content.is-dragging-skill .echoes-battle-panel__combat-unit--drop-target {
+    border-color: rgba(255, 189, 122, 0.32);
+    box-shadow: inset 0 0 0 1px rgba(255, 189, 122, 0.08);
+}
+
+.echoes-battle-panel__combat-unit--drop-target.is-drop-hover {
+    border-color: rgba(255, 182, 101, 0.9);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 182, 101, 0.18),
+        0 0 0 1px rgba(255, 182, 101, 0.08),
+        0 14px 28px rgba(0, 0, 0, 0.24);
+    background: linear-gradient(180deg, rgba(113, 51, 18, 0.38), rgba(34, 14, 9, 0.92));
+    transform: translateY(-2px);
+}
+
 .echoes-battle-panel__combat-unit,
 .echoes-battle-panel__combat-center {
     padding: 0.9rem 1rem;
@@ -903,7 +922,7 @@
     background: rgba(255, 255, 255, 0.04);
     color: inherit;
     text-align: left;
-    cursor: pointer;
+    cursor: grab;
     transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
 }
 
@@ -932,6 +951,12 @@
 .echoes-battle-panel__combat-skill:disabled {
     cursor: default;
     opacity: 0.58;
+}
+
+.echoes-battle-panel__combat-skill.is-dragging {
+    opacity: 0.46;
+    transform: scale(0.98);
+    cursor: grabbing;
 }
 
 .echoes-battle-panel__combat-skill.is-selected {
