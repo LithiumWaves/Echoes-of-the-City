@@ -732,28 +732,27 @@
                     </div>
 
                     <div class="echoes-battle-panel__combat-stage-area">
-                        ${renderTargetOverlay(battle, activePlayerSlot)}
                         ${renderTargetOverlayWithUiState(battle, activePlayerSlot, uiState)}
                         ${renderResolutionCard(getResolvedBattle(battle, uiState), activePlayerSlot, uiState)}
                         ${renderPlaybackOverlay(battle, uiState)}
                         ${renderResolutionBadges(getResolvedBattle(battle, uiState), uiState)}
+                        ${playerMarkup}
                         ${enemyMarkup}
                     </div>
                 </section>
             `;
         }
 
-        function renderPlanner(battle, activePlayerSlot) {
         function renderPlanner(battle, activePlayerSlot, uiState) {
+            const activeUnit = activePlayerSlot ? getUnitById(battle, activePlayerSlot.unitId) : null;
             const selectedSkill = activePlayerSlot?.selectedSkillId ? getSkillById(activeUnit, activePlayerSlot.selectedSkillId) : null;
             const targetSlot = activePlayerSlot?.targetSlotId ? getSlotById(battle, activePlayerSlot.targetSlotId) : null;
             const targetUnit = targetSlot ? getUnitById(battle, targetSlot.unitId) : null;
-            const logMarkup = battle.log
             const resolvedBattle = getResolvedBattle(battle, uiState);
             const logMarkup = resolvedBattle.log
+                .slice(-4)
                 .reverse()
                 .map((entry) => `<li>${entry}</li>`)
-                .join('');
                 .join('');
 
             return `

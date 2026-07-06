@@ -79,7 +79,11 @@
                     }
 
                     const scriptSource = await response.text();
-                    window.eval(`${scriptSource}\n//# sourceURL=${scriptUrl}`);
+                    try {
+                        window.eval(`${scriptSource}\n//# sourceURL=${scriptUrl}`);
+                    } catch (error) {
+                        throw new Error(`Failed to evaluate ${relativePath}: ${error?.message || error}`);
+                    }
                 }
 
                 if (!window.EchoesOfTheCityBattle?.createDebugBattleController) {
@@ -92,6 +96,18 @@
         }
 
         await state.battleModulePromise;
+    }
+
+    function formatCombatModuleError(error) {
+        if (!error) {
+            return 'Unknown combat initialization error.';
+        }
+
+        if (typeof error === 'string') {
+            return error;
+        }
+
+        return error.stack || error.message || String(error);
     }
 
     async function initializeCombatController() {
@@ -122,11 +138,12 @@
         state.combatController?.handleClick(event);
     }
 
-    function renderCombatLoadError() {
+    function renderCombatLoadError(error) {
         if (!elements.combatContent) {
             return;
         }
 
+        const errorMessage = formatCombatModuleError(error);
         elements.combatContent.innerHTML = `
             <div class="echoes-battle-panel__combat-debug">
                 <div class="echoes-battle-panel__combat-toolbar">
@@ -134,8 +151,18 @@
                         <span class="echoes-battle-panel__combat-pill">Combat Module Error</span>
                     </div>
                 </div>
+                <pre class="echoes-battle-panel__combat-load-error">${escapeHtml(errorMessage)}</pre>
             </div>
         `;
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     function configureAudio(audio, volume) {
@@ -852,8 +879,8 @@
         try {
             await initializeCombatController();
         } catch (error) {
-            console.debug(`${EXTENSION_ID}: combat module initialization skipped.`, error);
-            renderCombatLoadError();
+            console.error(`${EXTENSION_ID}: combat module initialization failed.`, error);
+            renderCombatLoadError(error);
         }
         preloadAudio();
         syncPanelState();
