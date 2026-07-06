@@ -1124,6 +1124,14 @@
     stroke-width: 1.55;
 }
 
+.echoes-battle-panel__field-path--enemy {
+    color: rgba(113, 168, 255, 0.82);
+    stroke-dasharray: 4 3;
+    stroke-width: 1.05;
+    opacity: 0.72;
+    filter: drop-shadow(0 0 2px rgba(83, 137, 230, 0.28));
+}
+
 .echoes-battle-panel__combat-result-card {
     position: absolute;
     left: 50%;

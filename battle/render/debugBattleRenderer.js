@@ -348,7 +348,7 @@
                 `;
             }
 
-            const paths = battle.playerSlots
+            const playerPaths = battle.playerSlots
                 .filter((slot) => slot.targetSlotId)
                 .map((slot) => {
                     const start = getFieldPosition('player', slot.index);
@@ -371,7 +371,29 @@
                 })
                 .join('');
 
-            if (!paths) {
+            const enemyPaths = battle.enemySlots
+                .filter((slot) => slot.targetSlotId)
+                .map((slot) => {
+                    const start = getFieldPosition('enemy', slot.index);
+                    const targetSlot = getSlotById(battle, slot.targetSlotId);
+                    if (!targetSlot) {
+                        return '';
+                    }
+
+                    const end = getFieldPosition('player', targetSlot.index);
+                    const controlX = (start.x + end.x) / 2;
+                    const controlY = Math.max(10, Math.min(start.y, end.y) - 10);
+                    return `
+                        <path
+                            class="echoes-battle-panel__field-path echoes-battle-panel__field-path--enemy"
+                            d="M ${start.x} ${start.y - 7} Q ${controlX} ${controlY} ${end.x} ${end.y - 8}"
+                            vector-effect="non-scaling-stroke"
+                        />
+                    `;
+                })
+                .join('');
+
+            if (!playerPaths && !enemyPaths) {
                 return '';
             }
 
@@ -382,7 +404,8 @@
                             <path d="M0,0 L7,3.5 L0,7 z" fill="currentColor"></path>
                         </marker>
                     </defs>
-                    ${paths}
+                    ${enemyPaths}
+                    ${playerPaths}
                 </svg>
             `;
         }
