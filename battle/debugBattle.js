@@ -12,6 +12,7 @@
             attackHit: 560,
             betweenEntries: 360,
         };
+        const BATTLEFIELD_HEIGHT_STORAGE_KEY = 'echoes-of-the-city:battlefield-height';
 
         if (!debugFightTemplate || typeof createDebugBattleEngine !== 'function' || typeof createDebugBattleRenderer !== 'function') {
             throw new Error('Battle modules are incomplete.');
@@ -31,7 +32,7 @@
         let dragAssignment = null;
         let playbackToken = 0;
         let playbackState = createIdlePlaybackState();
-        let battlefieldHeight = DEFAULT_BATTLEFIELD_HEIGHT;
+        let battlefieldHeight = loadPersistedBattlefieldHeight();
         let activeResizePointerId = null;
 
         function createIdlePlaybackState() {
@@ -212,6 +213,28 @@
             mountElement.classList.remove('is-dragging-skill');
         }
 
+        function loadPersistedBattlefieldHeight() {
+            try {
+                const rawValue = window.localStorage?.getItem(BATTLEFIELD_HEIGHT_STORAGE_KEY);
+                const parsedValue = Number.parseFloat(rawValue || '');
+                if (Number.isFinite(parsedValue)) {
+                    return clamp(parsedValue, MIN_BATTLEFIELD_HEIGHT, MAX_BATTLEFIELD_HEIGHT);
+                }
+            } catch (error) {
+                return DEFAULT_BATTLEFIELD_HEIGHT;
+            }
+
+            return DEFAULT_BATTLEFIELD_HEIGHT;
+        }
+
+        function persistBattlefieldHeight() {
+            try {
+                window.localStorage?.setItem(BATTLEFIELD_HEIGHT_STORAGE_KEY, String(battlefieldHeight));
+            } catch (error) {
+                return;
+            }
+        }
+
         function applyBattlefieldHeight() {
             mountElement?.style.setProperty('--echoes-battlefield-height', `${battlefieldHeight}%`);
         }
@@ -250,6 +273,7 @@
             const nextHeight = clamp(((event.clientY - rect.top) / rect.height) * 100, MIN_BATTLEFIELD_HEIGHT, MAX_BATTLEFIELD_HEIGHT);
             battlefieldHeight = nextHeight;
             applyBattlefieldHeight();
+            persistBattlefieldHeight();
         }
 
         function handleResizePointerUp(event) {

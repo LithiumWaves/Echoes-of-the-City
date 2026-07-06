@@ -453,6 +453,61 @@
             `).join('');
         }
 
+        function getPlaybackValueState(playback, entry) {
+            if (!playback?.isRunning || !entry) {
+                return null;
+            }
+
+            if ((playback.phase === 'round-reveal' || playback.phase === 'coin-break') && entry.engagementType === 'clash') {
+                const currentRound = entry.rounds?.[playback.roundIndex];
+                if (!currentRound) {
+                    return null;
+                }
+
+                return {
+                    leftValue: currentRound.leftPower,
+                    rightValue: currentRound.rightPower,
+                    leftLabel: 'Clash Power',
+                    rightLabel: 'Clash Power',
+                };
+            }
+
+            if (playback.phase === 'attack-hit') {
+                const currentHit = entry.hits?.[playback.hitIndex];
+                const attackingSide = getPlaybackAttackingSide(entry);
+                if (!currentHit) {
+                    return null;
+                }
+
+                return {
+                    leftValue: attackingSide === 'left' ? currentHit.finalPower : currentHit.damage,
+                    rightValue: attackingSide === 'right' ? currentHit.finalPower : currentHit.damage,
+                    leftLabel: attackingSide === 'left' ? 'Final Power' : 'Damage',
+                    rightLabel: attackingSide === 'right' ? 'Final Power' : 'Damage',
+                };
+            }
+
+            return null;
+        }
+
+        function renderPlaybackValueBadges(leftPosition, rightPosition, playback, entry) {
+            const valueState = getPlaybackValueState(playback, entry);
+            if (!valueState) {
+                return '';
+            }
+
+            return `
+                <div class="echoes-battle-panel__playback-value-badge echoes-battle-panel__playback-value-badge--left" style="left: ${leftPosition.x - 4}%; top: ${leftPosition.y - 23}%;">
+                    <span>${valueState.leftLabel}</span>
+                    <strong>${valueState.leftValue}</strong>
+                </div>
+                <div class="echoes-battle-panel__playback-value-badge echoes-battle-panel__playback-value-badge--right" style="left: ${rightPosition.x + 4}%; top: ${rightPosition.y - 23}%;">
+                    <span>${valueState.rightLabel}</span>
+                    <strong>${valueState.rightValue}</strong>
+                </div>
+            `;
+        }
+
         function renderPlaybackOverlay(battle, uiState) {
             const playback = uiState?.playback;
             const resolvedBattle = getResolvedBattle(battle, uiState);
@@ -491,6 +546,7 @@
                         <span>Resolving ${playback.entryIndex + 1} / ${playback.totalEntries}</span>
                         <strong>${statusLabel}</strong>
                     </div>
+                    ${renderPlaybackValueBadges(leftPosition, rightPosition, playback, entry)}
                     <div class="echoes-battle-panel__playback-panel echoes-battle-panel__playback-panel--left" style="left: ${Math.max(6, leftPosition.x - 8)}%; top: ${Math.max(14, leftPosition.y - 28)}%;">
                         <span>${leftUnit?.name || 'Left Unit'}</span>
                         <strong>${leftSkill?.name || 'No Clash'}</strong>

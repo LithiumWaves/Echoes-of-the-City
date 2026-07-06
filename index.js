@@ -862,6 +862,12 @@
         elements.combatTrayButton.addEventListener('click', handleCombatTrayButtonClick);
         elements.combatContent.addEventListener('click', handleCombatContentClick);
         elements.combatContent.addEventListener('pointerdown', handleCombatContentPointerDown);
+        elements.combatContent.addEventListener('dragstart', (event) => state.combatController?.handleDragStart(event));
+        elements.combatContent.addEventListener('dragover', (event) => state.combatController?.handleDragOver(event));
+        elements.combatContent.addEventListener('dragenter', (event) => state.combatController?.handleDragEnter(event));
+        elements.combatContent.addEventListener('dragleave', (event) => state.combatController?.handleDragLeave(event));
+        elements.combatContent.addEventListener('drop', (event) => state.combatController?.handleDrop(event));
+        elements.combatContent.addEventListener('dragend', () => state.combatController?.handleDragEnd());
         elements.characterTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.characterTrayButton.addEventListener('click', handleCharacterTrayButtonClick);
         document.addEventListener('keydown', handleKeydown);
