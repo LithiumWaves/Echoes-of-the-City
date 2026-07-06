@@ -25,9 +25,14 @@
             mountElement,
             resolveAssetUrl,
         });
+        const DEFAULT_BATTLEFIELD_HEIGHT = 58;
+        const MIN_BATTLEFIELD_HEIGHT = 34;
+        const MAX_BATTLEFIELD_HEIGHT = 78;
         let dragAssignment = null;
         let playbackToken = 0;
         let playbackState = createIdlePlaybackState();
+        let battlefieldHeight = DEFAULT_BATTLEFIELD_HEIGHT;
+        let activeResizePointerId = null;
 
         function createIdlePlaybackState() {
             return {
@@ -207,12 +212,75 @@
             mountElement.classList.remove('is-dragging-skill');
         }
 
+        function applyBattlefieldHeight() {
+            mountElement?.style.setProperty('--echoes-battlefield-height', `${battlefieldHeight}%`);
+        }
+
+        function getCombatLayoutElement() {
+            return mountElement?.querySelector('.echoes-battle-panel__combat-limbus') || mountElement;
+        }
+
+        function stopResizeBattlefield() {
+            if (activeResizePointerId === null) {
+                return;
+            }
+
+            activeResizePointerId = null;
+            mountElement?.classList.remove('is-resizing-battlefield');
+            window.removeEventListener('pointermove', handleResizePointerMove);
+            window.removeEventListener('pointerup', handleResizePointerUp);
+            window.removeEventListener('pointercancel', handleResizePointerUp);
+        }
+
+        function handleResizePointerMove(event) {
+            if (activeResizePointerId !== event.pointerId) {
+                return;
+            }
+
+            const layoutElement = getCombatLayoutElement();
+            if (!layoutElement) {
+                return;
+            }
+
+            const rect = layoutElement.getBoundingClientRect();
+            if (!rect.height) {
+                return;
+            }
+
+            const nextHeight = clamp(((event.clientY - rect.top) / rect.height) * 100, MIN_BATTLEFIELD_HEIGHT, MAX_BATTLEFIELD_HEIGHT);
+            battlefieldHeight = nextHeight;
+            applyBattlefieldHeight();
+        }
+
+        function handleResizePointerUp(event) {
+            if (activeResizePointerId !== event.pointerId) {
+                return;
+            }
+
+            stopResizeBattlefield();
+        }
+
+        function handlePointerDown(event) {
+            const resizeHandle = event.target.closest('[data-resize-handle="battlefield"]');
+            if (!resizeHandle) {
+                return;
+            }
+
+            event.preventDefault();
+            activeResizePointerId = event.pointerId;
+            mountElement?.classList.add('is-resizing-battlefield');
+            window.addEventListener('pointermove', handleResizePointerMove);
+            window.addEventListener('pointerup', handleResizePointerUp);
+            window.addEventListener('pointercancel', handleResizePointerUp);
+        }
+
         function render() {
             const resolvedBattle = engine.getState();
             const displayBattle = playbackState.isRunning && playbackState.previewBattle
                 ? playbackState.previewBattle
                 : resolvedBattle;
 
+            applyBattlefieldHeight();
             renderer.render(displayBattle, {
                 resolvedBattle,
                 playback: playbackState,
@@ -393,8 +461,10 @@
             handleDragLeave,
             handleDrop,
             handleDragEnd,
+            handlePointerDown,
             render,
             reset() {
+                stopResizeBattlefield();
                 cancelPlayback();
                 dragAssignment = null;
                 clearDropTargetState();

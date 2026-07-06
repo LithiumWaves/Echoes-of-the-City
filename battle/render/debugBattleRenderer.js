@@ -810,6 +810,16 @@
             mountElement.innerHTML = `
                 <div class="echoes-battle-panel__combat-limbus">
                     ${renderBattlefield(battle, activePlayerSlot, uiState)}
+                    <div
+                        class="echoes-battle-panel__combat-resize-handle"
+                        data-resize-handle="battlefield"
+                        role="separator"
+                        aria-orientation="horizontal"
+                        aria-label="Resize battlefield"
+                        tabindex="0"
+                    >
+                        <span></span>
+                    </div>
                     ${renderPlanner(battle, activePlayerSlot, uiState)}
                 </div>
             `;

@@ -138,6 +138,10 @@
         state.combatController?.handleClick(event);
     }
 
+    function handleCombatContentPointerDown(event) {
+        state.combatController?.handlePointerDown(event);
+    }
+
     function renderCombatLoadError(error) {
         if (!elements.combatContent) {
             return;
@@ -857,6 +861,7 @@
         elements.combatTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.combatTrayButton.addEventListener('click', handleCombatTrayButtonClick);
         elements.combatContent.addEventListener('click', handleCombatContentClick);
+        elements.combatContent.addEventListener('pointerdown', handleCombatContentPointerDown);
         elements.characterTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.characterTrayButton.addEventListener('click', handleCharacterTrayButtonClick);
         document.addEventListener('keydown', handleKeydown);
