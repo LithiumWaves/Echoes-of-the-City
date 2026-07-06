@@ -140,7 +140,7 @@
                         offenseLevel: 2,
                         targeting: 'highestMaxPower',
                         borderPath: 'assets/skillborders/Pride3.png',
-                        description: 'Skill 3. A single minus-coin counterclash that retaliates into To Claim Their Bones on clash loss.',
+                        description: 'Skill 3.',
                     },
                     {
                         id: 'to-claim-their-bones',

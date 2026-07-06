@@ -59,6 +59,10 @@
             return getSlotById(battle, battle.activePlayerSlotId) || battle.playerSlots[0] || null;
         }
 
+        function getResolvedBattle(battle, uiState) {
+            return uiState?.resolvedBattle || battle;
+        }
+
         function getPhaseLabel(battle) {
             if (battle.winner === 'player') {
                 return 'Victory';
@@ -202,6 +206,54 @@
         }
 
         function renderFieldUnit(battle, unit, slot, side, activePlayerSlot) {
+            return renderFieldUnitWithUiState(battle, unit, slot, side, activePlayerSlot, {});
+        }
+
+        function getPlaybackAttackingSide(entry) {
+            if (!entry) {
+                return null;
+            }
+
+            if (entry.engagementType === 'clash') {
+                return entry.winnerSide;
+            }
+
+            return entry.leftSkillId ? 'left' : 'right';
+        }
+
+        function getPlaybackRoleClasses(slotId, uiState) {
+            const playback = uiState?.playback;
+            if (!playback?.isRunning || !playback.entry) {
+                return '';
+            }
+
+            const { entry, phase } = playback;
+            const isLeft = entry.leftSlotId === slotId;
+            const isRight = entry.rightSlotId === slotId;
+            if (!isLeft && !isRight) {
+                return '';
+            }
+
+            const attackingSide = getPlaybackAttackingSide(entry);
+            let classes = ' is-playback-focus';
+
+            if (phase === 'approach' || phase === 'skill-intro' || phase === 'round-reveal' || phase === 'coin-break') {
+                classes += isLeft ? ' is-playback-engaged-left' : ' is-playback-engaged-right';
+                return classes;
+            }
+
+            if (phase === 'attack-hit' || phase === 'entry-end') {
+                if (isLeft) {
+                    classes += attackingSide === 'left' ? ' is-playback-attack-left' : ' is-playback-recoil-left';
+                } else if (isRight) {
+                    classes += attackingSide === 'right' ? ' is-playback-attack-right' : ' is-playback-recoil-right';
+                }
+            }
+
+            return classes;
+        }
+
+        function renderFieldUnitWithUiState(battle, unit, slot, side, activePlayerSlot, uiState) {
             const position = getFieldPosition(side, slot.index);
             const isPlayer = side === 'player';
             const isActive = isPlayer && activePlayerSlot?.id === slot.id;
@@ -220,16 +272,17 @@
                 : isPlayer
                     ? (assignedSkill?.name || 'Choose skill')
                     : (intentSkill?.name || 'Intent hidden');
+            const playbackClasses = getPlaybackRoleClasses(slot.id, uiState);
 
             return `
                 <button
-                    class="echoes-battle-panel__field-unit echoes-battle-panel__field-unit--${side}${isActive ? ' is-active' : ''}${isTargeted ? ' is-targeted' : ''}${slot.resolved ? ' is-resolved' : ''}${isDropTarget ? ' echoes-battle-panel__combat-unit--drop-target' : ''}"
+                    class="echoes-battle-panel__field-unit echoes-battle-panel__field-unit--${side}${isActive ? ' is-active' : ''}${isTargeted ? ' is-targeted' : ''}${slot.resolved ? ' is-resolved' : ''}${isDropTarget ? ' echoes-battle-panel__combat-unit--drop-target' : ''}${playbackClasses}"
                     type="button"
                     style="left: ${position.x}%; top: ${position.y}%;"
                     title="${tooltip}"
                     ${actionAttrs}
                     ${isDropTarget ? 'data-drop-target="enemy-slot"' : ''}
-                    ${battle.phase !== 'select' && isPlayer ? 'disabled' : ''}
+                    ${(battle.phase !== 'select' && isPlayer) || uiState?.isPlaybackRunning ? 'disabled' : ''}
                 >
                     <span class="echoes-battle-panel__field-speed">${slot.speed}</span>
                     <span class="echoes-battle-panel__field-shadow"></span>
@@ -249,6 +302,38 @@
         }
 
         function renderTargetOverlay(battle, activePlayerSlot) {
+            return renderTargetOverlayWithUiState(battle, activePlayerSlot, {});
+        }
+
+        function renderTargetOverlayWithUiState(battle, activePlayerSlot, uiState) {
+            const playback = uiState?.playback;
+            if (playback?.isRunning && playback.entry) {
+                const startSlot = getSlotById(battle, playback.entry.leftSlotId);
+                const endSlot = getSlotById(battle, playback.entry.rightSlotId);
+                if (!startSlot || !endSlot) {
+                    return '';
+                }
+
+                const start = getFieldPosition(startSlot.side, startSlot.index);
+                const end = getFieldPosition(endSlot.side, endSlot.index);
+                const controlX = (start.x + end.x) / 2;
+                const controlY = Math.max(8, Math.min(start.y, end.y) - 18);
+                return `
+                    <svg class="echoes-battle-panel__field-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                        <defs>
+                            <marker id="echoes-field-arrow" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto" markerUnits="strokeWidth">
+                                <path d="M0,0 L7,3.5 L0,7 z" fill="currentColor"></path>
+                            </marker>
+                        </defs>
+                        <path
+                            class="echoes-battle-panel__field-path is-active"
+                            d="M ${start.x} ${start.y - 7} Q ${controlX} ${controlY} ${end.x} ${end.y - 8}"
+                            vector-effect="non-scaling-stroke"
+                        />
+                    </svg>
+                `;
+            }
+
             const paths = battle.playerSlots
                 .filter((slot) => slot.targetSlotId)
                 .map((slot) => {
@@ -288,7 +373,11 @@
             `;
         }
 
-        function renderResolutionBadges(battle) {
+        function renderResolutionBadges(battle, uiState) {
+            if (uiState?.isPlaybackRunning) {
+                return '';
+            }
+
             const presentation = battle.clashPresentation;
             if (!presentation || battle.phase !== 'resolved') {
                 return '';
@@ -317,7 +406,126 @@
             `;
         }
 
-        function renderResolutionCard(battle, activePlayerSlot) {
+        function renderPlaybackCoinTrack(skill, side, playback, entry) {
+            if (!skill) {
+                return '';
+            }
+
+            const totalCoins = skill.coinCount;
+            const brokenCoins = side === 'left' ? playback.leftBroken : playback.rightBroken;
+            const remainingCoins = Math.max(0, totalCoins - brokenCoins);
+            const states = [];
+            for (let index = 0; index < totalCoins; index += 1) {
+                if (index >= remainingCoins) {
+                    states.push('broken');
+                } else {
+                    states.push('pending');
+                }
+            }
+
+            const currentRound = entry.engagementType === 'clash' ? entry.rounds?.[playback.roundIndex] : null;
+            if (playback.phase === 'round-reveal' || playback.phase === 'coin-break') {
+                const flips = side === 'left' ? (currentRound?.leftFlips || []) : (currentRound?.rightFlips || []);
+                for (let index = 0; index < flips.length; index += 1) {
+                    states[index] = flips[index] ? 'heads' : 'tails';
+                }
+            }
+
+            const attackingSide = getPlaybackAttackingSide(entry);
+            const isAttackingSide = attackingSide === side;
+            if (playback.phase === 'attack-hit' && isAttackingSide) {
+                for (let index = 0; index < playback.hitIndex; index += 1) {
+                    if (states[index] !== 'broken') {
+                        states[index] = 'spent';
+                    }
+                }
+
+                const currentHit = entry.hits?.[playback.hitIndex];
+                if (currentHit && states[playback.hitIndex] !== 'broken') {
+                    states[playback.hitIndex] = currentHit.isHeads ? 'heads' : 'tails';
+                }
+            }
+
+            return states.map((state, index) => `
+                <span class="echoes-battle-panel__playback-coin is-${state}">
+                    <strong>${index + 1}</strong>
+                </span>
+            `).join('');
+        }
+
+        function renderPlaybackOverlay(battle, uiState) {
+            const playback = uiState?.playback;
+            const resolvedBattle = getResolvedBattle(battle, uiState);
+            if (!playback?.isRunning || !playback.entry) {
+                return '';
+            }
+
+            const entry = playback.entry;
+            const leftSlot = getSlotById(resolvedBattle, entry.leftSlotId);
+            const rightSlot = getSlotById(resolvedBattle, entry.rightSlotId);
+            if (!leftSlot || !rightSlot) {
+                return '';
+            }
+
+            const leftUnit = getUnitById(resolvedBattle, leftSlot.unitId);
+            const rightUnit = getUnitById(resolvedBattle, rightSlot.unitId);
+            const leftSkill = entry.leftSkillId ? getSkillById(leftUnit, entry.leftSkillId) : null;
+            const rightSkill = entry.rightSkillId ? getSkillById(rightUnit, entry.rightSkillId) : null;
+            const leftPosition = getFieldPosition(leftSlot.side, leftSlot.index);
+            const rightPosition = getFieldPosition(rightSlot.side, rightSlot.index);
+            const statusLabel = playback.phase === 'approach'
+                ? 'Closing In'
+                : playback.phase === 'skill-intro'
+                    ? 'Skill Reveal'
+                    : playback.phase === 'round-reveal'
+                        ? `Clash ${playback.roundIndex + 1}`
+                        : playback.phase === 'coin-break'
+                            ? 'Coin Broken'
+                            : playback.phase === 'attack-hit'
+                                ? `Attack ${playback.hitIndex + 1}`
+                                : 'Resolution';
+
+            return `
+                <div class="echoes-battle-panel__playback-overlay">
+                    <div class="echoes-battle-panel__playback-banner">
+                        <span>Resolving ${playback.entryIndex + 1} / ${playback.totalEntries}</span>
+                        <strong>${statusLabel}</strong>
+                    </div>
+                    <div class="echoes-battle-panel__playback-panel echoes-battle-panel__playback-panel--left" style="left: ${Math.max(6, leftPosition.x - 8)}%; top: ${Math.max(14, leftPosition.y - 28)}%;">
+                        <span>${leftUnit?.name || 'Left Unit'}</span>
+                        <strong>${leftSkill?.name || 'No Clash'}</strong>
+                        <small>${leftSkill ? `Base ${leftSkill.basePower} | Coin ${leftSkill.coinPower >= 0 ? '+' : ''}${leftSkill.coinPower}` : 'No clash skill'}</small>
+                        <div class="echoes-battle-panel__playback-coins">
+                            ${renderPlaybackCoinTrack(leftSkill, 'left', playback, entry)}
+                        </div>
+                    </div>
+                    <div class="echoes-battle-panel__playback-panel echoes-battle-panel__playback-panel--right" style="left: ${Math.min(94, rightPosition.x + 8)}%; top: ${Math.max(14, rightPosition.y - 28)}%;">
+                        <span>${rightUnit?.name || 'Right Unit'}</span>
+                        <strong>${rightSkill?.name || 'No Clash'}</strong>
+                        <small>${rightSkill ? `Base ${rightSkill.basePower} | Coin ${rightSkill.coinPower >= 0 ? '+' : ''}${rightSkill.coinPower}` : 'No clash skill'}</small>
+                        <div class="echoes-battle-panel__playback-coins">
+                            ${renderPlaybackCoinTrack(rightSkill, 'right', playback, entry)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderResolutionCard(battle, activePlayerSlot, uiState) {
+            const playback = uiState?.playback;
+            if (playback?.isRunning && playback.entry) {
+                const entry = playback.entry;
+                return `
+                    <div class="echoes-battle-panel__combat-result-card is-resolved is-playback">
+                        <span class="echoes-battle-panel__combat-result-label">${entry.engagementType === 'clash' ? 'Clash Playback' : 'Attack Playback'}</span>
+                        <strong>${entry.leftUnitName} vs ${entry.rightUnitName}</strong>
+                        <small>${entry.engagementType === 'clash'
+                            ? `${entry.leftSkillName} vs ${entry.rightSkillName}`
+                            : `${entry.leftSkillId ? entry.leftSkillName : entry.rightSkillName}`}</small>
+                    </div>
+                `;
+            }
+
             const presentation = battle.clashPresentation;
 
             if (!presentation) {
@@ -351,8 +559,9 @@
             `;
         }
 
-        function renderResolutionFeed(battle) {
-            const history = Array.isArray(battle.resolutionHistory) ? battle.resolutionHistory : [];
+        function renderResolutionFeed(battle, uiState) {
+            const resolvedBattle = getResolvedBattle(battle, uiState);
+            const history = Array.isArray(resolvedBattle.resolutionHistory) ? resolvedBattle.resolutionHistory : [];
             if (!history.length) {
                 return '<div class="echoes-battle-panel__planner-empty">Resolve the turn to see every clash and attack in order.</div>';
             }
@@ -385,18 +594,19 @@
             }).join('');
         }
 
-        function renderQueueTrack(battle) {
-            const queueIds = battle.phase === 'resolved' && battle.resolutionQueue.length
-                ? battle.resolutionQueue
-                : battle.speedOrder;
+        function renderQueueTrack(battle, uiState) {
+            const resolvedBattle = getResolvedBattle(battle, uiState);
+            const queueIds = resolvedBattle.phase === 'resolved' && resolvedBattle.resolutionQueue.length
+                ? resolvedBattle.resolutionQueue
+                : resolvedBattle.speedOrder;
 
             if (!queueIds.length) {
                 return '<div class="echoes-battle-panel__planner-empty">Queue unavailable.</div>';
             }
 
             return queueIds.map((slotId, index) => {
-                const slot = getSlotById(battle, slotId);
-                const unit = getUnitById(battle, slot.unitId);
+                const slot = getSlotById(resolvedBattle, slotId);
+                const unit = getUnitById(resolvedBattle, slot.unitId);
                 return `
                     <div class="echoes-battle-panel__queue-chip">
                         <span>${index + 1}</span>
@@ -473,12 +683,12 @@
                 .join('');
         }
 
-        function renderBattlefield(battle, activePlayerSlot) {
+        function renderBattlefield(battle, activePlayerSlot, uiState) {
             const playerMarkup = battle.playerSlots
-                .map((slot) => renderFieldUnit(battle, getUnitById(battle, slot.unitId), slot, 'player', activePlayerSlot))
+                .map((slot) => renderFieldUnitWithUiState(battle, getUnitById(battle, slot.unitId), slot, 'player', activePlayerSlot, uiState))
                 .join('');
             const enemyMarkup = battle.enemySlots
-                .map((slot) => renderFieldUnit(battle, getUnitById(battle, slot.unitId), slot, 'enemy', activePlayerSlot))
+                .map((slot) => renderFieldUnitWithUiState(battle, getUnitById(battle, slot.unitId), slot, 'enemy', activePlayerSlot, uiState))
                 .join('');
 
             return `
@@ -499,15 +709,15 @@
                                 class="echoes-battle-panel__combat-button"
                                 type="button"
                                 data-action="resolve-turn"
-                                ${battle.phase !== 'select' || battle.winner ? 'disabled' : ''}
+                                ${battle.phase !== 'select' || battle.winner || uiState?.isPlaybackRunning ? 'disabled' : ''}
                             >
-                                Resolve
+                                ${uiState?.isPlaybackRunning ? 'Resolving...' : 'Resolve'}
                             </button>
                             <button
                                 class="echoes-battle-panel__combat-button"
                                 type="button"
                                 data-action="next-turn"
-                                ${battle.phase !== 'resolved' || battle.winner ? 'disabled' : ''}
+                                ${getResolvedBattle(battle, uiState).phase !== 'resolved' || getResolvedBattle(battle, uiState).winner || uiState?.isPlaybackRunning ? 'disabled' : ''}
                             >
                                 Next
                             </button>
@@ -523,9 +733,10 @@
 
                     <div class="echoes-battle-panel__combat-stage-area">
                         ${renderTargetOverlay(battle, activePlayerSlot)}
-                        ${renderResolutionCard(battle, activePlayerSlot)}
-                        ${renderResolutionBadges(battle)}
-                        ${playerMarkup}
+                        ${renderTargetOverlayWithUiState(battle, activePlayerSlot, uiState)}
+                        ${renderResolutionCard(getResolvedBattle(battle, uiState), activePlayerSlot, uiState)}
+                        ${renderPlaybackOverlay(battle, uiState)}
+                        ${renderResolutionBadges(getResolvedBattle(battle, uiState), uiState)}
                         ${enemyMarkup}
                     </div>
                 </section>
@@ -533,14 +744,16 @@
         }
 
         function renderPlanner(battle, activePlayerSlot) {
-            const activeUnit = activePlayerSlot ? getUnitById(battle, activePlayerSlot.unitId) : null;
+        function renderPlanner(battle, activePlayerSlot, uiState) {
             const selectedSkill = activePlayerSlot?.selectedSkillId ? getSkillById(activeUnit, activePlayerSlot.selectedSkillId) : null;
             const targetSlot = activePlayerSlot?.targetSlotId ? getSlotById(battle, activePlayerSlot.targetSlotId) : null;
             const targetUnit = targetSlot ? getUnitById(battle, targetSlot.unitId) : null;
             const logMarkup = battle.log
-                .slice(-4)
+            const resolvedBattle = getResolvedBattle(battle, uiState);
+            const logMarkup = resolvedBattle.log
                 .reverse()
                 .map((entry) => `<li>${entry}</li>`)
+                .join('');
                 .join('');
 
             return `
@@ -573,13 +786,13 @@
                     <aside class="echoes-battle-panel__planner-lane echoes-battle-panel__planner-lane--queue">
                         <div class="echoes-battle-panel__planner-heading">
                             <span>Resolution</span>
-                            <strong>${getPhaseLabel(battle)}</strong>
+                            <strong>${uiState?.isPlaybackRunning ? 'Playing Back' : getPhaseLabel(resolvedBattle)}</strong>
                         </div>
                         <div class="echoes-battle-panel__queue-track">
-                            ${renderQueueTrack(battle)}
+                            ${renderQueueTrack(battle, uiState)}
                         </div>
                         <div class="echoes-battle-panel__resolution-feed">
-                            ${renderResolutionFeed(battle)}
+                            ${renderResolutionFeed(battle, uiState)}
                         </div>
                         <ol class="echoes-battle-panel__planner-log">
                             ${logMarkup}
@@ -589,7 +802,7 @@
             `;
         }
 
-        function render(battle) {
+        function render(battle, uiState = {}) {
             if (!mountElement) {
                 return;
             }
@@ -597,8 +810,8 @@
             const activePlayerSlot = getActivePlayerSlot(battle);
             mountElement.innerHTML = `
                 <div class="echoes-battle-panel__combat-limbus">
-                    ${renderBattlefield(battle, activePlayerSlot)}
-                    ${renderPlanner(battle, activePlayerSlot)}
+                    ${renderBattlefield(battle, activePlayerSlot, uiState)}
+                    ${renderPlanner(battle, activePlayerSlot, uiState)}
                 </div>
             `;
         }

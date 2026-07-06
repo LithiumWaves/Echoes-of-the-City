@@ -122,30 +122,6 @@
         state.combatController?.handleClick(event);
     }
 
-    function handleCombatContentDragStart(event) {
-        state.combatController?.handleDragStart(event);
-    }
-
-    function handleCombatContentDragOver(event) {
-        state.combatController?.handleDragOver(event);
-    }
-
-    function handleCombatContentDragEnter(event) {
-        state.combatController?.handleDragEnter(event);
-    }
-
-    function handleCombatContentDragLeave(event) {
-        state.combatController?.handleDragLeave(event);
-    }
-
-    function handleCombatContentDrop(event) {
-        state.combatController?.handleDrop(event);
-    }
-
-    function handleCombatContentDragEnd(event) {
-        state.combatController?.handleDragEnd(event);
-    }
-
     function renderCombatLoadError() {
         if (!elements.combatContent) {
             return;
@@ -854,12 +830,6 @@
         elements.combatTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.combatTrayButton.addEventListener('click', handleCombatTrayButtonClick);
         elements.combatContent.addEventListener('click', handleCombatContentClick);
-        elements.combatContent.addEventListener('dragstart', handleCombatContentDragStart);
-        elements.combatContent.addEventListener('dragover', handleCombatContentDragOver);
-        elements.combatContent.addEventListener('dragenter', handleCombatContentDragEnter);
-        elements.combatContent.addEventListener('dragleave', handleCombatContentDragLeave);
-        elements.combatContent.addEventListener('drop', handleCombatContentDrop);
-        elements.combatContent.addEventListener('dragend', handleCombatContentDragEnd);
         elements.characterTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.characterTrayButton.addEventListener('click', handleCharacterTrayButtonClick);
         document.addEventListener('keydown', handleKeydown);
