@@ -154,6 +154,16 @@
             return `${skill.name} | ${getCompactSkillPowerLabel(skill)}`;
         }
 
+        function getSlotTargetSummary(battle, slot) {
+            const targetSlot = slot?.targetSlotId ? getSlotById(battle, slot.targetSlotId) : null;
+            if (!targetSlot) {
+                return 'No target';
+            }
+
+            const targetUnit = getUnitById(battle, targetSlot.unitId);
+            return `${targetUnit?.name || 'Unknown'} ${targetSlot.index + 1}`;
+        }
+
         function getUnitTooltip(battle, unit, slot, side) {
             const assignedSkill = slot?.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
             const intentSkillId = slot?.intentSkillId || slot?.selectedSkillId;
@@ -168,8 +178,8 @@
                 unit.name,
                 `HP ${unit.hp}/${unit.maxHp} | SP ${unit.sp} | Speed ${slot?.speed || 0}`,
                 side === 'enemy'
-                    ? `Intent: ${getSkillSummary(intentSkill)}`
-                    : `Assigned: ${getSkillSummary(assignedSkill)}`,
+                    ? `Intent: ${getSkillSummary(intentSkill)} -> ${getSlotTargetSummary(battle, slot)}`
+                    : `Assigned: ${getSkillSummary(assignedSkill)} -> ${getSlotTargetSummary(battle, slot)}`,
                 statuses || 'No active statuses',
             ].join('\n'));
         }
@@ -271,7 +281,10 @@
                 ? (intentSkill?.name || assignedSkill?.name || 'No action')
                 : isPlayer
                     ? (assignedSkill?.name || 'Choose skill')
-                    : (intentSkill?.name || 'Intent hidden');
+                    : (intentSkill?.name || 'No intent');
+            const targetLabel = isPlayer && !assignedSkill
+                ? 'No target'
+                : getSlotTargetSummary(battle, slot);
             const playbackClasses = getPlaybackRoleClasses(slot.id, uiState);
 
             return `
@@ -292,6 +305,7 @@
                     </span>
                     <span class="echoes-battle-panel__field-name">${unit.name}</span>
                     <span class="echoes-battle-panel__field-state">${stateLabel}</span>
+                    <span class="echoes-battle-panel__field-target">${targetLabel}</span>
                     <span class="echoes-battle-panel__field-vitals">
                         <span class="echoes-battle-panel__field-hp">HP ${unit.hp}/${unit.maxHp}</span>
                         <span class="echoes-battle-panel__field-sp">SP ${unit.sp}</span>

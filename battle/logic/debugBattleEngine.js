@@ -40,6 +40,7 @@
             speed: 0,
             selectedSkillId: null,
             intentSkillId: null,
+            intentTargetSlotId: null,
             targetSlotId: null,
             resolved: false,
         };
@@ -1409,6 +1410,42 @@
             return getFirstLivingSlotId(currentBattle, 'player');
         }
 
+        function refreshRedirectedTargets(targetBattle) {
+            targetBattle.enemySlots.forEach((enemySlot) => {
+                if (!isSlotAlive(targetBattle, enemySlot) || !enemySlot.selectedSkillId) {
+                    return;
+                }
+
+                enemySlot.targetSlotId = enemySlot.intentTargetSlotId || getFirstLivingSlotId(targetBattle, 'player');
+            });
+
+            targetBattle.enemySlots.forEach((enemySlot) => {
+                if (!isSlotAlive(targetBattle, enemySlot) || !enemySlot.selectedSkillId) {
+                    return;
+                }
+
+                const redirectingSlots = targetBattle.playerSlots
+                    .filter((playerSlot) => (
+                        isSlotAlive(targetBattle, playerSlot) &&
+                        Boolean(playerSlot.selectedSkillId) &&
+                        playerSlot.targetSlotId === enemySlot.id &&
+                        playerSlot.speed > enemySlot.speed
+                    ))
+                    .sort((left, right) => {
+                        if (right.speed !== left.speed) {
+                            return right.speed - left.speed;
+                        }
+
+                        return left.index - right.index;
+                    });
+
+                const redirectingSlot = redirectingSlots[0];
+                if (redirectingSlot) {
+                    enemySlot.targetSlotId = redirectingSlot.id;
+                }
+            });
+        }
+
         function getPlayerTemplates() {
             if (Array.isArray(debugFightTemplate.playerUnits) && debugFightTemplate.playerUnits.length) {
                 return debugFightTemplate.playerUnits;
@@ -1484,6 +1521,7 @@
                 slot.resolved = false;
                 slot.selectedSkillId = null;
                 slot.intentSkillId = null;
+                slot.intentTargetSlotId = null;
                 slot.speed = randomInt(...unit.speedRange);
                 slot.targetSlotId = getFirstLivingSlotId(targetBattle, getOpposingSide(slot.side));
                 unit.speed = slot.speed;
@@ -1504,7 +1542,8 @@
                 slot.selectedSkillId = pickEnemySkillId(targetBattle, slot);
                 slot.intentSkillId = slot.selectedSkillId;
                 const skill = getSkillById(enemyUnit, slot.selectedSkillId);
-                slot.targetSlotId = getAutoTargetSlotId(targetBattle, slot, skill) || pickEnemyTargetSlotId(targetBattle, slot);
+                slot.intentTargetSlotId = getAutoTargetSlotId(targetBattle, slot, skill) || pickEnemyTargetSlotId(targetBattle, slot);
+                slot.targetSlotId = slot.intentTargetSlotId;
                 emitEvent(targetBattle, 'enemy_intent_set', {
                     unitName: enemyUnit.name,
                     slotLabel: getSlotLabel(slot),
@@ -1512,6 +1551,8 @@
                     targetLabel: getSlotTargetLabel(targetBattle, slot.targetSlotId),
                 });
             });
+
+            refreshRedirectedTargets(targetBattle);
 
             refreshSpeedOrder(targetBattle);
             ensureActivePlayerSlot(targetBattle);
@@ -1565,6 +1606,7 @@
                 ? getAutoTargetSlotId(battle, slot, skill)
                 : (slot.targetSlotId || getFirstLivingSlotId(battle, 'enemy'));
             battle.activePlayerSlotId = slot.id;
+            refreshRedirectedTargets(battle);
 
             emitEvent(battle, 'skill_selected', {
                 unitName: unit.name,
@@ -1595,6 +1637,7 @@
             }
 
             battle.activePlayerSlotId = slot.id;
+            refreshRedirectedTargets(battle);
             emitEvent(battle, 'target_selected', {
                 unitName: unit.name,
                 slotLabel: getSlotLabel(slot),
@@ -1615,6 +1658,8 @@
                     slot.targetSlotId = getAutoTargetSlotId(targetBattle, slot, skill);
                 }
             });
+
+            refreshRedirectedTargets(targetBattle);
         }
 
         function resolveTurn() {

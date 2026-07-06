@@ -1255,6 +1255,7 @@
 
 .echoes-battle-panel__field-name,
 .echoes-battle-panel__field-state,
+.echoes-battle-panel__field-target,
 .echoes-battle-panel__field-vitals {
     display: block;
     position: relative;
@@ -1275,10 +1276,15 @@
 }
 
 .echoes-battle-panel__field-state,
+.echoes-battle-panel__field-target,
 .echoes-battle-panel__field-vitals {
     margin-top: 0.12rem;
     color: #e0b988;
     font-size: 0.64rem;
+}
+
+.echoes-battle-panel__field-target {
+    color: rgba(196, 224, 255, 0.82);
 }
 
 .echoes-battle-panel__field-vitals {
