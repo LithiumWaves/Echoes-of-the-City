@@ -1343,7 +1343,7 @@
             }
 
             if (skill.targeting !== 'highestMaxPower') {
-                return opposingSlots[0].id;
+                return null;
             }
 
             const scoredSlots = opposingSlots.map((slot) => {

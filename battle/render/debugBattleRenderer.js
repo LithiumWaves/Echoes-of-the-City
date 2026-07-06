@@ -348,15 +348,53 @@
                 `;
             }
 
+            const clashPairKeys = new Set();
+            const clashPaths = battle.playerSlots
+                .filter((playerSlot) => {
+                    const enemySlot = playerSlot.targetSlotId ? getSlotById(battle, playerSlot.targetSlotId) : null;
+                    return enemySlot
+                        && enemySlot.side === 'enemy'
+                        && enemySlot.targetSlotId === playerSlot.id
+                        && Boolean(playerSlot.selectedSkillId)
+                        && Boolean(enemySlot.selectedSkillId);
+                })
+                .map((playerSlot) => {
+                    const enemySlot = getSlotById(battle, playerSlot.targetSlotId);
+                    const pairKey = [playerSlot.id, enemySlot.id].sort().join(':');
+                    if (clashPairKeys.has(pairKey)) {
+                        return '';
+                    }
+
+                    clashPairKeys.add(pairKey);
+                    const start = getFieldPosition('player', playerSlot.index);
+                    const end = getFieldPosition('enemy', enemySlot.index);
+                    const controlX = (start.x + end.x) / 2;
+                    const controlY = Math.max(8, Math.min(start.y, end.y) - 18);
+                    const isActive = activePlayerSlot?.id === playerSlot.id;
+                    return `
+                        <path
+                            class="echoes-battle-panel__field-path echoes-battle-panel__field-path--clash${isActive ? ' is-active' : ''}"
+                            d="M ${start.x} ${start.y - 7} Q ${controlX} ${controlY} ${end.x} ${end.y - 8}"
+                            vector-effect="non-scaling-stroke"
+                        />
+                    `;
+                })
+                .join('');
+
             const playerPaths = battle.playerSlots
                 .filter((slot) => slot.targetSlotId)
                 .map((slot) => {
-                    const start = getFieldPosition('player', slot.index);
                     const targetSlot = getSlotById(battle, slot.targetSlotId);
                     if (!targetSlot) {
                         return '';
                     }
 
+                    const pairKey = [slot.id, targetSlot.id].sort().join(':');
+                    if (clashPairKeys.has(pairKey)) {
+                        return '';
+                    }
+
+                    const start = getFieldPosition('player', slot.index);
                     const end = getFieldPosition('enemy', targetSlot.index);
                     const controlX = (start.x + end.x) / 2;
                     const controlY = Math.max(8, Math.min(start.y, end.y) - 18);
@@ -374,12 +412,17 @@
             const enemyPaths = battle.enemySlots
                 .filter((slot) => slot.targetSlotId)
                 .map((slot) => {
-                    const start = getFieldPosition('enemy', slot.index);
                     const targetSlot = getSlotById(battle, slot.targetSlotId);
                     if (!targetSlot) {
                         return '';
                     }
 
+                    const pairKey = [slot.id, targetSlot.id].sort().join(':');
+                    if (clashPairKeys.has(pairKey)) {
+                        return '';
+                    }
+
+                    const start = getFieldPosition('enemy', slot.index);
                     const end = getFieldPosition('player', targetSlot.index);
                     const controlX = (start.x + end.x) / 2;
                     const controlY = Math.max(10, Math.min(start.y, end.y) - 10);
@@ -393,7 +436,7 @@
                 })
                 .join('');
 
-            if (!playerPaths && !enemyPaths) {
+            if (!clashPaths && !playerPaths && !enemyPaths) {
                 return '';
             }
 
@@ -404,6 +447,7 @@
                             <path d="M0,0 L7,3.5 L0,7 z" fill="currentColor"></path>
                         </marker>
                     </defs>
+                    ${clashPaths}
                     ${enemyPaths}
                     ${playerPaths}
                 </svg>
