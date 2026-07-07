@@ -18,10 +18,24 @@
         },
     };
 
+    const kimSprites = {
+        idle: 'assets/debugsprites/Bamboo-hatted_Kim_Idle_Sprite.png',
+        moving: 'assets/debugsprites/Bamboo-hatted_Kim_Moving_Sprite.png',
+        hurt: 'assets/debugsprites/Bamboo-hatted_Kim_Hurt_Sprite.png',
+        skills: { ...vergiliusSprites.skills },
+    };
+
+    const dongbaekSprites = {
+        idle: 'assets/debugsprites/Lobotomy_E.G.O_Sunshower_-_Dongbaek_Idle_Sprite.png',
+        moving: 'assets/debugsprites/Lobotomy_E.G.O_Sunshower_-_Dongbaek_Moving_Sprite.png',
+        hurt: 'assets/debugsprites/Lobotomy_E.G.O_Sunshower_-_Dongbaek_Hurt_Sprite.png',
+        skills: { ...vergiliusSprites.skills },
+    };
+
     const hongLuSprites = {
-        idle: 'assets/debugsprites/The_House_of_Spiders_The_Ring_Nursefather_Hong_Lu_Idle_Animation.gif',
-        moving: 'assets/debugsprites/The_House_of_Spiders_The_Ring_Nursefather_Hong_Lu_Moving_Sprite.png',
-        hurt: 'assets/debugsprites/The_House_of_Spiders_The_Ring_Nursefather_Hong_Lu_Hurt_Sprite.png',
+        idle: 'assets/debugsprites/The_Ring_Nursefather_-_Callisto_Idle_Sprite.png',
+        moving: 'assets/debugsprites/The_Ring_Nursefather_-_Callisto_Moving_Sprite.png',
+        hurt: 'assets/debugsprites/The_Ring_Nursefather_-_Callisto_Hurt_Sprite.png',
         skills: {
             anatomize: 'assets/debugsprites/The_House_of_Spiders_The_Ring_Nursefather_Hong_Lu_Skill_1.gif',
             'gather-ingredient-blood-bathed-objet': 'assets/debugsprites/The_House_of_Spiders_The_Ring_Nursefather_Hong_Lu_Skill_2.gif',
@@ -106,7 +120,7 @@
                     pierce: 1,
                     blunt: 1,
                 },
-                sprites: vergiliusSprites,
+                sprites: kimSprites,
                 skills: [
                     {
                         id: 'draw-of-the-sword',
@@ -159,7 +173,7 @@
         enemyUnits: [
             {
                 id: 'ring-nursefather-hong-lu',
-                name: 'The Ring Nursefather Hong Lu',
+                name: 'The Ring Nursefather Callisto',
                 level: 50,
                 maxHp: 428,
                 sp: 0,
@@ -220,7 +234,7 @@
                     pierce: 1,
                     blunt: 1,
                 },
-                sprites: hongLuSprites,
+                sprites: dongbaekSprites,
                 skills: [
                     {
                         id: 'stinging-memories',
