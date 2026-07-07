@@ -42,6 +42,7 @@
             intentSkillId: null,
             intentTargetSlotId: null,
             targetSlotId: null,
+            manualTargetLock: false,
             resolved: false,
         };
     }
@@ -1531,6 +1532,7 @@
                 slot.selectedSkillId = null;
                 slot.intentSkillId = null;
                 slot.intentTargetSlotId = null;
+                slot.manualTargetLock = false;
                 slot.speed = randomInt(...unit.speedRange);
                 slot.targetSlotId = getFirstLivingSlotId(targetBattle, getOpposingSide(slot.side));
                 unit.speed = slot.speed;
@@ -1611,6 +1613,7 @@
             }
 
             slot.selectedSkillId = skillId;
+            slot.manualTargetLock = false;
             slot.targetSlotId = skill.targeting === 'highestMaxPower'
                 ? getAutoTargetSlotId(battle, slot, skill)
                 : (slot.targetSlotId || getFirstLivingSlotId(battle, 'enemy'));
@@ -1638,12 +1641,8 @@
             }
 
             const unit = getUnitById(battle, slot.unitId);
-            const skill = slot.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
-            if (skill?.targeting === 'highestMaxPower') {
-                slot.targetSlotId = getAutoTargetSlotId(battle, slot, skill);
-            } else {
-                slot.targetSlotId = targetSlot.id;
-            }
+            slot.targetSlotId = targetSlot.id;
+            slot.manualTargetLock = true;
 
             battle.activePlayerSlotId = slot.id;
             refreshRedirectedTargets(battle);
@@ -1663,7 +1662,7 @@
 
                 const unit = getUnitById(targetBattle, slot.unitId);
                 const skill = getSkillById(unit, slot.selectedSkillId);
-                if (skill?.targeting === 'highestMaxPower') {
+                if (skill?.targeting === 'highestMaxPower' && !slot.manualTargetLock) {
                     slot.targetSlotId = getAutoTargetSlotId(targetBattle, slot, skill);
                 }
             });
