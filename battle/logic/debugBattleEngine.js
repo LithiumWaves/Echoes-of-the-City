@@ -1314,6 +1314,8 @@
             const loserSkill = clashResult.winnerSide === 'left' ? rightSkill : leftSkill;
             const loserContext = clashResult.winnerSide === 'left' ? rightContext : leftContext;
             const remainingCoins = clashResult.winnerSide === 'left' ? clashResult.leftRemainingCoins : clashResult.rightRemainingCoins;
+            const winnerSlot = clashResult.winnerSide === 'left' ? leftSlot : rightSlot;
+            const loserSlot = clashResult.winnerSide === 'left' ? rightSlot : leftSlot;
 
             emitEvent(targetBattle, 'clash_won', {
                 winnerName: clashWinnerUnit.name,
@@ -1347,13 +1349,7 @@
                 clashResult.winnerSide === 'left' ? rightContext : leftContext,
                 remainingCoins,
             );
-            let totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
-
-            if (loserContext.followUpSkillIdOnClashLose && isUnitAlive(clashLoserUnit) && isUnitAlive(clashWinnerUnit)) {
-                const followUpHits = resolveFollowUpSkill(targetBattle, clashLoserUnit, clashWinnerUnit, loserContext.followUpSkillIdOnClashLose);
-                totalDamage += followUpHits.reduce((sum, hit) => sum + hit.damage, 0);
-                hits.push(...followUpHits);
-            }
+            const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
 
             applyAttackEndEffects(targetBattle, clashWinnerUnit, winnerSkill, winnerContext);
 
@@ -1385,6 +1381,39 @@
                 totalDamage,
                 remainingCoins,
             };
+
+            if (loserContext.followUpSkillIdOnClashLose && isUnitAlive(clashLoserUnit) && isUnitAlive(clashWinnerUnit)) {
+                const followUpSkill = getSkillById(clashLoserUnit, loserContext.followUpSkillIdOnClashLose);
+                if (followUpSkill) {
+                    emitEvent(targetBattle, 'engagement_started', {
+                        engagementType: 'one-sided',
+                        attackerName: clashLoserUnit.name,
+                        defenderName: clashWinnerUnit.name,
+                        skillName: followUpSkill.name,
+                    });
+
+                    const followUpHits = resolveFollowUpSkill(targetBattle, clashLoserUnit, clashWinnerUnit, loserContext.followUpSkillIdOnClashLose);
+                    const followUpTotalDamage = followUpHits.reduce((sum, hit) => sum + hit.damage, 0);
+                    const followUpPresentation = createOneSidedPresentation(
+                        loserSlot,
+                        winnerSlot,
+                        clashLoserUnit,
+                        clashWinnerUnit,
+                        followUpSkill,
+                        followUpHits,
+                        followUpTotalDamage,
+                    );
+                    targetBattle.resolutionHistory.push(followUpPresentation);
+                    targetBattle.lastResolution = {
+                        engagementType: 'one-sided',
+                        actingUnitName: clashLoserUnit.name,
+                        targetUnitName: clashWinnerUnit.name,
+                        actingSkillName: followUpSkill.name,
+                        totalDamage: followUpTotalDamage,
+                        remainingCoins: followUpSkill.coinCount,
+                    };
+                }
+            }
         }
 
         function resolveOneSidedEngagement(targetBattle, actingSlot, targetSlot) {
