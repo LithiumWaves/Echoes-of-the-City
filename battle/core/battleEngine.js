@@ -48,6 +48,7 @@
             staggerThresholdIndex: 0,
             staggerLevel: 0,
             staggerTurnsRemaining: 0,
+            staggerRecoverTurn: 0,
             sprites: {
                 ...template.sprites,
                 skills: { ...template.sprites.skills },
@@ -1026,6 +1027,13 @@
             };
         }
 
+        function syncStaggerCountdown(targetBattle, unit) {
+            const recoverTurn = unit.staggerRecoverTurn || 0;
+            unit.staggerTurnsRemaining = recoverTurn > 0
+                ? Math.max(0, (recoverTurn - targetBattle.turn) + 1)
+                : 0;
+        }
+
         function applyStaggerFromDamage(targetBattle, unit, sourceUnit, previousHp, nextHp) {
             if (!isUnitAlive(unit)) {
                 return false;
@@ -1049,7 +1057,8 @@
             }
 
             unit.staggerLevel += crossedCount;
-            unit.staggerTurnsRemaining = Math.max(unit.staggerTurnsRemaining || 0, 2);
+            unit.staggerRecoverTurn = Math.max(unit.staggerRecoverTurn || 0, targetBattle.turn + 1);
+            syncStaggerCountdown(targetBattle, unit);
             const slot = getAllSlots(targetBattle).find((candidate) => candidate.unitId === unit.id) || null;
             clearSlotAction(slot);
             emitEvent(targetBattle, 'unit_staggered', {
@@ -1066,17 +1075,19 @@
         }
 
         function progressStaggerTurnState(targetBattle, unit) {
-            if (!isUnitStaggered(unit)) {
+            if (!unit.staggerRecoverTurn) {
+                unit.staggerTurnsRemaining = 0;
                 return;
             }
 
-            unit.staggerTurnsRemaining = Math.max(0, (unit.staggerTurnsRemaining || 0) - 1);
-            if (unit.staggerTurnsRemaining > 0) {
+            syncStaggerCountdown(targetBattle, unit);
+            if (isUnitStaggered(unit)) {
                 return;
             }
 
             const previousLevel = unit.staggerLevel || 0;
             unit.staggerLevel = 0;
+            unit.staggerRecoverTurn = 0;
             emitEvent(targetBattle, 'unit_stagger_recovered', {
                 unitId: unit.id,
                 unitName: unit.name,
