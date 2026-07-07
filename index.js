@@ -12,6 +12,7 @@
         'battle/core/battleRenderer.js',
         'battle/core/battleHandler.js',
         'battle/debug/debugFightDefinition.js',
+        'battle/debug/debugRollManager.js',
         'battle/debug/debugBattleController.js',
     ];
     const ASSET_RELATIVE_PATHS = {
@@ -111,6 +112,39 @@
         return error.stack || error.message || String(error);
     }
 
+    function renderBattleStartScreen() {
+        if (!elements.combatContent) {
+            return;
+        }
+
+        if (state.battleHandler) {
+            state.battleHandler.render();
+            return;
+        }
+
+        elements.combatContent.innerHTML = `
+            <div class="echoes-battle-panel__combat-debug">
+                <div class="echoes-battle-panel__combat-toolbar">
+                    <div class="echoes-battle-panel__combat-pills">
+                        <span class="echoes-battle-panel__combat-pill">Debug Battle</span>
+                    </div>
+                </div>
+                <div class="echoes-battle-panel__planner-empty">
+                    Launch the hard-coded debug fight when you are ready.
+                </div>
+                <div style="margin-top: 0.8rem; display: flex; justify-content: center;">
+                    <button
+                        class="echoes-battle-panel__combat-button"
+                        type="button"
+                        data-action="start-debug-battle"
+                    >
+                        Start Debug Battle
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
     async function initializeBattleHandler() {
         if (!elements.combatContent) {
             return;
@@ -118,27 +152,40 @@
 
         await ensureBattleModuleLoaded();
 
-        state.battleHandler = window.EchoesOfTheCityBattle.createBattleHandler({
+        state.battleHandler = window.EchoesOfTheCityBattle.createDebugBattleController({
             mountElement: elements.combatContent,
             clamp,
             resolveAssetUrl: resolveExtensionUrl,
-            battleDefinition: window.EchoesOfTheCityBattleModules?.battleDefinitions?.debugFight,
-            enableDebugTools: true,
-            storageKeyPrefix: 'echoes-of-the-city:debug-battle',
         });
 
         state.battleHandler.render();
     }
 
     function renderCombatScreen() {
-        state.battleHandler?.render();
+        if (state.battleHandler) {
+            state.battleHandler.render();
+            return;
+        }
+
+        renderBattleStartScreen();
     }
 
     function resetDebugBattle() {
         state.battleHandler?.reset();
     }
 
-    function handleCombatContentClick(event) {
+    async function handleCombatContentClick(event) {
+        const actionTarget = event.target.closest('[data-action="start-debug-battle"]');
+        if (actionTarget) {
+            try {
+                await initializeBattleHandler();
+            } catch (error) {
+                console.error(`${EXTENSION_ID}: combat module initialization failed.`, error);
+                renderCombatLoadError(error);
+            }
+            return;
+        }
+
         state.battleHandler?.handleClick(event);
     }
 
@@ -714,7 +761,7 @@
 
         state.activeScreen = 'combat';
         syncPanelState();
-        state.battleHandler?.render();
+        renderCombatScreen();
     }
 
     function handleTrayButtonHover(event) {
@@ -896,12 +943,7 @@
         document.addEventListener('touchstart', handleAudioUnlockGesture, true);
         document.addEventListener('click', handleAudioUnlockGesture, true);
         createBattleInterface();
-        try {
-            await initializeBattleHandler();
-        } catch (error) {
-            console.error(`${EXTENSION_ID}: combat module initialization failed.`, error);
-            renderCombatLoadError(error);
-        }
+        renderBattleStartScreen();
         preloadAudio();
         syncPanelState();
 

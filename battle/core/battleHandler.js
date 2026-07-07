@@ -8,6 +8,7 @@
             resolveAssetUrl,
             battleDefinition = battleModules.defaultBattleDefinition || null,
             enableDebugTools = false,
+            debugRollManager = null,
             storageKeyPrefix = 'echoes-of-the-city:battle',
             engineFactory = battleModules.createBattleEngine,
             rendererFactory = battleModules.createBattleRenderer,
@@ -30,6 +31,9 @@
         const engine = engineFactory({
             clamp,
             battleDefinition,
+            peekRollToken: debugRollManager?.peekToken?.bind(debugRollManager),
+            consumeRollToken: debugRollManager?.consumeToken?.bind(debugRollManager),
+            onTurnStarted: debugRollManager?.handleTurnStarted?.bind(debugRollManager),
         });
         const renderer = rendererFactory({
             mountElement,
@@ -121,7 +125,7 @@
                 return false;
             }
 
-            if (entry.engagementType === 'clash') {
+            if (Array.isArray(entry.rounds) && entry.rounds.length) {
                 for (let roundIndex = 0; roundIndex < entry.rounds.length; roundIndex += 1) {
                     const round = entry.rounds[roundIndex];
                     updatePlaybackState({
@@ -337,6 +341,7 @@
                 isPlaybackRunning: playbackState.isRunning,
                 turnDebugEnabled,
                 debugToolsEnabled: enableDebugTools,
+                debugRollState: debugRollManager?.getUiState?.() || null,
             });
         }
 
@@ -364,17 +369,15 @@
                 return;
             }
 
-            if (action === 'debug-roll-clear' && enableDebugTools && slotId && typeof engine.setDebugForcedCoinSequence === 'function') {
-                engine.setDebugForcedCoinSequence(slotId, '');
+            if (action === 'debug-roll-clear' && enableDebugTools && slotId && debugRollManager?.setSequence) {
+                debugRollManager.setSequence(slotId, '');
                 render();
                 return;
             }
 
-            if (action === 'debug-roll-clear-all' && enableDebugTools && typeof engine.setDebugForcedCoinSequence === 'function') {
+            if (action === 'debug-roll-clear-all' && enableDebugTools && debugRollManager?.clearAll) {
                 const state = engine.getState();
-                [...state.playerSlots, ...state.enemySlots].forEach((slot) => {
-                    engine.setDebugForcedCoinSequence(slot.id, '');
-                });
+                debugRollManager.clearAll(state);
                 render();
                 return;
             }
@@ -427,7 +430,7 @@
         }
 
         function handleChange(event) {
-            if (!enableDebugTools || typeof engine.setDebugForcedCoinSequence !== 'function') {
+            if (!enableDebugTools || !debugRollManager?.setSequence) {
                 return;
             }
 
@@ -441,7 +444,7 @@
                 return;
             }
 
-            engine.setDebugForcedCoinSequence(slotId, input.value || '');
+            debugRollManager.setSequence(slotId, input.value || '');
             render();
         }
 

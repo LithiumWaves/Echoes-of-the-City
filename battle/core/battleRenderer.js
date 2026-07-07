@@ -520,9 +520,21 @@
                 }
             }
 
-            const currentRound = entry.engagementType === 'clash' ? entry.rounds?.[playback.roundIndex] : null;
+            const currentRound = entry.rounds?.[playback.roundIndex] || null;
+            const normalizeFlips = (flips) => {
+                if (Array.isArray(flips)) {
+                    return flips;
+                }
+                if (typeof flips === 'string') {
+                    return flips
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .map((token) => token === 'H');
+                }
+                return [];
+            };
             if (playback.phase === 'round-reveal' || playback.phase === 'coin-break') {
-                const flips = side === 'left' ? (currentRound?.leftFlips || []) : (currentRound?.rightFlips || []);
+                const flips = normalizeFlips(side === 'left' ? currentRound?.leftFlips : currentRound?.rightFlips);
                 for (let index = 0; index < flips.length; index += 1) {
                     states[index] = flips[index] ? 'heads' : 'tails';
                 }
@@ -555,7 +567,7 @@
                 return null;
             }
 
-            if ((playback.phase === 'round-reveal' || playback.phase === 'coin-break') && entry.engagementType === 'clash') {
+            if ((playback.phase === 'round-reveal' || playback.phase === 'coin-break') && entry.rounds?.length) {
                 const currentRound = entry.rounds?.[playback.roundIndex];
                 if (!currentRound) {
                     return null;
@@ -564,8 +576,8 @@
                 return {
                     leftValue: currentRound.leftPower,
                     rightValue: currentRound.rightPower,
-                    leftLabel: 'Clash Power',
-                    rightLabel: 'Clash Power',
+                    leftLabel: entry.engagementType === 'clash' ? 'Clash Power' : 'Final Power',
+                    rightLabel: entry.engagementType === 'clash' ? 'Clash Power' : 'Final Power',
                 };
             }
 
@@ -630,7 +642,7 @@
                 : playback.phase === 'skill-intro'
                     ? 'Skill Reveal'
                     : playback.phase === 'round-reveal'
-                        ? `Clash ${playback.roundIndex + 1}`
+                        ? `${entry.engagementType === 'clash' ? 'Clash' : 'Defense'} ${playback.roundIndex + 1}`
                         : playback.phase === 'coin-break'
                             ? 'Coin Broken'
                             : playback.phase === 'attack-hit'
@@ -672,7 +684,7 @@
                     <div class="echoes-battle-panel__combat-result-card is-resolved is-playback">
                         <span class="echoes-battle-panel__combat-result-label">${entry.engagementType === 'clash' ? 'Clash Playback' : 'Attack Playback'}</span>
                         <strong>${entry.leftUnitName} vs ${entry.rightUnitName}</strong>
-                        <small>${entry.engagementType === 'clash'
+                        <small>${entry.engagementType === 'clash' || entry.rightSkillId
                             ? `${entry.leftSkillName} vs ${entry.rightSkillName}`
                             : `${entry.leftSkillId ? entry.leftSkillName : entry.rightSkillName}`}</small>
                     </div>
@@ -698,7 +710,9 @@
             const winnerName = presentation.winnerSide === 'left' ? presentation.leftUnitName : presentation.rightUnitName;
             const subline = presentation.engagementType === 'clash'
                 ? `${presentation.leftSkillName} vs ${presentation.rightSkillName}`
-                : `${winnerName} resolved a one-sided attack`;
+                : presentation.rightSkillId
+                    ? `${presentation.leftSkillName} vs ${presentation.rightSkillName}`
+                    : `${winnerName} resolved a one-sided attack`;
             return `
                 <div class="echoes-battle-panel__combat-result-card is-resolved">
                     <span class="echoes-battle-panel__combat-result-label">${presentation.engagementType === 'clash' ? 'Clash' : 'Attack'}</span>
@@ -723,6 +737,8 @@
                 const actorNames = `${entry.leftUnitName} vs ${entry.rightUnitName}`;
                 const detail = entry.engagementType === 'clash'
                     ? `${entry.leftSkillName} vs ${entry.rightSkillName}`
+                    : entry.rightSkillId
+                        ? `${entry.leftSkillName} vs ${entry.rightSkillName}`
                     : entry.leftSkillId
                         ? `${entry.leftUnitName} used ${entry.leftSkillName}`
                         : `${entry.rightUnitName} used ${entry.rightSkillName}`;
@@ -837,10 +853,11 @@
                 .join('');
         }
 
-        function renderDebugRollControls(battle) {
+        function renderDebugRollControls(battle, uiState) {
             const slots = [...battle.playerSlots, ...battle.enemySlots];
-            const scripts = battle.debug?.forcedRollScripts || {};
-            const indices = battle.debug?.activeForcedCoinIndices || {};
+            const debugRollState = uiState?.debugRollState || {};
+            const scripts = debugRollState.forcedRollScripts || {};
+            const indices = debugRollState.activeForcedCoinIndices || {};
 
             const formatToken = (token) => {
                 if (typeof token === 'boolean') {
@@ -858,7 +875,7 @@
             return slots.map((slot) => {
                 const unit = getUnitById(battle, slot.unitId);
                 const skill = slot.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
-                const forcedInput = escapeAttribute(battle.debug?.forcedCoinInputs?.[slot.id] || '');
+                const forcedInput = escapeAttribute(debugRollState.forcedCoinInputs?.[slot.id] || '');
                 const script = Array.isArray(scripts[slot.id]) ? scripts[slot.id] : [];
                 const activeIndex = indices[slot.id] || 0;
                 const remaining = Math.max(0, script.length - activeIndex);
@@ -1091,7 +1108,7 @@
                                         Script examples: <strong>H T H</strong> (coin faces), <strong>P20</strong> or <strong>20</strong> (force next roll power), <strong>K2</strong> (force 2 heads on next roll).
                                     </div>
                                     <div class="echoes-battle-panel__debug-roll-grid">
-                                        ${renderDebugRollControls(battle)}
+                                        ${renderDebugRollControls(battle, uiState)}
                                     </div>
                                 </div>
                             `

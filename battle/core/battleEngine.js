@@ -51,6 +51,9 @@
         const {
             clamp,
             battleDefinition = options?.battleDefinition || null,
+            peekRollToken = null,
+            consumeRollToken = null,
+            onTurnStarted = null,
         } = options;
         let nextEventId = 1;
         let battle = createDebugBattleState();
@@ -311,41 +314,6 @@
             return clamp(typeof value === 'number' ? value : 0, 0, max);
         }
 
-        function parseForcedRollScript(sequenceText) {
-            const tokens = String(sequenceText || '')
-                .toUpperCase()
-                .replace(/,/g, ' ')
-                .split(/\s+/)
-                .filter(Boolean);
-
-            return tokens
-                .map((token) => {
-                    if (token === 'H' || token === '1') {
-                        return true;
-                    }
-                    if (token === 'T' || token === '0') {
-                        return false;
-                    }
-
-                    const powerMatch = token.match(/^P(-?\d+)$/);
-                    if (powerMatch) {
-                        return { type: 'power', value: Number.parseInt(powerMatch[1], 10) };
-                    }
-
-                    const headsMatch = token.match(/^K(\d+)$/);
-                    if (headsMatch) {
-                        return { type: 'heads', value: Number.parseInt(headsMatch[1], 10) };
-                    }
-
-                    if (/^-?\d+$/.test(token)) {
-                        return { type: 'power', value: Number.parseInt(token, 10) };
-                    }
-
-                    return null;
-                })
-                .filter(Boolean);
-        }
-
         function applyStatus(targetBattle, unit, statusId, payload) {
             const potencyDelta = typeof payload?.potency === 'number' ? payload.potency : 0;
             const countDelta = typeof payload?.count === 'number' ? payload.count : 0;
@@ -441,33 +409,30 @@
             return { previousSp, nextSp: unit.sp };
         }
 
-        function peekForcedRollToken(targetBattle, slotId) {
+        function peekForcedRollToken(slotId) {
             if (!slotId) {
                 return null;
             }
 
-            const debugState = targetBattle.debug;
-            const sequence = debugState?.forcedRollScripts?.[slotId];
-            if (!Array.isArray(sequence) || !sequence.length) {
+            if (typeof peekRollToken !== 'function') {
                 return null;
             }
 
-            const currentIndex = debugState.activeForcedCoinIndices[slotId] || 0;
-            if (currentIndex >= sequence.length) {
+            const token = peekRollToken(slotId);
+            if (typeof token === 'undefined') {
                 return null;
             }
 
-            return sequence[currentIndex];
+            return token;
         }
 
-        function consumeForcedRollToken(targetBattle, slotId) {
-            const token = peekForcedRollToken(targetBattle, slotId);
-            if (token === null) {
+        function consumeForcedRollToken(slotId) {
+            if (!slotId || typeof consumeRollToken !== 'function') {
                 return null;
             }
 
-            targetBattle.debug.activeForcedCoinIndices[slotId] = (targetBattle.debug.activeForcedCoinIndices[slotId] || 0) + 1;
-            return token;
+            const token = consumeRollToken(slotId);
+            return typeof token === 'undefined' ? null : token;
         }
 
         function applyFixedDamage(targetBattle, unit, statusId, damage) {
@@ -627,9 +592,9 @@
                 if (typeof forcedIsHeads === 'boolean') {
                     isHeads = forcedIsHeads;
                 } else {
-                    const token = peekForcedRollToken(targetBattle, attackContext.slotId);
+                    const token = peekForcedRollToken(attackContext.slotId);
                     if (typeof token === 'boolean') {
-                        isHeads = consumeForcedRollToken(targetBattle, attackContext.slotId);
+                        isHeads = consumeForcedRollToken(attackContext.slotId);
                     } else {
                         isHeads = Math.random() * 100 < getCoinHeadChance(unit);
                     }
@@ -653,10 +618,10 @@
             const flips = [];
             let power = skill.basePower + (attackContext.flatPowerBonus || 0);
 
-            const nextToken = peekForcedRollToken(targetBattle, attackContext.slotId);
+            const nextToken = peekForcedRollToken(attackContext.slotId);
             let forcedFlips = null;
             if (nextToken && typeof nextToken === 'object' && (nextToken.type === 'power' || nextToken.type === 'heads')) {
-                const directive = consumeForcedRollToken(targetBattle, attackContext.slotId);
+                const directive = consumeForcedRollToken(attackContext.slotId);
                 const effectiveCoinPower = getEffectiveCoinPower(unit, skill, attackContext);
                 const baseValue = skill.basePower + (attackContext.flatPowerBonus || 0);
                 let desiredHeads = 0;
@@ -1288,24 +1253,38 @@
             };
         }
 
-        function createOneSidedPresentation(attackerSlot, defenderSlot, attacker, defender, skill, hits, totalDamage) {
+        function createOneSidedPresentation(attackerSlot, defenderSlot, attacker, defender, skill, hits, totalDamage, options = {}) {
             const openingHit = hits[0] || null;
+            const defenderSkill = options.defenderSkill || null;
+            const rawRounds = Array.isArray(options.rounds) ? options.rounds : [];
+            const rounds = rawRounds.map((round) => ({
+                result: round.result,
+                leftPower: attackerSlot.side === 'player' ? round.attackPower : round.defendPower,
+                rightPower: attackerSlot.side === 'player' ? round.defendPower : round.attackPower,
+                leftFlips: attackerSlot.side === 'player' ? round.attackFlips : round.defendFlips,
+                rightFlips: attackerSlot.side === 'player' ? round.defendFlips : round.attackFlips,
+            }));
+            const decisiveRound = rounds[rounds.length - 1] || null;
             return {
                 engagementType: 'one-sided',
                 leftSlotId: attackerSlot.side === 'player' ? attackerSlot.id : defenderSlot.id,
                 rightSlotId: attackerSlot.side === 'player' ? defenderSlot.id : attackerSlot.id,
                 leftUnitName: attackerSlot.side === 'player' ? attacker.name : defender.name,
                 rightUnitName: attackerSlot.side === 'player' ? defender.name : attacker.name,
-                leftSkillId: attackerSlot.side === 'player' ? skill.id : null,
-                rightSkillId: attackerSlot.side === 'enemy' ? skill.id : null,
-                leftSkillName: attackerSlot.side === 'player' ? skill.name : 'No clash',
-                rightSkillName: attackerSlot.side === 'enemy' ? skill.name : 'No clash',
+                leftSkillId: attackerSlot.side === 'player' ? skill.id : defenderSkill?.id || null,
+                rightSkillId: attackerSlot.side === 'enemy' ? skill.id : defenderSkill?.id || null,
+                leftSkillName: attackerSlot.side === 'player' ? skill.name : defenderSkill?.name || 'No clash',
+                rightSkillName: attackerSlot.side === 'enemy' ? skill.name : defenderSkill?.name || 'No clash',
                 winnerSide: attackerSlot.side === 'player' ? 'left' : 'right',
-                rounds: [],
+                rounds,
                 hits,
                 totalDamage,
-                leftDisplayPower: attackerSlot.side === 'player' ? (openingHit?.finalPower || 0) : 0,
-                rightDisplayPower: attackerSlot.side === 'enemy' ? (openingHit?.finalPower || 0) : 0,
+                leftDisplayPower: decisiveRound
+                    ? decisiveRound.leftPower
+                    : attackerSlot.side === 'player' ? (openingHit?.finalPower || 0) : 0,
+                rightDisplayPower: decisiveRound
+                    ? decisiveRound.rightPower
+                    : attackerSlot.side === 'enemy' ? (openingHit?.finalPower || 0) : 0,
             };
         }
 
@@ -1344,6 +1323,7 @@
             let evadedCoinCount = 0;
             let evadeBroken = false;
             const evadePowerBonus = getDefenseSkillFinalPowerBonus(defender, evadeSkill, attacker, attackSkill);
+            const rounds = [];
 
             for (let coinIndex = 0; coinIndex < attackSkill.coinCount; coinIndex += 1) {
                 attackContext.currentCoinIndex = coinIndex + 1;
@@ -1358,6 +1338,13 @@
                 if (!evadeBroken) {
                     const evadeRoll = rollSingleCoin(targetBattle, defender, evadeSkill, evadeContext);
                     const evadePower = (evadeRoll?.power || evadeSkill.basePower) + evadePowerBonus;
+                    rounds.push({
+                        result: evadePower >= finalPower ? 'evade' : 'hit',
+                        attackPower: finalPower,
+                        defendPower: evadePower,
+                        attackFlips: [roll.isHeads],
+                        defendFlips: typeof evadeRoll?.isHeads === 'boolean' ? [evadeRoll.isHeads] : [],
+                    });
 
                     if (evadePower >= finalPower) {
                         evadedCoinCount += 1;
@@ -1422,6 +1409,7 @@
                 hits,
                 evadedCoinCount,
                 evadeBroken,
+                rounds,
             };
         }
 
@@ -1619,13 +1607,14 @@
             });
 
             let hits = [];
+            let evadeResult = null;
             if (isEvadeSkill(defendingSkill) && !defenseState.broken && isUnitAlive(targetUnit)) {
                 if (!defenseState.context) {
                     defenseState.context = createSkillContext(targetBattle, targetUnit, targetSlot, defendingSkill, actingUnit);
                 }
                 defenseState.activated = true;
                 defenseState.used = true;
-                const evadeResult = resolveAttackAgainstEvade(targetBattle, actingUnit, actingSkill, targetUnit, defendingSkill, attackContext, defenseState.context);
+                evadeResult = resolveAttackAgainstEvade(targetBattle, actingUnit, actingSkill, targetUnit, defendingSkill, attackContext, defenseState.context);
                 hits = evadeResult.hits;
                 if (evadeResult.evadeBroken) {
                     defenseState.broken = true;
@@ -1641,7 +1630,19 @@
                 markUnitDefeated(targetBattle, targetUnit, actingUnit);
             }
 
-            targetBattle.clashPresentation = createOneSidedPresentation(actingSlot, targetSlot, actingUnit, targetUnit, actingSkill, hits, totalDamage);
+            targetBattle.clashPresentation = createOneSidedPresentation(
+                actingSlot,
+                targetSlot,
+                actingUnit,
+                targetUnit,
+                actingSkill,
+                hits,
+                totalDamage,
+                {
+                    defenderSkill: isEvadeSkill(defendingSkill) ? defendingSkill : null,
+                    rounds: isEvadeSkill(defendingSkill) ? evadeResult?.rounds || [] : [],
+                },
+            );
             targetBattle.resolutionHistory.push(targetBattle.clashPresentation);
             targetBattle.lastResolution = {
                 engagementType: 'one-sided',
@@ -1862,11 +1863,6 @@
                 lastResolution: null,
                 clashPresentation: null,
                 resolutionHistory: [],
-                debug: {
-                    forcedCoinInputs: {},
-                    forcedRollScripts: {},
-                    activeForcedCoinIndices: {},
-                },
             };
 
             emitEvent(nextBattle, 'battle_started', {
@@ -1888,7 +1884,9 @@
             targetBattle.clashPresentation = null;
             targetBattle.resolutionQueue = [];
             targetBattle.resolutionHistory = [];
-            targetBattle.debug.activeForcedCoinIndices = {};
+            if (typeof onTurnStarted === 'function') {
+                onTurnStarted(targetBattle);
+            }
 
             emitEvent(targetBattle, 'turn_started', {
                 turn: targetBattle.turn,
@@ -2062,7 +2060,6 @@
                 return false;
             }
 
-            battle.debug.activeForcedCoinIndices = {};
             normalizeAutoTargets(battle);
             const queue = buildResolutionQueue(battle);
             for (const slot of queue) {
@@ -2182,26 +2179,6 @@
             return true;
         }
 
-        function setDebugForcedCoinSequence(slotId, sequenceText) {
-            const slot = getSlotById(battle, slotId);
-            if (!slot) {
-                return false;
-            }
-
-            const nextInput = typeof sequenceText === 'string' ? sequenceText.toUpperCase() : '';
-            const parsedSequence = parseForcedRollScript(nextInput);
-            battle.debug.forcedCoinInputs[slotId] = nextInput;
-
-            if (parsedSequence.length) {
-                battle.debug.forcedRollScripts[slotId] = parsedSequence;
-            } else {
-                delete battle.debug.forcedRollScripts[slotId];
-            }
-
-            battle.debug.activeForcedCoinIndices[slotId] = 0;
-            return true;
-        }
-
         return {
             getState,
             selectSlot,
@@ -2212,7 +2189,6 @@
             reset,
             addStatus,
             clearStatuses,
-            setDebugForcedCoinSequence,
         };
     }
 
