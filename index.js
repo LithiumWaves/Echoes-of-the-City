@@ -8,10 +8,11 @@
     const DRAG_THRESHOLD = 6;
     const PANEL_ASPECT_RATIO = 1640 / 4120;
     const BATTLE_SCRIPT_RELATIVE_PATHS = [
-        'battle/data/debugFightData.js',
-        'battle/logic/debugBattleEngine.js',
-        'battle/render/debugBattleRenderer.js',
-        'battle/debugBattle.js',
+        'battle/core/battleEngine.js',
+        'battle/core/battleRenderer.js',
+        'battle/core/battleHandler.js',
+        'battle/debug/debugFightDefinition.js',
+        'battle/debug/debugBattleController.js',
     ];
     const ASSET_RELATIVE_PATHS = {
         hover: 'audio/battlewindow/hovermechanical.wav',
@@ -121,8 +122,7 @@
             mountElement: elements.combatContent,
             clamp,
             resolveAssetUrl: resolveExtensionUrl,
-            battleDefinition: window.EchoesOfTheCityBattleModules?.battleDefinitions?.debugFight
-                || window.EchoesOfTheCityBattleModules?.debugFightTemplate,
+            battleDefinition: window.EchoesOfTheCityBattleModules?.battleDefinitions?.debugFight,
             enableDebugTools: true,
             storageKeyPrefix: 'echoes-of-the-city:debug-battle',
         });
