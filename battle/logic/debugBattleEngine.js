@@ -1429,9 +1429,18 @@
                         isSlotAlive(targetBattle, playerSlot) &&
                         Boolean(playerSlot.selectedSkillId) &&
                         playerSlot.targetSlotId === enemySlot.id &&
-                        playerSlot.speed > enemySlot.speed
+                        (
+                            enemySlot.intentTargetSlotId === playerSlot.id
+                            || playerSlot.speed > enemySlot.speed
+                        )
                     ))
                     .sort((left, right) => {
+                        const leftWasOriginallyTargeted = enemySlot.intentTargetSlotId === left.id;
+                        const rightWasOriginallyTargeted = enemySlot.intentTargetSlotId === right.id;
+                        if (leftWasOriginallyTargeted !== rightWasOriginallyTargeted) {
+                            return leftWasOriginallyTargeted ? -1 : 1;
+                        }
+
                         if (right.speed !== left.speed) {
                             return right.speed - left.speed;
                         }
