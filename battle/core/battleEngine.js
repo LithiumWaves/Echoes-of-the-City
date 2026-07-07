@@ -1325,8 +1325,12 @@
             return hits;
         }
 
-        function getActiveDefenseSkill(targetBattle, slot) {
+        function getActiveDefenseSkill(targetBattle, slot, attackerSlot = null) {
             if (!slot?.selectedSkillId) {
+                return null;
+            }
+
+            if (attackerSlot && slot.targetSlotId && slot.targetSlotId !== attackerSlot.id) {
                 return null;
             }
 
@@ -1603,7 +1607,7 @@
             const targetUnit = getUnitById(targetBattle, targetSlot.unitId);
             const actingSkill = getSkillById(actingUnit, actingSlot.selectedSkillId);
             const attackContext = createSkillContext(targetBattle, actingUnit, actingSlot, actingSkill, targetUnit);
-            const defendingSkill = getActiveDefenseSkill(targetBattle, targetSlot);
+            const defendingSkill = getActiveDefenseSkill(targetBattle, targetSlot, actingSlot);
             const defendContext = { damageReductionMultiplier: 1 };
             const defenseState = ensureDefenseState(targetSlot);
 
@@ -1745,9 +1749,7 @@
                         return false;
                     }
 
-                    const unit = getUnitById(targetBattle, slot.unitId);
-                    const skill = getSkillById(unit, slot.selectedSkillId);
-                    return isDefenseSkill(skill) ? true : Boolean(slot.targetSlotId);
+                    return Boolean(slot.targetSlotId);
                 });
         }
 
@@ -1986,11 +1988,9 @@
 
             slot.selectedSkillId = skillId;
             slot.manualTargetLock = false;
-            slot.targetSlotId = isDefenseSkill(skill)
-                ? null
-                : (skill.targeting === 'highestMaxPower'
-                    ? getAutoTargetSlotId(battle, slot, skill)
-                    : (slot.targetSlotId || getFirstLivingSlotId(battle, 'enemy')));
+            slot.targetSlotId = skill.targeting === 'highestMaxPower'
+                ? getAutoTargetSlotId(battle, slot, skill)
+                : (slot.targetSlotId || getFirstLivingSlotId(battle, 'enemy'));
             slot.defenseState = {
                 activated: false,
                 used: false,
@@ -2020,11 +2020,6 @@
                 return false;
             }
 
-            const unit = getUnitById(battle, slot.unitId);
-            const skill = slot.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
-            if (isDefenseSkill(skill)) {
-                return false;
-            }
             slot.targetSlotId = targetSlot.id;
             slot.manualTargetLock = true;
 
@@ -2046,13 +2041,10 @@
 
                 const unit = getUnitById(targetBattle, slot.unitId);
                 const skill = getSkillById(unit, slot.selectedSkillId);
-                if (isDefenseSkill(skill)) {
-                    slot.targetSlotId = null;
-                    return;
-                }
-
                 if (skill?.targeting === 'highestMaxPower' && !slot.manualTargetLock) {
                     slot.targetSlotId = getAutoTargetSlotId(targetBattle, slot, skill);
+                } else if (!slot.targetSlotId || !isSlotAlive(targetBattle, getSlotById(targetBattle, slot.targetSlotId))) {
+                    slot.targetSlotId = getFirstLivingSlotId(targetBattle, getOpposingSide(slot.side));
                 }
             });
 
@@ -2078,10 +2070,12 @@
 
                 const actingUnit = getUnitById(battle, slot.unitId);
                 const actingSkill = getSkillById(actingUnit, slot.selectedSkillId);
+                if (isDefenseSkill(actingSkill)) {
+                    slot.resolved = true;
+                    continue;
+                }
+
                 if (!slot.targetSlotId) {
-                    if (isDefenseSkill(actingSkill)) {
-                        slot.resolved = true;
-                    }
                     continue;
                 }
 

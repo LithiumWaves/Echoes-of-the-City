@@ -171,12 +171,6 @@
         }
 
         function getSlotTargetSummary(battle, slot) {
-            const unit = slot ? getUnitById(battle, slot.unitId) : null;
-            const skill = slot?.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
-            if (isDefenseSkill(skill)) {
-                return 'Reactive';
-            }
-
             const targetSlot = slot?.targetSlotId ? getSlotById(battle, slot.targetSlotId) : null;
             if (!targetSlot) {
                 return 'No target';
@@ -829,8 +823,8 @@
                             data-action="select-skill"
                             data-slot-id="${activePlayerSlot.id}"
                             data-skill-id="${skill.id}"
-                            draggable="${isDisabled || isDefense ? 'false' : 'true'}"
-                            ${isDefense ? '' : 'data-drag-skill="true"'}
+                            draggable="${isDisabled ? 'false' : 'true'}"
+                            data-drag-skill="true"
                             title="${tooltipText}"
                             aria-label="${tooltipText}"
                             ${isDisabled ? 'disabled' : ''}
@@ -1068,7 +1062,9 @@
                         </div>
                         <div class="echoes-battle-panel__planner-summary">
                             ${selectedSkill && isDefenseSkill(selectedSkill)
-                                ? `${activeUnit?.name || 'Slot'} will use ${selectedSkill.name} reactively when attacked.`
+                                ? targetUnit
+                                    ? `${activeUnit?.name || 'Slot'} will use ${selectedSkill.name} against ${targetUnit.name}.`
+                                    : `Drag ${selectedSkill.name} onto an enemy, or click an enemy after selecting it.`
                                 : targetUnit
                                 ? `${activeUnit?.name || 'Slot'} -> ${targetUnit.name}`
                                 : 'Drag a skill onto an enemy, or click an enemy after selecting a skill.'}

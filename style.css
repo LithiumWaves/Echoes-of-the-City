@@ -1899,7 +1899,7 @@
 }
 
 .echoes-battle-panel__planner-skill.is-defense {
-    cursor: pointer;
+    cursor: grab;
     border-color: rgba(196, 166, 120, 0.36);
     background: rgba(74, 55, 34, 0.18);
 }
