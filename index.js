@@ -23,7 +23,7 @@
     const state = {
         isOpen: false,
         activeScreen: 'main-menu',
-        combatController: null,
+        battleHandler: null,
         battleModulePromise: null,
         audioEnabled: false,
         audioUnlocked: false,
@@ -65,7 +65,7 @@
     const audioBuffers = new Map();
 
     async function ensureBattleModuleLoaded() {
-        if (window.EchoesOfTheCityBattle?.createDebugBattleController) {
+        if (window.EchoesOfTheCityBattle?.createBattleHandler) {
             return;
         }
 
@@ -86,8 +86,8 @@
                     }
                 }
 
-                if (!window.EchoesOfTheCityBattle?.createDebugBattleController) {
-                    throw new Error('Battle module did not expose a controller factory.');
+                if (!window.EchoesOfTheCityBattle?.createBattleHandler) {
+                    throw new Error('Battle module did not expose a battle handler factory.');
                 }
             })().catch((error) => {
                 state.battleModulePromise = null;
@@ -110,40 +110,44 @@
         return error.stack || error.message || String(error);
     }
 
-    async function initializeCombatController() {
+    async function initializeBattleHandler() {
         if (!elements.combatContent) {
             return;
         }
 
         await ensureBattleModuleLoaded();
 
-        state.combatController = window.EchoesOfTheCityBattle.createDebugBattleController({
+        state.battleHandler = window.EchoesOfTheCityBattle.createBattleHandler({
             mountElement: elements.combatContent,
             clamp,
             resolveAssetUrl: resolveExtensionUrl,
+            battleDefinition: window.EchoesOfTheCityBattleModules?.battleDefinitions?.debugFight
+                || window.EchoesOfTheCityBattleModules?.debugFightTemplate,
+            enableDebugTools: true,
+            storageKeyPrefix: 'echoes-of-the-city:debug-battle',
         });
 
-        state.combatController.render();
+        state.battleHandler.render();
     }
 
     function renderCombatScreen() {
-        state.combatController?.render();
+        state.battleHandler?.render();
     }
 
     function resetDebugBattle() {
-        state.combatController?.reset();
+        state.battleHandler?.reset();
     }
 
     function handleCombatContentClick(event) {
-        state.combatController?.handleClick(event);
+        state.battleHandler?.handleClick(event);
     }
 
         function handleCombatContentChange(event) {
-            state.combatController?.handleChange?.(event);
+            state.battleHandler?.handleChange?.(event);
         }
 
     function handleCombatContentPointerDown(event) {
-        state.combatController?.handlePointerDown(event);
+        state.battleHandler?.handlePointerDown(event);
     }
 
     function renderCombatLoadError(error) {
@@ -710,7 +714,7 @@
 
         state.activeScreen = 'combat';
         syncPanelState();
-        state.combatController?.render();
+        state.battleHandler?.render();
     }
 
     function handleTrayButtonHover(event) {
@@ -867,12 +871,12 @@
         elements.combatContent.addEventListener('click', handleCombatContentClick);
         elements.combatContent.addEventListener('change', handleCombatContentChange);
         elements.combatContent.addEventListener('pointerdown', handleCombatContentPointerDown);
-        elements.combatContent.addEventListener('dragstart', (event) => state.combatController?.handleDragStart(event));
-        elements.combatContent.addEventListener('dragover', (event) => state.combatController?.handleDragOver(event));
-        elements.combatContent.addEventListener('dragenter', (event) => state.combatController?.handleDragEnter(event));
-        elements.combatContent.addEventListener('dragleave', (event) => state.combatController?.handleDragLeave(event));
-        elements.combatContent.addEventListener('drop', (event) => state.combatController?.handleDrop(event));
-        elements.combatContent.addEventListener('dragend', () => state.combatController?.handleDragEnd());
+        elements.combatContent.addEventListener('dragstart', (event) => state.battleHandler?.handleDragStart(event));
+        elements.combatContent.addEventListener('dragover', (event) => state.battleHandler?.handleDragOver(event));
+        elements.combatContent.addEventListener('dragenter', (event) => state.battleHandler?.handleDragEnter(event));
+        elements.combatContent.addEventListener('dragleave', (event) => state.battleHandler?.handleDragLeave(event));
+        elements.combatContent.addEventListener('drop', (event) => state.battleHandler?.handleDrop(event));
+        elements.combatContent.addEventListener('dragend', () => state.battleHandler?.handleDragEnd());
         elements.characterTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.characterTrayButton.addEventListener('click', handleCharacterTrayButtonClick);
         document.addEventListener('keydown', handleKeydown);
@@ -893,7 +897,7 @@
         document.addEventListener('click', handleAudioUnlockGesture, true);
         createBattleInterface();
         try {
-            await initializeCombatController();
+            await initializeBattleHandler();
         } catch (error) {
             console.error(`${EXTENSION_ID}: combat module initialization failed.`, error);
             renderCombatLoadError(error);

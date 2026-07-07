@@ -1,9 +1,17 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
 
-    function createDebugBattleController(options) {
-        const { mountElement, clamp, resolveAssetUrl } = options;
-        const { debugFightTemplate, createDebugBattleEngine, createDebugBattleRenderer } = battleModules;
+    function createBattleHandler(options) {
+        const {
+            mountElement,
+            clamp,
+            resolveAssetUrl,
+            battleDefinition = battleModules.defaultBattleDefinition || battleModules.battleDefinitions?.debugFight || battleModules.debugFightTemplate,
+            enableDebugTools = false,
+            storageKeyPrefix = 'echoes-of-the-city:battle',
+            engineFactory = battleModules.createBattleEngine || battleModules.createDebugBattleEngine,
+            rendererFactory = battleModules.createBattleRenderer || battleModules.createDebugBattleRenderer,
+        } = options;
         const PLAYBACK_TIMINGS = {
             approach: 420,
             skillIntro: 480,
@@ -12,18 +20,18 @@
             attackHit: 560,
             betweenEntries: 360,
         };
-        const BATTLEFIELD_HEIGHT_STORAGE_KEY = 'echoes-of-the-city:battlefield-height';
-        const TURN_DEBUG_STORAGE_KEY = 'echoes-of-the-city:turn-debug-enabled';
+        const BATTLEFIELD_HEIGHT_STORAGE_KEY = `${storageKeyPrefix}:battlefield-height`;
+        const TURN_DEBUG_STORAGE_KEY = `${storageKeyPrefix}:turn-debug-enabled`;
 
-        if (!debugFightTemplate || typeof createDebugBattleEngine !== 'function' || typeof createDebugBattleRenderer !== 'function') {
+        if (!battleDefinition || typeof engineFactory !== 'function' || typeof rendererFactory !== 'function') {
             throw new Error('Battle modules are incomplete.');
         }
 
-        const engine = createDebugBattleEngine({
+        const engine = engineFactory({
             clamp,
-            debugFightTemplate,
+            battleDefinition,
         });
-        const renderer = createDebugBattleRenderer({
+        const renderer = rendererFactory({
             mountElement,
             resolveAssetUrl,
         });
@@ -35,7 +43,7 @@
         let playbackState = createIdlePlaybackState();
         let battlefieldHeight = loadPersistedBattlefieldHeight();
         let activeResizePointerId = null;
-        let turnDebugEnabled = loadPersistedTurnDebugEnabled();
+        let turnDebugEnabled = enableDebugTools ? loadPersistedTurnDebugEnabled() : false;
 
         function createIdlePlaybackState() {
             return {
@@ -328,6 +336,7 @@
                 playback: playbackState,
                 isPlaybackRunning: playbackState.isRunning,
                 turnDebugEnabled,
+                debugToolsEnabled: enableDebugTools,
             });
         }
 
@@ -348,20 +357,20 @@
                 return;
             }
 
-            if (action === 'toggle-turn-debug') {
+            if (action === 'toggle-turn-debug' && enableDebugTools) {
                 turnDebugEnabled = !turnDebugEnabled;
                 persistTurnDebugEnabled();
                 render();
                 return;
             }
 
-            if (action === 'debug-roll-clear' && slotId) {
+            if (action === 'debug-roll-clear' && enableDebugTools && slotId && typeof engine.setDebugForcedCoinSequence === 'function') {
                 engine.setDebugForcedCoinSequence(slotId, '');
                 render();
                 return;
             }
 
-            if (action === 'debug-roll-clear-all') {
+            if (action === 'debug-roll-clear-all' && enableDebugTools && typeof engine.setDebugForcedCoinSequence === 'function') {
                 const state = engine.getState();
                 [...state.playerSlots, ...state.enemySlots].forEach((slot) => {
                     engine.setDebugForcedCoinSequence(slot.id, '');
@@ -418,6 +427,10 @@
         }
 
         function handleChange(event) {
+            if (!enableDebugTools || typeof engine.setDebugForcedCoinSequence !== 'function') {
+                return;
+            }
+
             const input = event.target.closest('[data-action="debug-roll-sequence"]');
             if (!input) {
                 return;
@@ -555,7 +568,17 @@
         };
     }
 
+    function createDebugBattleController(options) {
+        return createBattleHandler({
+            ...options,
+            battleDefinition: battleModules.battleDefinitions?.debugFight || battleModules.debugFightTemplate,
+            enableDebugTools: true,
+            storageKeyPrefix: 'echoes-of-the-city:debug-battle',
+        });
+    }
+
     window.EchoesOfTheCityBattle = {
+        createBattleHandler,
         createDebugBattleController,
     };
 })();

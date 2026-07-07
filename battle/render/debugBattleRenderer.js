@@ -1,7 +1,7 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
 
-    battleModules.createDebugBattleRenderer = function createDebugBattleRenderer(options) {
+    function createBattleRenderer(options) {
         const { mountElement, resolveAssetUrl } = options;
         const keywordStatusIconPaths = {
             bleed: 'assets/statuseffects/keywordstatus/Bleed.png',
@@ -964,6 +964,7 @@
         }
 
         function renderBattlefield(battle, activePlayerSlot, uiState) {
+            const debugToolsEnabled = uiState?.debugToolsEnabled !== false;
             const playerMarkup = battle.playerSlots
                 .map((slot) => renderFieldUnitWithUiState(battle, getUnitById(battle, slot.unitId), slot, 'player', activePlayerSlot, uiState))
                 .join('');
@@ -985,13 +986,17 @@
                             </div>
                         </div>
                         <div class="echoes-battle-panel__combat-controls">
-                            <button
-                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost${uiState?.turnDebugEnabled ? ' is-active' : ''}"
-                                type="button"
-                                data-action="toggle-turn-debug"
-                            >
-                                Debug
-                            </button>
+                            ${debugToolsEnabled
+                                ? `
+                                    <button
+                                        class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost${uiState?.turnDebugEnabled ? ' is-active' : ''}"
+                                        type="button"
+                                        data-action="toggle-turn-debug"
+                                    >
+                                        Debug
+                                    </button>
+                                `
+                                : ''}
                             <button
                                 class="echoes-battle-panel__combat-button"
                                 type="button"
@@ -1032,6 +1037,7 @@
         }
 
         function renderPlanner(battle, activePlayerSlot, uiState) {
+            const debugToolsEnabled = uiState?.debugToolsEnabled !== false;
             const activeUnit = activePlayerSlot ? getUnitById(battle, activePlayerSlot.unitId) : null;
             const selectedSkill = activePlayerSlot?.selectedSkillId ? getSkillById(activeUnit, activePlayerSlot.selectedSkillId) : null;
             const targetSlot = activePlayerSlot?.targetSlotId ? getSlotById(battle, activePlayerSlot.targetSlotId) : null;
@@ -1070,26 +1076,30 @@
                         <div class="echoes-battle-panel__planner-skill-row">
                             ${renderSkillCards(battle, activePlayerSlot)}
                         </div>
-                        <div class="echoes-battle-panel__planner-debug">
-                            <div class="echoes-battle-panel__planner-heading">
-                                <span>Debug Rolls</span>
-                                <strong>H/T or final value</strong>
-                                <button
-                                    class="echoes-battle-panel__planner-debug-clearall"
-                                    type="button"
-                                    data-action="debug-roll-clear-all"
-                                    ${battle.phase !== 'select' ? 'disabled' : ''}
-                                >
-                                    Clear All
-                                </button>
-                            </div>
-                            <div class="echoes-battle-panel__planner-debug-note">
-                                Script examples: <strong>H T H</strong> (coin faces), <strong>P20</strong> or <strong>20</strong> (force next roll power), <strong>K2</strong> (force 2 heads on next roll).
-                            </div>
-                            <div class="echoes-battle-panel__debug-roll-grid">
-                                ${renderDebugRollControls(battle)}
-                            </div>
-                        </div>
+                        ${debugToolsEnabled
+                            ? `
+                                <div class="echoes-battle-panel__planner-debug">
+                                    <div class="echoes-battle-panel__planner-heading">
+                                        <span>Debug Rolls</span>
+                                        <strong>H/T or final value</strong>
+                                        <button
+                                            class="echoes-battle-panel__planner-debug-clearall"
+                                            type="button"
+                                            data-action="debug-roll-clear-all"
+                                            ${battle.phase !== 'select' ? 'disabled' : ''}
+                                        >
+                                            Clear All
+                                        </button>
+                                    </div>
+                                    <div class="echoes-battle-panel__planner-debug-note">
+                                        Script examples: <strong>H T H</strong> (coin faces), <strong>P20</strong> or <strong>20</strong> (force next roll power), <strong>K2</strong> (force 2 heads on next roll).
+                                    </div>
+                                    <div class="echoes-battle-panel__debug-roll-grid">
+                                        ${renderDebugRollControls(battle)}
+                                    </div>
+                                </div>
+                            `
+                            : ''}
                     </div>
 
                     <aside class="echoes-battle-panel__planner-lane echoes-battle-panel__planner-lane--queue">
@@ -1138,5 +1148,8 @@
         return {
             render,
         };
-    };
+    }
+
+    battleModules.createBattleRenderer = createBattleRenderer;
+    battleModules.createDebugBattleRenderer = createBattleRenderer;
 })();

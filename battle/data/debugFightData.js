@@ -1,5 +1,6 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
+    const battleDefinitions = battleModules.battleDefinitions || (battleModules.battleDefinitions = {});
 
     const vergiliusSprites = {
         idle: 'assets/debugsprites/Vergilius_Idle_Sprite.png',
@@ -46,7 +47,7 @@
         },
     };
 
-    battleModules.debugFightTemplate = {
+    const debugFightDefinition = {
         playerUnits: [
             {
                 id: 'vergilius',
@@ -296,4 +297,8 @@
             },
         ],
     };
+
+    battleDefinitions.debugFight = debugFightDefinition;
+    battleModules.debugFightTemplate = debugFightDefinition;
+    battleModules.defaultBattleDefinition = battleModules.defaultBattleDefinition || debugFightDefinition;
 })();

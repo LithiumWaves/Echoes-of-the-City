@@ -47,8 +47,11 @@
         };
     }
 
-    battleModules.createDebugBattleEngine = function createDebugBattleEngine(options) {
-        const { clamp, debugFightTemplate } = options;
+    function createBattleEngine(options) {
+        const {
+            clamp,
+            battleDefinition = options?.debugFightTemplate,
+        } = options;
         let nextEventId = 1;
         let battle = createDebugBattleState();
 
@@ -1814,19 +1817,19 @@
         }
 
         function getPlayerTemplates() {
-            if (Array.isArray(debugFightTemplate.playerUnits) && debugFightTemplate.playerUnits.length) {
-                return debugFightTemplate.playerUnits;
+            if (Array.isArray(battleDefinition.playerUnits) && battleDefinition.playerUnits.length) {
+                return battleDefinition.playerUnits;
             }
 
-            return debugFightTemplate.hero ? [debugFightTemplate.hero] : [];
+            return battleDefinition.hero ? [battleDefinition.hero] : [];
         }
 
         function getEnemyTemplates() {
-            if (Array.isArray(debugFightTemplate.enemyUnits) && debugFightTemplate.enemyUnits.length) {
-                return debugFightTemplate.enemyUnits;
+            if (Array.isArray(battleDefinition.enemyUnits) && battleDefinition.enemyUnits.length) {
+                return battleDefinition.enemyUnits;
             }
 
-            return debugFightTemplate.enemy ? [debugFightTemplate.enemy] : [];
+            return battleDefinition.enemy ? [battleDefinition.enemy] : [];
         }
 
         function createDebugBattleState() {
@@ -2207,5 +2210,8 @@
             clearStatuses,
             setDebugForcedCoinSequence,
         };
-    };
+    }
+
+    battleModules.createBattleEngine = createBattleEngine;
+    battleModules.createDebugBattleEngine = createBattleEngine;
 })();
