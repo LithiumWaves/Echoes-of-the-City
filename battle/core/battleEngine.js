@@ -9,6 +9,27 @@
         'minus_coin_boost',
         'minus_coin_drop',
     ]);
+    const PHYSICAL_DAMAGE_TYPES = ['slash', 'pierce', 'blunt'];
+    const SIN_TYPES = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
+
+    function normalizeResistanceBucket(source, keys) {
+        const bucket = {};
+        keys.forEach((key) => {
+            const rawValue = source?.[key];
+            bucket[key] = typeof rawValue === 'number' ? rawValue : 1;
+        });
+        return bucket;
+    }
+
+    function normalizeUnitResistances(templateResistances) {
+        const raw = templateResistances || {};
+        const physicalSource = raw.physical || raw;
+        const sinSource = raw.sin || {};
+        return {
+            physical: normalizeResistanceBucket(physicalSource, PHYSICAL_DAMAGE_TYPES),
+            sin: normalizeResistanceBucket(sinSource, SIN_TYPES),
+        };
+    }
 
     function normalizeStaggerThresholds(templateThresholds, maxHp) {
         if (!Array.isArray(templateThresholds)) {
@@ -43,7 +64,7 @@
             passives: [],
             pendingStatuses: [],
             turnState: {},
-            resistances: { ...template.resistances },
+            resistances: normalizeUnitResistances(template.resistances),
             staggerThresholds: normalizeStaggerThresholds(template.staggerThresholds, template.maxHp),
             staggerThresholdIndex: 0,
             staggerLevel: 0,
@@ -737,16 +758,25 @@
             return levelDifference > 0 ? Math.floor(levelDifference / 3) : 0;
         }
 
-        function getResistanceMultiplier(unit, damageType) {
+        function getPhysicalResistanceMultiplier(unit, damageType) {
             const dynamic = unit.turnState?.resistanceOverrides?.[damageType];
             const baseResistance = typeof dynamic === 'number'
                 ? dynamic
-                : (unit.resistances[damageType] || 1);
+                : (unit.resistances?.physical?.[damageType] || 1);
             return isUnitStaggered(unit) ? Math.max(2, baseResistance) : baseResistance;
         }
 
+        function getSinResistanceMultiplier(unit, sinType) {
+            if (!sinType) {
+                return 1;
+            }
+
+            return unit.resistances?.sin?.[sinType] || 1;
+        }
+
         function calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical) {
-            const resistance = getResistanceMultiplier(defender, skill.damageType);
+            const physicalResistance = getPhysicalResistanceMultiplier(defender, skill.damageType);
+            const sinResistance = getSinResistanceMultiplier(defender, skill.sinType);
             const levelDifference = getSkillOffenseLevel(attacker, skill) - getDefenseLevel(defender);
             const levelModifier = 1 + (levelDifference / (Math.abs(levelDifference) + 25));
             const protection = getStatusCount(defender, 'protection');
@@ -756,7 +786,10 @@
                 : 1;
             const incomingReduction = defendContext?.damageReductionMultiplier ?? 1;
             const damageMultiplier = attackContext.damageMultiplier || 1;
-            const rawDamage = Math.max(1, Math.round(finalPower * resistance * levelModifier * protectionModifier * damageMultiplier * critDamageMultiplier * incomingReduction));
+            const rawDamage = Math.max(
+                1,
+                Math.round(finalPower * physicalResistance * sinResistance * levelModifier * protectionModifier * damageMultiplier * critDamageMultiplier * incomingReduction),
+            );
             return rawDamage;
         }
 
@@ -944,7 +977,7 @@
                 if (coinIndex === 1 && isCritical) {
                     defender.turnState.resistanceOverrides = {
                         ...(defender.turnState.resistanceOverrides || {}),
-                        slash: (defender.resistances.slash || 1) * 1.25,
+                        slash: (defender.resistances.physical?.slash || 1) * 1.25,
                     };
                     defender.turnState.defenseLevelModifier = (defender.turnState.defenseLevelModifier || 0) - 4;
                 }

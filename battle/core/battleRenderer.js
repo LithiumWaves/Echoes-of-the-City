@@ -4,6 +4,8 @@
     function createBattleRenderer(options) {
         const { mountElement, resolveAssetUrl } = options;
         const staggerOverlayPath = 'assets/statuseffects/states/stagger/stagger.png';
+        const physicalDamageTypes = ['slash', 'pierce', 'blunt'];
+        const sinTypes = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
         const keywordStatusIconPaths = {
             bleed: 'assets/statuseffects/keywordstatus/Bleed.png',
             burn: 'assets/statuseffects/keywordstatus/Burn.png',
@@ -123,9 +125,98 @@
                 rupture: 'Rupture',
                 sinking: 'Sinking',
                 tremor: 'Tremor',
+                slash: 'Slash',
+                pierce: 'Pierce',
+                blunt: 'Blunt',
+                wrath: 'Wrath',
+                lust: 'Lust',
+                sloth: 'Sloth',
+                gluttony: 'Gluttony',
+                gloom: 'Gloom',
+                pride: 'Pride',
+                envy: 'Envy',
             };
 
             return labels[statusId] || statusId;
+        }
+
+        function getResistanceDescriptor(value) {
+            if (value <= 0.5) {
+                return 'Ineffective';
+            }
+            if (value < 1) {
+                return 'Endure';
+            }
+            if (value >= 2) {
+                return 'Fatal';
+            }
+            if (value > 1) {
+                return 'Weak';
+            }
+            return 'Normal';
+        }
+
+        function formatResistanceEntry(label, value) {
+            return `${label} ${value}x ${getResistanceDescriptor(value)}`;
+        }
+
+        function getResistanceBucket(unit, bucket) {
+            return unit?.resistances?.[bucket] || {};
+        }
+
+        function getResistanceSummary(unit, keys, bucket) {
+            const source = getResistanceBucket(unit, bucket);
+            return keys
+                .map((key) => formatResistanceEntry(getStatusLabel(key), source[key] ?? 1))
+                .join(' | ');
+        }
+
+        function getStaggerThresholdSummary(unit) {
+            const thresholds = Array.isArray(unit?.staggerThresholds) ? unit.staggerThresholds : [];
+            if (!thresholds.length) {
+                return 'None';
+            }
+
+            return thresholds.map((threshold, index) => {
+                const prefix = index < (unit.staggerThresholdIndex || 0)
+                    ? 'x'
+                    : index === (unit.staggerThresholdIndex || 0)
+                        ? '>'
+                        : '-';
+                return `${prefix}${threshold}`;
+            }).join(' ');
+        }
+
+        function renderStaggerThresholdTrack(unit) {
+            const thresholds = Array.isArray(unit?.staggerThresholds) ? unit.staggerThresholds : [];
+            if (!thresholds.length) {
+                return '';
+            }
+
+            return `
+                <span class="echoes-battle-panel__field-thresholds">
+                    ${thresholds.map((threshold, index) => {
+                        const className = index < (unit.staggerThresholdIndex || 0)
+                            ? ' is-spent'
+                            : index === (unit.staggerThresholdIndex || 0)
+                                ? ' is-next'
+                                : '';
+                        return `<span class="echoes-battle-panel__field-threshold${className}">${threshold}</span>`;
+                    }).join('')}
+                </span>
+            `;
+        }
+
+        function getSkillDamageProfileLabel(skill) {
+            if (!skill) {
+                return 'No skill';
+            }
+
+            if (isDefenseSkill(skill)) {
+                return `${getSkillType(skill).toUpperCase()} | ${skill.sinType ? getStatusLabel(skill.sinType) : 'No Sin'}`;
+            }
+
+            return `${getStatusLabel(skill.damageType)} | ${skill.sinType ? getStatusLabel(skill.sinType) : 'No Sin'}`;
         }
 
         function getRenderableStatuses(unit) {
@@ -210,6 +301,9 @@
                 isUnitStaggered(unit)
                     ? `Staggered | Level ${unit.staggerLevel || 1} | Recovery in ${unit.staggerTurnsRemaining} turn(s)`
                     : `Next Stagger: ${nextStaggerThreshold ?? 'None'}`,
+                `Stagger Thresholds: ${getStaggerThresholdSummary(unit)}`,
+                `Physical Res: ${getResistanceSummary(unit, physicalDamageTypes, 'physical')}`,
+                `Sin Res: ${getResistanceSummary(unit, sinTypes, 'sin')}`,
                 side === 'enemy'
                     ? `Intent: ${getSkillSummary(intentSkill)} -> ${getSlotTargetSummary(battle, slot)}`
                     : `Assigned: ${getSkillSummary(assignedSkill)} -> ${getSlotTargetSummary(battle, slot)}`,
@@ -350,6 +444,7 @@
                         <span class="echoes-battle-panel__field-hp">HP ${unit.hp}/${unit.maxHp}</span>
                         <span class="echoes-battle-panel__field-sp">SP ${unit.sp}</span>
                     </span>
+                    ${renderStaggerThresholdTrack(unit)}
                     ${renderMiniStatuses(unit)}
                 </button>
             `;
@@ -851,7 +946,7 @@
                     const borderUrl = resolveAssetUrl(sharedBorderPath);
                     const tooltipText = escapeAttribute([
                         skill.name,
-                        `${isDefense ? 'DEFENSE' : skill.damageType.toUpperCase()} | ${getSkillPowerLabel(skill)}`,
+                        `${getSkillDamageProfileLabel(skill)} | ${getSkillPowerLabel(skill)}`,
                         `${isDefense ? 'Defense' : 'Offense'} ${getSkillOffenseLevel(unit, skill)}`,
                         skill.description,
                     ].join('\n'));

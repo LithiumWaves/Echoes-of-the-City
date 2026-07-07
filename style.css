@@ -1328,6 +1328,38 @@
     gap: 0.35rem;
 }
 
+.echoes-battle-panel__field-thresholds {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.22rem;
+    margin-top: 0.18rem;
+    position: relative;
+    z-index: 1;
+}
+
+.echoes-battle-panel__field-threshold {
+    min-width: 1.9rem;
+    padding: 0.08rem 0.28rem;
+    border-radius: 999px;
+    background: rgba(31, 18, 12, 0.62);
+    border: 1px solid rgba(201, 162, 116, 0.14);
+    color: rgba(236, 204, 165, 0.72);
+    font-size: 0.56rem;
+    line-height: 1.1;
+}
+
+.echoes-battle-panel__field-threshold.is-next {
+    border-color: rgba(255, 198, 115, 0.42);
+    color: #ffe1b6;
+    background: rgba(77, 43, 22, 0.7);
+}
+
+.echoes-battle-panel__field-threshold.is-spent {
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+
 .echoes-battle-panel__field-unit.is-staggered .echoes-battle-panel__field-ring {
     border-color: rgba(255, 197, 98, 0.96);
     box-shadow: inset 0 0 0 1px rgba(255, 214, 146, 0.28), 0 0 16px rgba(255, 175, 54, 0.2);
