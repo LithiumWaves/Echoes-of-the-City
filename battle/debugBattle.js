@@ -13,6 +13,7 @@
             betweenEntries: 360,
         };
         const BATTLEFIELD_HEIGHT_STORAGE_KEY = 'echoes-of-the-city:battlefield-height';
+        const TURN_DEBUG_STORAGE_KEY = 'echoes-of-the-city:turn-debug-enabled';
 
         if (!debugFightTemplate || typeof createDebugBattleEngine !== 'function' || typeof createDebugBattleRenderer !== 'function') {
             throw new Error('Battle modules are incomplete.');
@@ -34,6 +35,7 @@
         let playbackState = createIdlePlaybackState();
         let battlefieldHeight = loadPersistedBattlefieldHeight();
         let activeResizePointerId = null;
+        let turnDebugEnabled = loadPersistedTurnDebugEnabled();
 
         function createIdlePlaybackState() {
             return {
@@ -235,6 +237,22 @@
             }
         }
 
+        function loadPersistedTurnDebugEnabled() {
+            try {
+                return window.localStorage?.getItem(TURN_DEBUG_STORAGE_KEY) === '1';
+            } catch (error) {
+                return false;
+            }
+        }
+
+        function persistTurnDebugEnabled() {
+            try {
+                window.localStorage?.setItem(TURN_DEBUG_STORAGE_KEY, turnDebugEnabled ? '1' : '0');
+            } catch (error) {
+                return;
+            }
+        }
+
         function applyBattlefieldHeight() {
             mountElement?.style.setProperty('--echoes-battlefield-height', `${battlefieldHeight}%`);
         }
@@ -309,6 +327,7 @@
                 resolvedBattle,
                 playback: playbackState,
                 isPlaybackRunning: playbackState.isRunning,
+                turnDebugEnabled,
             });
         }
 
@@ -325,7 +344,29 @@
                 targetSlotId,
             } = actionTarget.dataset;
 
-            if (playbackState.isRunning && action !== 'reset-fight') {
+            if (playbackState.isRunning && !['reset-fight', 'toggle-turn-debug'].includes(action)) {
+                return;
+            }
+
+            if (action === 'toggle-turn-debug') {
+                turnDebugEnabled = !turnDebugEnabled;
+                persistTurnDebugEnabled();
+                render();
+                return;
+            }
+
+            if (action === 'debug-roll-clear' && slotId) {
+                engine.setDebugForcedCoinSequence(slotId, '');
+                render();
+                return;
+            }
+
+            if (action === 'debug-roll-clear-all') {
+                const state = engine.getState();
+                [...state.playerSlots, ...state.enemySlots].forEach((slot) => {
+                    engine.setDebugForcedCoinSequence(slot.id, '');
+                });
+                render();
                 return;
             }
 

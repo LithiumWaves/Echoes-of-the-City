@@ -822,10 +822,30 @@
 
         function renderDebugRollControls(battle) {
             const slots = [...battle.playerSlots, ...battle.enemySlots];
+            const scripts = battle.debug?.forcedRollScripts || {};
+            const indices = battle.debug?.activeForcedCoinIndices || {};
+
+            const formatToken = (token) => {
+                if (typeof token === 'boolean') {
+                    return token ? 'H' : 'T';
+                }
+                if (token?.type === 'power') {
+                    return `P${token.value}`;
+                }
+                if (token?.type === 'heads') {
+                    return `K${token.value}`;
+                }
+                return '-';
+            };
+
             return slots.map((slot) => {
                 const unit = getUnitById(battle, slot.unitId);
                 const skill = slot.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
                 const forcedInput = escapeAttribute(battle.debug?.forcedCoinInputs?.[slot.id] || '');
+                const script = Array.isArray(scripts[slot.id]) ? scripts[slot.id] : [];
+                const activeIndex = indices[slot.id] || 0;
+                const remaining = Math.max(0, script.length - activeIndex);
+                const nextToken = script[activeIndex];
                 const helperLabel = skill
                     ? `${skill.name} | ${getCompactSkillPowerLabel(skill)}`
                     : 'No skill selected yet';
@@ -837,11 +857,24 @@
                             <small>${slot.side === 'player' ? 'Ally' : 'Enemy'} Slot ${slot.index + 1}</small>
                         </span>
                         <span class="echoes-battle-panel__debug-roll-skill">${helperLabel}</span>
+                        <span class="echoes-battle-panel__debug-roll-meta">
+                            <small>Next: ${formatToken(nextToken)}</small>
+                            <small>Remaining: ${remaining}</small>
+                            <button
+                                class="echoes-battle-panel__debug-roll-clear"
+                                type="button"
+                                data-action="debug-roll-clear"
+                                data-slot-id="${slot.id}"
+                                ${battle.phase !== 'select' ? 'disabled' : ''}
+                            >
+                                Clear
+                            </button>
+                        </span>
                         <input
                             class="echoes-battle-panel__debug-roll-input"
                             type="text"
                             value="${forcedInput}"
-                            placeholder="H T H"
+                            placeholder="P20 K2 H T"
                             data-action="debug-roll-sequence"
                             data-slot-id="${slot.id}"
                             spellcheck="false"
@@ -850,6 +883,61 @@
                     </label>
                 `;
             }).join('');
+        }
+
+        function renderTurnDebugOverlay(battle, activePlayerSlot, uiState) {
+            if (!uiState?.turnDebugEnabled) {
+                return '';
+            }
+
+            const resolvedBattle = getResolvedBattle(battle, uiState);
+            const allSlots = [...resolvedBattle.playerSlots, ...resolvedBattle.enemySlots];
+            const rows = allSlots.map((slot) => {
+                const unit = getUnitById(resolvedBattle, slot.unitId);
+                const skill = slot.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
+                const targetSlot = slot.targetSlotId ? getSlotById(resolvedBattle, slot.targetSlotId) : null;
+                const targetUnit = targetSlot ? getUnitById(resolvedBattle, targetSlot.unitId) : null;
+                const isRedirected = slot.side === 'enemy' && slot.intentTargetSlotId && slot.targetSlotId && slot.intentTargetSlotId !== slot.targetSlotId;
+                const isActive = activePlayerSlot?.id === slot.id;
+
+                return `
+                    <div class="echoes-battle-panel__turn-debug-row${isActive ? ' is-active' : ''}">
+                        <span>${slot.side === 'player' ? 'Ally' : 'Enemy'} ${slot.index + 1}</span>
+                        <span>${unit?.name || 'Unknown'}</span>
+                        <span>SPD ${slot.speed}</span>
+                        <span>${skill?.name || '-'}</span>
+                        <span>${targetUnit ? `${targetUnit.name} ${targetSlot.index + 1}` : '-'}</span>
+                        <span>${isRedirected ? 'Redirected' : ''}</span>
+                    </div>
+                `;
+            }).join('');
+
+            const history = Array.isArray(resolvedBattle.resolutionHistory) ? resolvedBattle.resolutionHistory : [];
+            const entries = history.length
+                ? history.map((entry, index) => {
+                    const label = entry.engagementType === 'clash'
+                        ? `${entry.leftUnitName} vs ${entry.rightUnitName} | ${entry.leftSkillName} vs ${entry.rightSkillName}`
+                        : entry.leftSkillId
+                            ? `${entry.leftUnitName} -> ${entry.rightUnitName} | ${entry.leftSkillName}`
+                            : `${entry.rightUnitName} -> ${entry.leftUnitName} | ${entry.rightSkillName}`;
+                    return `<div class="echoes-battle-panel__turn-debug-entry"><span>${index + 1}</span><span>${label}</span></div>`;
+                }).join('')
+                : '<div class="echoes-battle-panel__turn-debug-empty">Resolve to populate resolutionHistory.</div>';
+
+            return `
+                <aside class="echoes-battle-panel__turn-debug">
+                    <div class="echoes-battle-panel__turn-debug-title">
+                        <strong>Turn Debug</strong>
+                        <small>State + resolutionHistory</small>
+                    </div>
+                    <div class="echoes-battle-panel__turn-debug-grid">
+                        ${rows}
+                    </div>
+                    <div class="echoes-battle-panel__turn-debug-history">
+                        ${entries}
+                    </div>
+                </aside>
+            `;
         }
 
         function renderBattlefield(battle, activePlayerSlot, uiState) {
@@ -874,6 +962,13 @@
                             </div>
                         </div>
                         <div class="echoes-battle-panel__combat-controls">
+                            <button
+                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost${uiState?.turnDebugEnabled ? ' is-active' : ''}"
+                                type="button"
+                                data-action="toggle-turn-debug"
+                            >
+                                Debug
+                            </button>
                             <button
                                 class="echoes-battle-panel__combat-button"
                                 type="button"
@@ -905,6 +1000,7 @@
                         ${renderResolutionCard(getResolvedBattle(battle, uiState), activePlayerSlot, uiState)}
                         ${renderPlaybackOverlay(battle, uiState)}
                         ${renderResolutionBadges(getResolvedBattle(battle, uiState), uiState)}
+                        ${renderTurnDebugOverlay(battle, activePlayerSlot, uiState)}
                         ${playerMarkup}
                         ${enemyMarkup}
                     </div>
@@ -953,6 +1049,14 @@
                             <div class="echoes-battle-panel__planner-heading">
                                 <span>Debug Rolls</span>
                                 <strong>H/T or final value</strong>
+                                <button
+                                    class="echoes-battle-panel__planner-debug-clearall"
+                                    type="button"
+                                    data-action="debug-roll-clear-all"
+                                    ${battle.phase !== 'select' ? 'disabled' : ''}
+                                >
+                                    Clear All
+                                </button>
                             </div>
                             <div class="echoes-battle-panel__planner-debug-note">
                                 Script examples: <strong>H T H</strong> (coin faces), <strong>P20</strong> or <strong>20</strong> (force next roll power), <strong>K2</strong> (force 2 heads on next roll).

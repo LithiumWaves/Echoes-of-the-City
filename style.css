@@ -268,6 +268,11 @@
     background: rgba(18, 12, 10, 0.68);
 }
 
+.echoes-battle-panel__combat-button.is-active {
+    border-color: rgba(255, 210, 155, 0.6);
+    background: rgba(115, 58, 26, 0.22);
+}
+
 .echoes-battle-panel__combat-arena {
     grid-template-columns: minmax(13rem, 0.78fr) minmax(20rem, 1.5fr) minmax(13rem, 0.78fr);
     align-items: stretch;
@@ -1741,6 +1746,41 @@
     line-height: 1.35;
 }
 
+.echoes-battle-panel__debug-roll-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.echoes-battle-panel__debug-roll-meta small {
+    color: rgba(255, 220, 183, 0.64);
+    font-size: 0.6rem;
+}
+
+.echoes-battle-panel__debug-roll-clear,
+.echoes-battle-panel__planner-debug-clearall {
+    border: 1px solid rgba(255, 190, 131, 0.16);
+    border-radius: 0.55rem;
+    padding: 0.25rem 0.45rem;
+    background: rgba(255, 255, 255, 0.035);
+    color: rgba(255, 240, 222, 0.92);
+    font-size: 0.62rem;
+    cursor: pointer;
+}
+
+.echoes-battle-panel__debug-roll-clear:disabled,
+.echoes-battle-panel__planner-debug-clearall:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+
+.echoes-battle-panel__debug-roll-clear:hover:not(:disabled),
+.echoes-battle-panel__planner-debug-clearall:hover:not(:disabled) {
+    border-color: rgba(255, 203, 146, 0.52);
+    background: rgba(115, 58, 26, 0.18);
+}
+
 .echoes-battle-panel__debug-roll-input {
     width: 100%;
     min-width: 0;
@@ -1761,6 +1801,88 @@
 
 .echoes-battle-panel__debug-roll-input:disabled {
     opacity: 0.55;
+}
+
+.echoes-battle-panel__turn-debug {
+    position: absolute;
+    right: 1rem;
+    top: 3.2rem;
+    width: min(34rem, calc(100% - 2rem));
+    max-height: calc(100% - 4.2rem);
+    overflow: auto;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(255, 190, 131, 0.14);
+    background: rgba(10, 8, 7, 0.82);
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.42);
+    padding: 0.7rem 0.8rem;
+    z-index: 12;
+}
+
+.echoes-battle-panel__turn-debug-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.8rem;
+}
+
+.echoes-battle-panel__turn-debug-title strong {
+    color: #fff0de;
+    font-size: 0.84rem;
+}
+
+.echoes-battle-panel__turn-debug-title small {
+    color: rgba(255, 220, 183, 0.68);
+    font-size: 0.62rem;
+}
+
+.echoes-battle-panel__turn-debug-grid {
+    display: grid;
+    gap: 0.28rem;
+    margin-top: 0.55rem;
+}
+
+.echoes-battle-panel__turn-debug-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 0.55rem;
+    align-items: baseline;
+    padding: 0.35rem 0.45rem;
+    border-radius: 0.62rem;
+    border: 1px solid rgba(255, 190, 131, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 240, 222, 0.92);
+    font: 0.64rem/1.35 Consolas, "Courier New", monospace;
+}
+
+.echoes-battle-panel__turn-debug-row.is-active {
+    border-color: rgba(255, 210, 155, 0.32);
+    background: rgba(115, 58, 26, 0.14);
+}
+
+.echoes-battle-panel__turn-debug-history {
+    margin-top: 0.65rem;
+    display: grid;
+    gap: 0.28rem;
+}
+
+.echoes-battle-panel__turn-debug-entry {
+    display: grid;
+    grid-template-columns: 1.4rem minmax(0, 1fr);
+    gap: 0.55rem;
+    padding: 0.32rem 0.45rem;
+    border-radius: 0.6rem;
+    border: 1px solid rgba(255, 190, 131, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    color: rgba(255, 220, 183, 0.84);
+    font: 0.62rem/1.4 Consolas, "Courier New", monospace;
+}
+
+.echoes-battle-panel__turn-debug-empty {
+    padding: 0.42rem 0.5rem;
+    border-radius: 0.62rem;
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 220, 183, 0.72);
+    font-size: 0.66rem;
 }
 
 .echoes-battle-panel__planner-skill {
