@@ -820,6 +820,38 @@
                 .join('');
         }
 
+        function renderDebugRollControls(battle) {
+            const slots = [...battle.playerSlots, ...battle.enemySlots];
+            return slots.map((slot) => {
+                const unit = getUnitById(battle, slot.unitId);
+                const skill = slot.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
+                const forcedInput = escapeAttribute(battle.debug?.forcedCoinInputs?.[slot.id] || '');
+                const helperLabel = skill
+                    ? `${skill.name} | ${getCompactSkillPowerLabel(skill)}`
+                    : 'No skill selected yet';
+
+                return `
+                    <label class="echoes-battle-panel__debug-roll-card">
+                        <span class="echoes-battle-panel__debug-roll-head">
+                            <strong>${unit.name}</strong>
+                            <small>${slot.side === 'player' ? 'Ally' : 'Enemy'} Slot ${slot.index + 1}</small>
+                        </span>
+                        <span class="echoes-battle-panel__debug-roll-skill">${helperLabel}</span>
+                        <input
+                            class="echoes-battle-panel__debug-roll-input"
+                            type="text"
+                            value="${forcedInput}"
+                            placeholder="H T H"
+                            data-action="debug-roll-sequence"
+                            data-slot-id="${slot.id}"
+                            spellcheck="false"
+                            ${battle.phase !== 'select' ? 'disabled' : ''}
+                        />
+                    </label>
+                `;
+            }).join('');
+        }
+
         function renderBattlefield(battle, activePlayerSlot, uiState) {
             const playerMarkup = battle.playerSlots
                 .map((slot) => renderFieldUnitWithUiState(battle, getUnitById(battle, slot.unitId), slot, 'player', activePlayerSlot, uiState))
@@ -916,6 +948,18 @@
                         </div>
                         <div class="echoes-battle-panel__planner-skill-row">
                             ${renderSkillCards(battle, activePlayerSlot)}
+                        </div>
+                        <div class="echoes-battle-panel__planner-debug">
+                            <div class="echoes-battle-panel__planner-heading">
+                                <span>Debug Rolls</span>
+                                <strong>Use H / T per slot</strong>
+                            </div>
+                            <div class="echoes-battle-panel__planner-debug-note">
+                                Fixed rolls are consumed in order during the turn. Extra coins fall back to normal randomness.
+                            </div>
+                            <div class="echoes-battle-panel__debug-roll-grid">
+                                ${renderDebugRollControls(battle)}
+                            </div>
                         </div>
                     </div>
 

@@ -138,6 +138,10 @@
         state.combatController?.handleClick(event);
     }
 
+        function handleCombatContentChange(event) {
+            state.combatController?.handleChange?.(event);
+        }
+
     function handleCombatContentPointerDown(event) {
         state.combatController?.handlePointerDown(event);
     }
@@ -861,6 +865,7 @@
         elements.combatTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.combatTrayButton.addEventListener('click', handleCombatTrayButtonClick);
         elements.combatContent.addEventListener('click', handleCombatContentClick);
+        elements.combatContent.addEventListener('change', handleCombatContentChange);
         elements.combatContent.addEventListener('pointerdown', handleCombatContentPointerDown);
         elements.combatContent.addEventListener('dragstart', (event) => state.combatController?.handleDragStart(event));
         elements.combatContent.addEventListener('dragover', (event) => state.combatController?.handleDragOver(event));

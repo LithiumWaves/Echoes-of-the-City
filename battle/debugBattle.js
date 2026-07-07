@@ -376,6 +376,21 @@
             }
         }
 
+        function handleChange(event) {
+            const input = event.target.closest('[data-action="debug-roll-sequence"]');
+            if (!input) {
+                return;
+            }
+
+            const { slotId } = input.dataset;
+            if (!slotId) {
+                return;
+            }
+
+            engine.setDebugForcedCoinSequence(slotId, input.value || '');
+            render();
+        }
+
         function handleDragStart(event) {
             if (playbackState.isRunning) {
                 return;
@@ -479,6 +494,7 @@
 
         return {
             handleClick,
+            handleChange,
             handleDragStart,
             handleDragOver,
             handleDragEnter,

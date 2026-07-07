@@ -1695,6 +1695,74 @@
     padding-bottom: 0.15rem;
 }
 
+.echoes-battle-panel__planner-debug {
+    margin-top: 0.7rem;
+}
+
+.echoes-battle-panel__planner-debug-note {
+    margin-top: 0.38rem;
+    color: rgba(255, 220, 183, 0.7);
+    font-size: 0.66rem;
+    line-height: 1.35;
+}
+
+.echoes-battle-panel__debug-roll-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.48rem;
+    margin-top: 0.6rem;
+}
+
+.echoes-battle-panel__debug-roll-card {
+    display: grid;
+    gap: 0.28rem;
+    padding: 0.48rem 0.52rem;
+    border-radius: 0.66rem;
+    border: 1px solid rgba(255, 190, 131, 0.12);
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.echoes-battle-panel__debug-roll-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.45rem;
+}
+
+.echoes-battle-panel__debug-roll-head strong {
+    color: #fff0de;
+    font-size: 0.74rem;
+}
+
+.echoes-battle-panel__debug-roll-head small,
+.echoes-battle-panel__debug-roll-skill {
+    color: rgba(255, 220, 183, 0.7);
+    font-size: 0.62rem;
+    line-height: 1.35;
+}
+
+.echoes-battle-panel__debug-roll-input {
+    width: 100%;
+    min-width: 0;
+    padding: 0.42rem 0.5rem;
+    border: 1px solid rgba(255, 193, 131, 0.18);
+    border-radius: 0.56rem;
+    background: rgba(10, 8, 7, 0.74);
+    color: #fff0de;
+    font: inherit;
+    text-transform: uppercase;
+}
+
+.echoes-battle-panel__debug-roll-input:focus {
+    outline: none;
+    border-color: rgba(255, 208, 155, 0.52);
+    box-shadow: 0 0 0 1px rgba(255, 208, 155, 0.14);
+}
+
+.echoes-battle-panel__debug-roll-input:disabled {
+    opacity: 0.55;
+}
+
 .echoes-battle-panel__planner-skill {
     position: relative;
     flex: 0 0 4.75rem;

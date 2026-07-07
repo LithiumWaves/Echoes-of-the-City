@@ -305,6 +305,12 @@
             return clamp(typeof value === 'number' ? value : 0, 0, max);
         }
 
+        function parseForcedCoinSequence(sequenceText) {
+            return String(sequenceText || '')
+                .toUpperCase()
+                .match(/[HT01]/g)?.map((token) => token === 'H' || token === '1') || [];
+        }
+
         function applyStatus(targetBattle, unit, statusId, payload) {
             const potencyDelta = typeof payload?.potency === 'number' ? payload.potency : 0;
             const countDelta = typeof payload?.count === 'number' ? payload.count : 0;
@@ -398,6 +404,26 @@
             const previousSp = unit.sp;
             unit.sp = clamp(unit.sp + amount, -45, 45);
             return { previousSp, nextSp: unit.sp };
+        }
+
+        function consumeForcedCoinResult(targetBattle, slotId) {
+            if (!slotId) {
+                return null;
+            }
+
+            const debugState = targetBattle.debug;
+            const sequence = debugState?.forcedCoinSequences?.[slotId];
+            if (!Array.isArray(sequence) || !sequence.length) {
+                return null;
+            }
+
+            const currentIndex = debugState.activeForcedCoinIndices[slotId] || 0;
+            if (currentIndex >= sequence.length) {
+                return null;
+            }
+
+            debugState.activeForcedCoinIndices[slotId] = currentIndex + 1;
+            return sequence[currentIndex];
         }
 
         function applyFixedDamage(targetBattle, unit, statusId, damage) {
@@ -536,7 +562,10 @@
             }
 
             const forcedZero = spendParalyzeForCoin(targetBattle, unit);
-            const isHeads = forcedZero ? false : Math.random() * 100 < getCoinHeadChance(unit);
+            const forcedDebugResult = forcedZero ? null : consumeForcedCoinResult(targetBattle, attackContext.slotId);
+            const isHeads = forcedZero
+                ? false
+                : (typeof forcedDebugResult === 'boolean' ? forcedDebugResult : Math.random() * 100 < getCoinHeadChance(unit));
             const effectiveCoinPower = getEffectiveCoinPower(unit, skill, attackContext);
             let power = skill.basePower + (attackContext.flatPowerBonus || 0);
 
@@ -1495,6 +1524,11 @@
                 lastResolution: null,
                 clashPresentation: null,
                 resolutionHistory: [],
+                debug: {
+                    forcedCoinInputs: {},
+                    forcedCoinSequences: {},
+                    activeForcedCoinIndices: {},
+                },
             };
 
             emitEvent(nextBattle, 'battle_started', {
@@ -1516,6 +1550,7 @@
             targetBattle.clashPresentation = null;
             targetBattle.resolutionQueue = [];
             targetBattle.resolutionHistory = [];
+            targetBattle.debug.activeForcedCoinIndices = {};
 
             emitEvent(targetBattle, 'turn_started', {
                 turn: targetBattle.turn,
@@ -1675,6 +1710,7 @@
                 return false;
             }
 
+            battle.debug.activeForcedCoinIndices = {};
             normalizeAutoTargets(battle);
             const queue = buildResolutionQueue(battle);
             for (const slot of queue) {
@@ -1779,6 +1815,26 @@
             return true;
         }
 
+        function setDebugForcedCoinSequence(slotId, sequenceText) {
+            const slot = getSlotById(battle, slotId);
+            if (!slot) {
+                return false;
+            }
+
+            const nextInput = typeof sequenceText === 'string' ? sequenceText.toUpperCase() : '';
+            const parsedSequence = parseForcedCoinSequence(nextInput);
+            battle.debug.forcedCoinInputs[slotId] = nextInput;
+
+            if (parsedSequence.length) {
+                battle.debug.forcedCoinSequences[slotId] = parsedSequence;
+            } else {
+                delete battle.debug.forcedCoinSequences[slotId];
+            }
+
+            battle.debug.activeForcedCoinIndices[slotId] = 0;
+            return true;
+        }
+
         return {
             getState,
             selectSlot,
@@ -1789,6 +1845,7 @@
             reset,
             addStatus,
             clearStatuses,
+            setDebugForcedCoinSequence,
         };
     };
 })();
