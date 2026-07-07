@@ -305,10 +305,39 @@
             return clamp(typeof value === 'number' ? value : 0, 0, max);
         }
 
-        function parseForcedCoinSequence(sequenceText) {
-            return String(sequenceText || '')
+        function parseForcedRollScript(sequenceText) {
+            const tokens = String(sequenceText || '')
                 .toUpperCase()
-                .match(/[HT01]/g)?.map((token) => token === 'H' || token === '1') || [];
+                .replace(/,/g, ' ')
+                .split(/\s+/)
+                .filter(Boolean);
+
+            return tokens
+                .map((token) => {
+                    if (token === 'H' || token === '1') {
+                        return true;
+                    }
+                    if (token === 'T' || token === '0') {
+                        return false;
+                    }
+
+                    const powerMatch = token.match(/^P(-?\d+)$/);
+                    if (powerMatch) {
+                        return { type: 'power', value: Number.parseInt(powerMatch[1], 10) };
+                    }
+
+                    const headsMatch = token.match(/^K(\d+)$/);
+                    if (headsMatch) {
+                        return { type: 'heads', value: Number.parseInt(headsMatch[1], 10) };
+                    }
+
+                    if (/^-?\d+$/.test(token)) {
+                        return { type: 'power', value: Number.parseInt(token, 10) };
+                    }
+
+                    return null;
+                })
+                .filter(Boolean);
         }
 
         function applyStatus(targetBattle, unit, statusId, payload) {
@@ -406,13 +435,13 @@
             return { previousSp, nextSp: unit.sp };
         }
 
-        function consumeForcedCoinResult(targetBattle, slotId) {
+        function peekForcedRollToken(targetBattle, slotId) {
             if (!slotId) {
                 return null;
             }
 
             const debugState = targetBattle.debug;
-            const sequence = debugState?.forcedCoinSequences?.[slotId];
+            const sequence = debugState?.forcedRollScripts?.[slotId];
             if (!Array.isArray(sequence) || !sequence.length) {
                 return null;
             }
@@ -422,8 +451,17 @@
                 return null;
             }
 
-            debugState.activeForcedCoinIndices[slotId] = currentIndex + 1;
             return sequence[currentIndex];
+        }
+
+        function consumeForcedRollToken(targetBattle, slotId) {
+            const token = peekForcedRollToken(targetBattle, slotId);
+            if (token === null) {
+                return null;
+            }
+
+            targetBattle.debug.activeForcedCoinIndices[slotId] = (targetBattle.debug.activeForcedCoinIndices[slotId] || 0) + 1;
+            return token;
         }
 
         function applyFixedDamage(targetBattle, unit, statusId, damage) {
@@ -555,17 +593,26 @@
                 + getStatusCount(unit, 'minus_coin_drop');
         }
 
-        function rollSingleCoin(targetBattle, unit, skill, attackContext) {
+        function rollSingleCoin(targetBattle, unit, skill, attackContext, forcedIsHeads = null) {
             triggerBleedOnCoinRoll(targetBattle, unit);
             if (unit.hp <= 0) {
                 return null;
             }
 
             const forcedZero = spendParalyzeForCoin(targetBattle, unit);
-            const forcedDebugResult = forcedZero ? null : consumeForcedCoinResult(targetBattle, attackContext.slotId);
-            const isHeads = forcedZero
-                ? false
-                : (typeof forcedDebugResult === 'boolean' ? forcedDebugResult : Math.random() * 100 < getCoinHeadChance(unit));
+            let isHeads = false;
+            if (!forcedZero) {
+                if (typeof forcedIsHeads === 'boolean') {
+                    isHeads = forcedIsHeads;
+                } else {
+                    const token = peekForcedRollToken(targetBattle, attackContext.slotId);
+                    if (typeof token === 'boolean') {
+                        isHeads = consumeForcedRollToken(targetBattle, attackContext.slotId);
+                    } else {
+                        isHeads = Math.random() * 100 < getCoinHeadChance(unit);
+                    }
+                }
+            }
             const effectiveCoinPower = getEffectiveCoinPower(unit, skill, attackContext);
             let power = skill.basePower + (attackContext.flatPowerBonus || 0);
 
@@ -584,8 +631,30 @@
             const flips = [];
             let power = skill.basePower + (attackContext.flatPowerBonus || 0);
 
+            const nextToken = peekForcedRollToken(targetBattle, attackContext.slotId);
+            let forcedFlips = null;
+            if (nextToken && typeof nextToken === 'object' && (nextToken.type === 'power' || nextToken.type === 'heads')) {
+                const directive = consumeForcedRollToken(targetBattle, attackContext.slotId);
+                const effectiveCoinPower = getEffectiveCoinPower(unit, skill, attackContext);
+                const baseValue = skill.basePower + (attackContext.flatPowerBonus || 0);
+                let desiredHeads = 0;
+
+                if (directive.type === 'heads') {
+                    desiredHeads = clampStatusValue(directive.value, coinCount);
+                } else if (directive.type === 'power') {
+                    if (effectiveCoinPower === 0) {
+                        desiredHeads = 0;
+                    } else {
+                        desiredHeads = Math.round((directive.value - baseValue) / effectiveCoinPower);
+                        desiredHeads = clampStatusValue(desiredHeads, coinCount);
+                    }
+                }
+
+                forcedFlips = Array.from({ length: coinCount }, (_, index) => index < desiredHeads);
+            }
+
             for (let index = 0; index < coinCount; index += 1) {
-                const roll = rollSingleCoin(targetBattle, unit, skill, attackContext);
+                const roll = rollSingleCoin(targetBattle, unit, skill, attackContext, forcedFlips ? forcedFlips[index] : null);
                 if (!roll) {
                     break;
                 }
@@ -1526,7 +1595,7 @@
                 resolutionHistory: [],
                 debug: {
                     forcedCoinInputs: {},
-                    forcedCoinSequences: {},
+                    forcedRollScripts: {},
                     activeForcedCoinIndices: {},
                 },
             };
@@ -1822,13 +1891,13 @@
             }
 
             const nextInput = typeof sequenceText === 'string' ? sequenceText.toUpperCase() : '';
-            const parsedSequence = parseForcedCoinSequence(nextInput);
+            const parsedSequence = parseForcedRollScript(nextInput);
             battle.debug.forcedCoinInputs[slotId] = nextInput;
 
             if (parsedSequence.length) {
-                battle.debug.forcedCoinSequences[slotId] = parsedSequence;
+                battle.debug.forcedRollScripts[slotId] = parsedSequence;
             } else {
-                delete battle.debug.forcedCoinSequences[slotId];
+                delete battle.debug.forcedRollScripts[slotId];
             }
 
             battle.debug.activeForcedCoinIndices[slotId] = 0;

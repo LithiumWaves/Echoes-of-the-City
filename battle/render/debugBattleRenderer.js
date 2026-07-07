@@ -952,10 +952,10 @@
                         <div class="echoes-battle-panel__planner-debug">
                             <div class="echoes-battle-panel__planner-heading">
                                 <span>Debug Rolls</span>
-                                <strong>Use H / T per slot</strong>
+                                <strong>H/T or final value</strong>
                             </div>
                             <div class="echoes-battle-panel__planner-debug-note">
-                                Fixed rolls are consumed in order during the turn. Extra coins fall back to normal randomness.
+                                Script examples: <strong>H T H</strong> (coin faces), <strong>P20</strong> or <strong>20</strong> (force next roll power), <strong>K2</strong> (force 2 heads on next roll).
                             </div>
                             <div class="echoes-battle-panel__debug-roll-grid">
                                 ${renderDebugRollControls(battle)}
