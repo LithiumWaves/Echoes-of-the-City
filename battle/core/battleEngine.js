@@ -1426,7 +1426,7 @@
         }
 
         function resolveCounterDefense(targetBattle, defenderSlot, defender, attackerSlot, attacker) {
-            const counterSkill = getActiveDefenseSkill(targetBattle, defenderSlot);
+            const counterSkill = getActiveDefenseSkill(targetBattle, defenderSlot, attackerSlot);
             if (!isCounterSkill(counterSkill)) {
                 return null;
             }
@@ -1788,15 +1788,20 @@
                 }
 
                 const redirectingSlots = targetBattle.playerSlots
-                    .filter((playerSlot) => (
-                        isSlotAlive(targetBattle, playerSlot) &&
-                        Boolean(playerSlot.selectedSkillId) &&
-                        playerSlot.targetSlotId === enemySlot.id &&
-                        (
-                            enemySlot.intentTargetSlotId === playerSlot.id
-                            || playerSlot.speed > enemySlot.speed
-                        )
-                    ))
+                    .filter((playerSlot) => {
+                        if (!isSlotAlive(targetBattle, playerSlot) || !playerSlot.selectedSkillId || playerSlot.targetSlotId !== enemySlot.id) {
+                            return false;
+                        }
+
+                        const playerUnit = getUnitById(targetBattle, playerSlot.unitId);
+                        const playerSkill = getSkillById(playerUnit, playerSlot.selectedSkillId);
+                        if (isDefenseSkill(playerSkill)) {
+                            return false;
+                        }
+
+                        return enemySlot.intentTargetSlotId === playerSlot.id
+                            || playerSlot.speed > enemySlot.speed;
+                    })
                     .sort((left, right) => {
                         const leftWasOriginallyTargeted = enemySlot.intentTargetSlotId === left.id;
                         const rightWasOriginallyTargeted = enemySlot.intentTargetSlotId === right.id;
@@ -2020,6 +2025,7 @@
                 return false;
             }
 
+            const unit = getUnitById(battle, slot.unitId);
             slot.targetSlotId = targetSlot.id;
             slot.manualTargetLock = true;
 
@@ -2085,10 +2091,14 @@
                     continue;
                 }
 
+                const targetUnit = getUnitById(battle, targetSlot.unitId);
+                const targetSkill = targetSlot.selectedSkillId ? getSkillById(targetUnit, targetSlot.selectedSkillId) : null;
+
                 const mutualTarget = (
                     !targetSlot.resolved &&
                     targetSlot.targetSlotId === slot.id &&
                     Boolean(targetSlot.selectedSkillId) &&
+                    !isDefenseSkill(targetSkill) &&
                     isSlotAlive(battle, targetSlot)
                 );
 
