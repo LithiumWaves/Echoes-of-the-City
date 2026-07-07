@@ -57,6 +57,7 @@
                 sp: 0,
                 speedRange: [4, 8],
                 defenseLevel: 50,
+                staggerThresholds: [0.66, 0.33],
                 resistances: {
                     slash: 1,
                     pierce: 1,
@@ -127,6 +128,7 @@
                 sp: 0,
                 speedRange: [4, 7],
                 defenseLevel: 49,
+                staggerThresholds: [0.66, 0.33],
                 resistances: {
                     slash: 1,
                     pierce: 1,
@@ -203,6 +205,7 @@
                 sp: 0,
                 speedRange: [3, 7],
                 defenseLevel: 50,
+                staggerThresholds: [0.75, 0.5, 0.25],
                 resistances: {
                     slash: 1,
                     pierce: 1,
@@ -253,6 +256,7 @@
                 sp: 0,
                 speedRange: [3, 7],
                 defenseLevel: 49,
+                staggerThresholds: [0.75, 0.5, 0.25],
                 resistances: {
                     slash: 1,
                     pierce: 1,

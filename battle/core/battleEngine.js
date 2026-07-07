@@ -10,6 +10,27 @@
         'minus_coin_drop',
     ]);
 
+    function normalizeStaggerThresholds(templateThresholds, maxHp) {
+        if (!Array.isArray(templateThresholds)) {
+            return [];
+        }
+
+        return templateThresholds
+            .map((value) => {
+                if (typeof value !== 'number' || !Number.isFinite(value)) {
+                    return null;
+                }
+
+                if (value > 0 && value <= 1) {
+                    return Math.round(maxHp * value);
+                }
+
+                return Math.round(value);
+            })
+            .filter((value) => Number.isFinite(value) && value > 0 && value < maxHp)
+            .sort((left, right) => right - left);
+    }
+
     function createBattleUnit(template, side, index) {
         return {
             ...template,
@@ -23,6 +44,10 @@
             pendingStatuses: [],
             turnState: {},
             resistances: { ...template.resistances },
+            staggerThresholds: normalizeStaggerThresholds(template.staggerThresholds, template.maxHp),
+            staggerThresholdIndex: 0,
+            staggerLevel: 0,
+            staggerTurnsRemaining: 0,
             sprites: {
                 ...template.sprites,
                 skills: { ...template.sprites.skills },
@@ -110,6 +135,23 @@
             return isUnitAlive(getUnitById(targetBattle, slot.unitId));
         }
 
+        function isUnitStaggered(unit) {
+            return isUnitAlive(unit) && (unit.staggerTurnsRemaining || 0) > 0;
+        }
+
+        function isSlotActionable(targetBattle, slot) {
+            const unit = getUnitById(targetBattle, slot.unitId);
+            return isUnitAlive(unit) && !isUnitStaggered(unit);
+        }
+
+        function getNextStaggerThreshold(unit) {
+            if (!Array.isArray(unit?.staggerThresholds)) {
+                return null;
+            }
+
+            return unit.staggerThresholds[unit.staggerThresholdIndex] ?? null;
+        }
+
         function getFirstLivingSlot(targetBattle, side) {
             return getSlotsForSide(targetBattle, side).find((slot) => isSlotAlive(targetBattle, slot)) || null;
         }
@@ -124,7 +166,8 @@
                 return activeSlot;
             }
 
-            return getFirstLivingSlot(targetBattle, 'player');
+            return getSlotsForSide(targetBattle, 'player').find((slot) => isSlotActionable(targetBattle, slot))
+                || getFirstLivingSlot(targetBattle, 'player');
         }
 
         function ensureActivePlayerSlot(targetBattle) {
@@ -266,6 +309,12 @@
                     return `${data.unitName} evades ${data.attackerName}'s Coin ${data.index} (${data.evadePower} vs ${data.attackPower}).`;
                 }
                 return `${data.unitName} is affected by ${data.statusId}.`;
+            }
+            if (type === 'unit_staggered') {
+                return `${data.unitName} is staggered at Threshold ${data.threshold} HP.`;
+            }
+            if (type === 'unit_stagger_recovered') {
+                return `${data.unitName} recovers from Stagger.`;
             }
             if (type === 'status_expired') {
                 return `${data.unitName} ${data.statusId} expired.`;
@@ -441,6 +490,7 @@
                 return 0;
             }
 
+            const previousHp = unit.hp;
             unit.hp = clamp(unit.hp - appliedDamage, 0, unit.maxHp);
             emitEvent(targetBattle, 'status_triggered', {
                 unitId: unit.id,
@@ -449,6 +499,7 @@
                 damage: appliedDamage,
                 hp: unit.hp,
             });
+            applyStaggerFromDamage(targetBattle, unit, null, previousHp, unit.hp);
             return appliedDamage;
         }
 
@@ -687,11 +738,10 @@
 
         function getResistanceMultiplier(unit, damageType) {
             const dynamic = unit.turnState?.resistanceOverrides?.[damageType];
-            if (typeof dynamic === 'number') {
-                return dynamic;
-            }
-
-            return unit.resistances[damageType] || 1;
+            const baseResistance = typeof dynamic === 'number'
+                ? dynamic
+                : (unit.resistances[damageType] || 1);
+            return isUnitStaggered(unit) ? Math.max(2, baseResistance) : baseResistance;
         }
 
         function calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical) {
@@ -957,6 +1007,83 @@
             return slot.defenseState;
         }
 
+        function clearSlotAction(slot) {
+            if (!slot) {
+                return;
+            }
+
+            slot.selectedSkillId = null;
+            slot.intentSkillId = null;
+            slot.intentTargetSlotId = null;
+            slot.targetSlotId = null;
+            slot.manualTargetLock = false;
+            slot.resolved = true;
+            slot.defenseState = {
+                activated: false,
+                used: false,
+                broken: false,
+                context: null,
+            };
+        }
+
+        function applyStaggerFromDamage(targetBattle, unit, sourceUnit, previousHp, nextHp) {
+            if (!isUnitAlive(unit)) {
+                return false;
+            }
+
+            let crossedThreshold = null;
+            let crossedCount = 0;
+            while (unit.staggerThresholdIndex < unit.staggerThresholds.length) {
+                const threshold = getNextStaggerThreshold(unit);
+                if (!(previousHp > threshold && nextHp <= threshold)) {
+                    break;
+                }
+
+                crossedThreshold = threshold;
+                crossedCount += 1;
+                unit.staggerThresholdIndex += 1;
+            }
+
+            if (!crossedCount) {
+                return false;
+            }
+
+            unit.staggerLevel += crossedCount;
+            unit.staggerTurnsRemaining = Math.max(unit.staggerTurnsRemaining || 0, 2);
+            const slot = getAllSlots(targetBattle).find((candidate) => candidate.unitId === unit.id) || null;
+            clearSlotAction(slot);
+            emitEvent(targetBattle, 'unit_staggered', {
+                unitId: unit.id,
+                unitName: unit.name,
+                staggerLevel: unit.staggerLevel,
+                threshold: crossedThreshold,
+                previousHp,
+                nextHp,
+                sourceUnitId: sourceUnit?.id || null,
+                sourceUnitName: sourceUnit?.name || null,
+            });
+            return true;
+        }
+
+        function progressStaggerTurnState(targetBattle, unit) {
+            if (!isUnitStaggered(unit)) {
+                return;
+            }
+
+            unit.staggerTurnsRemaining = Math.max(0, (unit.staggerTurnsRemaining || 0) - 1);
+            if (unit.staggerTurnsRemaining > 0) {
+                return;
+            }
+
+            const previousLevel = unit.staggerLevel || 0;
+            unit.staggerLevel = 0;
+            emitEvent(targetBattle, 'unit_stagger_recovered', {
+                unitId: unit.id,
+                unitName: unit.name,
+                previousLevel,
+            });
+        }
+
         function markUnitDefeated(targetBattle, unit, defeatedByUnit) {
             if (!unit || targetBattle.defeatedUnitIds.includes(unit.id)) {
                 return;
@@ -1031,6 +1158,7 @@
                 const previousHp = defender.hp;
 
                 defender.hp = clamp(defender.hp - damage, 0, defender.maxHp);
+                applyStaggerFromDamage(targetBattle, defender, attacker, previousHp, defender.hp);
                 triggerRuptureOnHit(targetBattle, defender);
                 triggerSinkingOnHit(targetBattle, defender);
 
@@ -1368,6 +1496,7 @@
                 const damage = calculateHitDamage(attacker, attackSkill, defender, finalPower, attackContext, { damageReductionMultiplier: 1 }, isCritical);
                 const previousHp = defender.hp;
                 defender.hp = clamp(defender.hp - damage, 0, defender.maxHp);
+                applyStaggerFromDamage(targetBattle, defender, attacker, previousHp, defender.hp);
                 triggerRuptureOnHit(targetBattle, defender);
                 triggerSinkingOnHit(targetBattle, defender);
 
@@ -1729,7 +1858,7 @@
 
         function buildResolutionQueue(targetBattle) {
             const queuedSlots = getAllSlots(targetBattle).filter((slot) => (
-                isSlotAlive(targetBattle, slot) &&
+                isSlotActionable(targetBattle, slot) &&
                 slot.selectedSkillId &&
                 slot.targetSlotId
             ));
@@ -1744,7 +1873,7 @@
 
         function hasAllPlayerAssignments(targetBattle) {
             return targetBattle.playerSlots
-                .filter((slot) => isSlotAlive(targetBattle, slot))
+                .filter((slot) => isSlotActionable(targetBattle, slot))
                 .every((slot) => {
                     if (!slot.selectedSkillId) {
                         return false;
@@ -1755,7 +1884,7 @@
         }
 
         function refreshSpeedOrder(targetBattle) {
-            const queue = sortSlotsBySpeed(targetBattle, getAllSlots(targetBattle).filter((slot) => isSlotAlive(targetBattle, slot)));
+            const queue = sortSlotsBySpeed(targetBattle, getAllSlots(targetBattle).filter((slot) => isSlotActionable(targetBattle, slot)));
             targetBattle.speedOrder = queue.map((slot) => slot.id);
         }
 
@@ -1776,7 +1905,7 @@
 
         function refreshRedirectedTargets(targetBattle) {
             targetBattle.enemySlots.forEach((enemySlot) => {
-                if (!isSlotAlive(targetBattle, enemySlot) || !enemySlot.selectedSkillId) {
+                if (!isSlotActionable(targetBattle, enemySlot) || !enemySlot.selectedSkillId) {
                     return;
                 }
 
@@ -1784,13 +1913,13 @@
             });
 
             targetBattle.enemySlots.forEach((enemySlot) => {
-                if (!isSlotAlive(targetBattle, enemySlot) || !enemySlot.selectedSkillId) {
+                if (!isSlotActionable(targetBattle, enemySlot) || !enemySlot.selectedSkillId) {
                     return;
                 }
 
                 const redirectingSlots = targetBattle.playerSlots
                     .filter((playerSlot) => {
-                        if (!isSlotAlive(targetBattle, playerSlot) || !playerSlot.selectedSkillId || playerSlot.targetSlotId !== enemySlot.id) {
+                        if (!isSlotActionable(targetBattle, playerSlot) || !playerSlot.selectedSkillId || playerSlot.targetSlotId !== enemySlot.id) {
                             return false;
                         }
 
@@ -1895,6 +2024,7 @@
             getAllUnits(targetBattle).forEach((unit) => {
                 unit.turnState = {};
                 processQueuedStatusesAtTurnStart(targetBattle, unit);
+                progressStaggerTurnState(targetBattle, unit);
             });
 
             getAllSlots(targetBattle).forEach((slot) => {
@@ -1910,8 +2040,14 @@
                     broken: false,
                     context: null,
                 };
-                slot.speed = randomInt(...unit.speedRange);
-                slot.targetSlotId = getFirstLivingSlotId(targetBattle, getOpposingSide(slot.side));
+                if (isUnitStaggered(unit)) {
+                    slot.speed = 0;
+                    slot.targetSlotId = null;
+                    slot.resolved = true;
+                } else {
+                    slot.speed = randomInt(...unit.speedRange);
+                    slot.targetSlotId = getFirstLivingSlotId(targetBattle, getOpposingSide(slot.side));
+                }
                 unit.speed = slot.speed;
 
                 emitEvent(targetBattle, 'slot_speed_rolled', {
@@ -1922,7 +2058,7 @@
             });
 
             targetBattle.enemySlots.forEach((slot) => {
-                if (!isSlotAlive(targetBattle, slot)) {
+                if (!isSlotActionable(targetBattle, slot)) {
                     return;
                 }
 
@@ -1965,7 +2101,7 @@
             }
 
             const slot = getSlotById(battle, slotId);
-            if (!slot || slot.side !== 'player' || !isSlotAlive(battle, slot)) {
+            if (!slot || slot.side !== 'player' || !isSlotActionable(battle, slot)) {
                 return false;
             }
 
@@ -1979,7 +2115,7 @@
             }
 
             const slot = getSlotById(battle, slotId);
-            if (!slot || slot.side !== 'player' || !isSlotAlive(battle, slot)) {
+            if (!slot || slot.side !== 'player' || !isSlotActionable(battle, slot)) {
                 return false;
             }
 
@@ -2019,7 +2155,7 @@
 
             const slot = getSlotById(battle, slotId);
             const targetSlot = getSlotById(battle, targetSlotId);
-            if (!slot || slot.side !== 'player' || !targetSlot || targetSlot.side !== 'enemy' || !isSlotAlive(battle, targetSlot)) {
+            if (!slot || slot.side !== 'player' || !isSlotActionable(battle, slot) || !targetSlot || targetSlot.side !== 'enemy' || !isSlotAlive(battle, targetSlot)) {
                 return false;
             }
 
@@ -2039,7 +2175,7 @@
 
         function normalizeAutoTargets(targetBattle) {
             getAllSlots(targetBattle).forEach((slot) => {
-                if (!slot.selectedSkillId || !isSlotAlive(targetBattle, slot)) {
+                if (!slot.selectedSkillId || !isSlotActionable(targetBattle, slot)) {
                     return;
                 }
 
@@ -2067,7 +2203,7 @@
                     break;
                 }
 
-                if (slot.resolved || !isSlotAlive(battle, slot) || !slot.selectedSkillId) {
+                if (slot.resolved || !isSlotActionable(battle, slot) || !slot.selectedSkillId) {
                     continue;
                 }
 

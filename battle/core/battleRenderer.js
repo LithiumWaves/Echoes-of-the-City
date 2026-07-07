@@ -3,6 +3,7 @@
 
     function createBattleRenderer(options) {
         const { mountElement, resolveAssetUrl } = options;
+        const staggerOverlayPath = 'assets/statuseffects/states/stagger/stagger.png';
         const keywordStatusIconPaths = {
             bleed: 'assets/statuseffects/keywordstatus/Bleed.png',
             burn: 'assets/statuseffects/keywordstatus/Burn.png',
@@ -142,8 +143,20 @@
             });
         }
 
+        function isUnitStaggered(unit) {
+            return unit.hp > 0 && (unit.staggerTurnsRemaining || 0) > 0;
+        }
+
+        function getNextStaggerThreshold(unit) {
+            if (!Array.isArray(unit?.staggerThresholds)) {
+                return null;
+            }
+
+            return unit.staggerThresholds[unit.staggerThresholdIndex] ?? null;
+        }
+
         function getUnitFieldSprite(unit, slot) {
-            if (unit.hp <= 0 && unit.sprites.hurt) {
+            if ((unit.hp <= 0 || isUnitStaggered(unit)) && unit.sprites.hurt) {
                 return resolveAssetUrl(unit.sprites.hurt);
             }
 
@@ -184,6 +197,7 @@
             const assignedSkill = slot?.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
             const intentSkillId = slot?.intentSkillId || slot?.selectedSkillId;
             const intentSkill = intentSkillId ? getSkillById(unit, intentSkillId) : null;
+            const nextStaggerThreshold = getNextStaggerThreshold(unit);
             const statuses = getRenderableStatuses(unit)
                 .map((status) => countOnlyStatuses.has(status.id)
                     ? `${getStatusLabel(status.id)} ${status.count}`
@@ -193,6 +207,9 @@
             return escapeAttribute([
                 unit.name,
                 `HP ${unit.hp}/${unit.maxHp} | SP ${unit.sp} | Speed ${slot?.speed || 0}`,
+                isUnitStaggered(unit)
+                    ? `Staggered | Level ${unit.staggerLevel || 1} | Recovery in ${unit.staggerTurnsRemaining} turn(s)`
+                    : `Next Stagger: ${nextStaggerThreshold ?? 'None'}`,
                 side === 'enemy'
                     ? `Intent: ${getSkillSummary(intentSkill)} -> ${getSlotTargetSummary(battle, slot)}`
                     : `Assigned: ${getSkillSummary(assignedSkill)} -> ${getSlotTargetSummary(battle, slot)}`,
@@ -295,6 +312,8 @@
                 : `data-action="${primaryAction}" data-target-slot-id="${slot.id}"`;
             const stateLabel = battle.phase === 'resolved'
                 ? (intentSkill?.name || assignedSkill?.name || 'No action')
+                : isUnitStaggered(unit)
+                    ? `Staggered ${unit.staggerLevel > 1 ? `+${unit.staggerLevel - 1}` : ''}`.trim()
                 : isPlayer
                     ? (assignedSkill ? (isDefenseSkill(assignedSkill) ? `${assignedSkill.name} Ready` : assignedSkill.name) : 'Choose skill')
                     : (intentSkill?.name || 'No intent');
@@ -302,10 +321,12 @@
                 ? 'No target'
                 : getSlotTargetSummary(battle, slot);
             const playbackClasses = getPlaybackRoleClasses(slot.id, uiState);
+            const isStaggered = isUnitStaggered(unit);
+            const staggerOverlayUrl = isStaggered ? resolveAssetUrl(staggerOverlayPath) : '';
 
             return `
                 <button
-                    class="echoes-battle-panel__field-unit echoes-battle-panel__field-unit--${side}${isActive ? ' is-active' : ''}${isTargeted ? ' is-targeted' : ''}${slot.resolved ? ' is-resolved' : ''}${isDropTarget ? ' echoes-battle-panel__combat-unit--drop-target' : ''}${playbackClasses}"
+                    class="echoes-battle-panel__field-unit echoes-battle-panel__field-unit--${side}${isActive ? ' is-active' : ''}${isTargeted ? ' is-targeted' : ''}${slot.resolved ? ' is-resolved' : ''}${isStaggered ? ' is-staggered' : ''}${isDropTarget ? ' echoes-battle-panel__combat-unit--drop-target' : ''}${playbackClasses}"
                     type="button"
                     style="left: ${position.x}%; top: ${position.y}%;"
                     title="${tooltip}"
@@ -318,6 +339,9 @@
                     <span class="echoes-battle-panel__field-ring"></span>
                     <span class="echoes-battle-panel__field-sprite">
                         <img src="${unitSprite}" alt="${unit.name}">
+                        ${staggerOverlayUrl
+                            ? `<img class="echoes-battle-panel__field-stagger-overlay" src="${staggerOverlayUrl}" alt="Staggered">`
+                            : ''}
                     </span>
                     <span class="echoes-battle-panel__field-name">${unit.name}</span>
                     <span class="echoes-battle-panel__field-state">${stateLabel}</span>
