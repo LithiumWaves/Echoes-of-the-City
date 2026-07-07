@@ -1898,6 +1898,22 @@
     overflow: hidden;
 }
 
+.echoes-battle-panel__planner-skill.is-defense {
+    cursor: pointer;
+    border-color: rgba(196, 166, 120, 0.36);
+    background: rgba(74, 55, 34, 0.18);
+}
+
+.echoes-battle-panel__planner-skill.is-defense .echoes-battle-panel__planner-skill-border {
+    filter: saturate(0.72) brightness(0.88);
+}
+
+.echoes-battle-panel__planner-skill.is-defense .echoes-battle-panel__planner-skill-rank {
+    background: rgba(43, 30, 18, 0.82);
+    border-color: rgba(212, 181, 131, 0.4);
+    color: #f5deb8;
+}
+
 .echoes-battle-panel__planner-skill.is-dragging {
     opacity: 0.42;
     transform: scale(0.98);

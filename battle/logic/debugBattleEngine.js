@@ -256,6 +256,9 @@
                 if (data.statusId === 'sinking') {
                     return `${data.unitName} loses ${data.damage} SP from Sinking.`;
                 }
+                if (data.statusId === 'evade') {
+                    return `${data.unitName} evades ${data.attackerName}'s Coin ${data.index} (${data.evadePower} vs ${data.attackPower}).`;
+                }
                 return `${data.unitName} is affected by ${data.statusId}.`;
             }
             if (type === 'status_expired') {
@@ -572,6 +575,22 @@
             return clamp(50 + unit.sp, 5, 95);
         }
 
+        function getSkillType(skill) {
+            return skill?.skillType || 'attack';
+        }
+
+        function isDefenseSkill(skill) {
+            return getSkillType(skill) !== 'attack';
+        }
+
+        function isEvadeSkill(skill) {
+            return getSkillType(skill) === 'evade';
+        }
+
+        function isCounterSkill(skill) {
+            return getSkillType(skill) === 'counter';
+        }
+
         function isPlusCoinSkill(skill) {
             return (skill.coinPower || 0) >= 0;
         }
@@ -684,8 +703,17 @@
             return Math.max(1, (unit.defenseLevel || unit.level) + modifier);
         }
 
+        function getSkillDefenseLevel(unit, skill) {
+            return Math.max(1, getDefenseLevel(unit) + (skill?.offenseLevel || 0));
+        }
+
         function getClashLevelBonus(unit, skill, opponent, opponentSkill) {
             const levelDifference = getSkillOffenseLevel(unit, skill) - getSkillOffenseLevel(opponent, opponentSkill);
+            return levelDifference > 0 ? Math.floor(levelDifference / 3) : 0;
+        }
+
+        function getDefenseSkillFinalPowerBonus(defender, defenseSkill, attacker, attackSkill) {
+            const levelDifference = getSkillDefenseLevel(defender, defenseSkill) - getSkillOffenseLevel(attacker, attackSkill);
             return levelDifference > 0 ? Math.floor(levelDifference / 3) : 0;
         }
 
@@ -946,6 +974,19 @@
                 unit: attacker,
                 skill,
             });
+        }
+
+        function ensureDefenseState(slot) {
+            if (!slot.defenseState) {
+                slot.defenseState = {
+                    activated: false,
+                    used: false,
+                    broken: false,
+                    context: null,
+                };
+            }
+
+            return slot.defenseState;
         }
 
         function markUnitDefeated(targetBattle, unit, defeatedByUnit) {
@@ -1281,6 +1322,144 @@
             return hits;
         }
 
+        function getActiveDefenseSkill(targetBattle, slot) {
+            if (!slot?.selectedSkillId) {
+                return null;
+            }
+
+            const unit = getUnitById(targetBattle, slot.unitId);
+            const skill = getSkillById(unit, slot.selectedSkillId);
+            return isDefenseSkill(skill) ? skill : null;
+        }
+
+        function resolveAttackAgainstEvade(targetBattle, attacker, attackSkill, defender, evadeSkill, attackContext, evadeContext) {
+            const hits = [];
+            let evadedCoinCount = 0;
+            let evadeBroken = false;
+            const evadePowerBonus = getDefenseSkillFinalPowerBonus(defender, evadeSkill, attacker, attackSkill);
+
+            for (let coinIndex = 0; coinIndex < attackSkill.coinCount; coinIndex += 1) {
+                attackContext.currentCoinIndex = coinIndex + 1;
+                const roll = rollSingleCoin(targetBattle, attacker, attackSkill, attackContext);
+                if (!roll || attacker.hp <= 0 || defender.hp <= 0) {
+                    break;
+                }
+
+                const isCritical = rollCritical(targetBattle, attacker);
+                const finalPower = roll.power + (isCritical ? (attackContext.critFinalPowerBonusByCoin[coinIndex + 1] || 0) : 0);
+
+                if (!evadeBroken) {
+                    const evadeRoll = rollSingleCoin(targetBattle, defender, evadeSkill, evadeContext);
+                    const evadePower = (evadeRoll?.power || evadeSkill.basePower) + evadePowerBonus;
+
+                    if (evadePower >= finalPower) {
+                        evadedCoinCount += 1;
+                        emitEvent(targetBattle, 'status_triggered', {
+                            unitId: defender.id,
+                            unitName: defender.name,
+                            statusId: 'evade',
+                            damage: 0,
+                            hp: defender.hp,
+                            attackerName: attacker.name,
+                            index: coinIndex + 1,
+                            attackPower: finalPower,
+                            evadePower,
+                        });
+                        continue;
+                    }
+
+                    evadeBroken = true;
+                }
+
+                const damage = calculateHitDamage(attacker, attackSkill, defender, finalPower, attackContext, { damageReductionMultiplier: 1 }, isCritical);
+                const previousHp = defender.hp;
+                defender.hp = clamp(defender.hp - damage, 0, defender.maxHp);
+                triggerRuptureOnHit(targetBattle, defender);
+                triggerSinkingOnHit(targetBattle, defender);
+
+                hits.push({
+                    finalPower,
+                    damage,
+                    isHeads: roll.isHeads,
+                    isCritical,
+                    targetHp: defender.hp,
+                });
+
+                emitEvent(targetBattle, 'hit_resolved', {
+                    index: coinIndex + 1,
+                    attackerId: attacker.id,
+                    attackerName: attacker.name,
+                    defenderId: defender.id,
+                    defenderName: defender.name,
+                    skillId: attackSkill.id,
+                    skillName: attackSkill.name,
+                    coinFace: roll.isHeads ? 'Heads' : 'Tails',
+                    finalPower,
+                    damage,
+                    damageType: attackSkill.damageType,
+                    previousHp,
+                    nextHp: defender.hp,
+                    isCritical,
+                });
+
+                invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, finalPower, damage, isCritical });
+                invokeHooks(defender, 'hitTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill: attackSkill, finalPower, damage, isCritical });
+                invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, damage });
+                invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill: attackSkill, damage });
+
+                applyCustomCoinEffects(targetBattle, attacker, defender, attackSkill, coinIndex + 1, isCritical);
+                applyGenericSkillEffects(targetBattle, 'onHit', attacker, defender, attackSkill);
+            }
+
+            return {
+                hits,
+                evadedCoinCount,
+                evadeBroken,
+            };
+        }
+
+        function resolveCounterDefense(targetBattle, defenderSlot, defender, attackerSlot, attacker) {
+            const counterSkill = getActiveDefenseSkill(targetBattle, defenderSlot);
+            if (!isCounterSkill(counterSkill)) {
+                return null;
+            }
+
+            const defenseState = ensureDefenseState(defenderSlot);
+            if (defenseState.used || !isUnitAlive(defender) || !isUnitAlive(attacker)) {
+                return null;
+            }
+
+            if (!defenseState.context) {
+                defenseState.context = createSkillContext(targetBattle, defender, defenderSlot, counterSkill, attacker);
+            }
+            defenseState.activated = true;
+            defenseState.used = true;
+
+            emitEvent(targetBattle, 'engagement_started', {
+                engagementType: 'one-sided',
+                attackerName: defender.name,
+                defenderName: attacker.name,
+                skillName: counterSkill.name,
+            });
+
+            const hits = resolveOneSidedAttack(
+                targetBattle,
+                defender,
+                counterSkill,
+                attacker,
+                defenseState.context,
+                { damageReductionMultiplier: 1 },
+                counterSkill.coinCount,
+            );
+            applyAttackEndEffects(targetBattle, defender, counterSkill, defenseState.context);
+            const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
+            return {
+                hits,
+                totalDamage,
+                skill: counterSkill,
+            };
+        }
+
         function resolveClashEngagement(targetBattle, actingSlot, targetSlot) {
             const actingUnit = getUnitById(targetBattle, actingSlot.unitId);
             const targetUnit = getUnitById(targetBattle, targetSlot.unitId);
@@ -1421,7 +1600,9 @@
             const targetUnit = getUnitById(targetBattle, targetSlot.unitId);
             const actingSkill = getSkillById(actingUnit, actingSlot.selectedSkillId);
             const attackContext = createSkillContext(targetBattle, actingUnit, actingSlot, actingSkill, targetUnit);
+            const defendingSkill = getActiveDefenseSkill(targetBattle, targetSlot);
             const defendContext = { damageReductionMultiplier: 1 };
+            const defenseState = ensureDefenseState(targetSlot);
 
             emitEvent(targetBattle, 'engagement_started', {
                 engagementType: 'one-sided',
@@ -1430,7 +1611,22 @@
                 skillName: actingSkill.name,
             });
 
-            const hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, actingSkill.coinCount);
+            let hits = [];
+            if (isEvadeSkill(defendingSkill) && !defenseState.broken && isUnitAlive(targetUnit)) {
+                if (!defenseState.context) {
+                    defenseState.context = createSkillContext(targetBattle, targetUnit, targetSlot, defendingSkill, actingUnit);
+                }
+                defenseState.activated = true;
+                defenseState.used = true;
+                const evadeResult = resolveAttackAgainstEvade(targetBattle, actingUnit, actingSkill, targetUnit, defendingSkill, attackContext, defenseState.context);
+                hits = evadeResult.hits;
+                if (evadeResult.evadeBroken) {
+                    defenseState.broken = true;
+                }
+            } else {
+                hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, actingSkill.coinCount);
+            }
+
             applyAttackEndEffects(targetBattle, actingUnit, actingSkill, attackContext);
             const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
 
@@ -1448,6 +1644,32 @@
                 totalDamage,
                 remainingCoins: actingSkill.coinCount,
             };
+
+            const counterResult = resolveCounterDefense(targetBattle, targetSlot, targetUnit, actingSlot, actingUnit);
+            if (counterResult) {
+                if (!isUnitAlive(actingUnit)) {
+                    markUnitDefeated(targetBattle, actingUnit, targetUnit);
+                }
+
+                const counterPresentation = createOneSidedPresentation(
+                    targetSlot,
+                    actingSlot,
+                    targetUnit,
+                    actingUnit,
+                    counterResult.skill,
+                    counterResult.hits,
+                    counterResult.totalDamage,
+                );
+                targetBattle.resolutionHistory.push(counterPresentation);
+                targetBattle.lastResolution = {
+                    engagementType: 'one-sided',
+                    actingUnitName: targetUnit.name,
+                    targetUnitName: actingUnit.name,
+                    actingSkillName: counterResult.skill.name,
+                    totalDamage: counterResult.totalDamage,
+                    remainingCoins: counterResult.skill.coinCount,
+                };
+            }
         }
 
         function getSkillMaxPower(skill) {
@@ -1515,7 +1737,15 @@
         function hasAllPlayerAssignments(targetBattle) {
             return targetBattle.playerSlots
                 .filter((slot) => isSlotAlive(targetBattle, slot))
-                .every((slot) => Boolean(slot.selectedSkillId && slot.targetSlotId));
+                .every((slot) => {
+                    if (!slot.selectedSkillId) {
+                        return false;
+                    }
+
+                    const unit = getUnitById(targetBattle, slot.unitId);
+                    const skill = getSkillById(unit, slot.selectedSkillId);
+                    return isDefenseSkill(skill) ? true : Boolean(slot.targetSlotId);
+                });
         }
 
         function refreshSpeedOrder(targetBattle) {
@@ -1666,6 +1896,12 @@
                 slot.intentSkillId = null;
                 slot.intentTargetSlotId = null;
                 slot.manualTargetLock = false;
+                slot.defenseState = {
+                    activated: false,
+                    used: false,
+                    broken: false,
+                    context: null,
+                };
                 slot.speed = randomInt(...unit.speedRange);
                 slot.targetSlotId = getFirstLivingSlotId(targetBattle, getOpposingSide(slot.side));
                 unit.speed = slot.speed;
@@ -1747,9 +1983,17 @@
 
             slot.selectedSkillId = skillId;
             slot.manualTargetLock = false;
-            slot.targetSlotId = skill.targeting === 'highestMaxPower'
-                ? getAutoTargetSlotId(battle, slot, skill)
-                : (slot.targetSlotId || getFirstLivingSlotId(battle, 'enemy'));
+            slot.targetSlotId = isDefenseSkill(skill)
+                ? null
+                : (skill.targeting === 'highestMaxPower'
+                    ? getAutoTargetSlotId(battle, slot, skill)
+                    : (slot.targetSlotId || getFirstLivingSlotId(battle, 'enemy')));
+            slot.defenseState = {
+                activated: false,
+                used: false,
+                broken: false,
+                context: null,
+            };
             battle.activePlayerSlotId = slot.id;
             refreshRedirectedTargets(battle);
 
@@ -1774,6 +2018,10 @@
             }
 
             const unit = getUnitById(battle, slot.unitId);
+            const skill = slot.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
+            if (isDefenseSkill(skill)) {
+                return false;
+            }
             slot.targetSlotId = targetSlot.id;
             slot.manualTargetLock = true;
 
@@ -1795,6 +2043,11 @@
 
                 const unit = getUnitById(targetBattle, slot.unitId);
                 const skill = getSkillById(unit, slot.selectedSkillId);
+                if (isDefenseSkill(skill)) {
+                    slot.targetSlotId = null;
+                    return;
+                }
+
                 if (skill?.targeting === 'highestMaxPower' && !slot.manualTargetLock) {
                     slot.targetSlotId = getAutoTargetSlotId(targetBattle, slot, skill);
                 }
@@ -1816,7 +2069,16 @@
                     break;
                 }
 
-                if (slot.resolved || !isSlotAlive(battle, slot) || !slot.selectedSkillId || !slot.targetSlotId) {
+                if (slot.resolved || !isSlotAlive(battle, slot) || !slot.selectedSkillId) {
+                    continue;
+                }
+
+                const actingUnit = getUnitById(battle, slot.unitId);
+                const actingSkill = getSkillById(actingUnit, slot.selectedSkillId);
+                if (!slot.targetSlotId) {
+                    if (isDefenseSkill(actingSkill)) {
+                        slot.resolved = true;
+                    }
                     continue;
                 }
 

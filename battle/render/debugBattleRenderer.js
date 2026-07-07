@@ -87,6 +87,14 @@
             return `${skill.basePower} ${skill.coinPower >= 0 ? '+' : ''}${skill.coinPower} (${skill.coinCount})`;
         }
 
+        function getSkillType(skill) {
+            return skill?.skillType || 'attack';
+        }
+
+        function isDefenseSkill(skill) {
+            return getSkillType(skill) !== 'attack';
+        }
+
         function escapeAttribute(value) {
             return String(value)
                 .replace(/&/g, '&amp;')
@@ -134,9 +142,17 @@
             });
         }
 
-        function getUnitFieldSprite(unit) {
+        function getUnitFieldSprite(unit, slot) {
             if (unit.hp <= 0 && unit.sprites.hurt) {
                 return resolveAssetUrl(unit.sprites.hurt);
+            }
+
+            const selectedSkill = slot?.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
+            if (getSkillType(selectedSkill) === 'evade' && unit.sprites.evade) {
+                return resolveAssetUrl(unit.sprites.evade);
+            }
+            if (getSkillType(selectedSkill) === 'guard' && unit.sprites.guard) {
+                return resolveAssetUrl(unit.sprites.guard);
             }
 
             return resolveAssetUrl(unit.sprites.idle);
@@ -151,10 +167,16 @@
                 return 'No skill';
             }
 
-            return `${skill.name} | ${getCompactSkillPowerLabel(skill)}`;
+            return `${skill.name}${isDefenseSkill(skill) ? ' [Defense]' : ''} | ${getCompactSkillPowerLabel(skill)}`;
         }
 
         function getSlotTargetSummary(battle, slot) {
+            const unit = slot ? getUnitById(battle, slot.unitId) : null;
+            const skill = slot?.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
+            if (isDefenseSkill(skill)) {
+                return 'Reactive';
+            }
+
             const targetSlot = slot?.targetSlotId ? getSlotById(battle, slot.targetSlotId) : null;
             if (!targetSlot) {
                 return 'No target';
@@ -270,7 +292,7 @@
             const isTargeted = activePlayerSlot?.targetSlotId === slot.id;
             const isDropTarget = !isPlayer && battle.phase === 'select' && unit.hp > 0;
             const tooltip = getUnitTooltip(battle, unit, slot, side);
-            const unitSprite = getUnitFieldSprite(unit);
+            const unitSprite = getUnitFieldSprite(unit, slot);
             const assignedSkill = slot.selectedSkillId ? getSkillById(unit, slot.selectedSkillId) : null;
             const intentSkill = slot.intentSkillId ? getSkillById(unit, slot.intentSkillId) : assignedSkill;
             const primaryAction = isPlayer ? 'select-slot' : 'select-target';
@@ -280,7 +302,7 @@
             const stateLabel = battle.phase === 'resolved'
                 ? (intentSkill?.name || assignedSkill?.name || 'No action')
                 : isPlayer
-                    ? (assignedSkill?.name || 'Choose skill')
+                    ? (assignedSkill ? (isDefenseSkill(assignedSkill) ? `${assignedSkill.name} Ready` : assignedSkill.name) : 'Choose skill')
                     : (intentSkill?.name || 'No intent');
             const targetLabel = isPlayer && !assignedSkill
                 ? 'No target'
@@ -791,29 +813,30 @@
                 .map((skill, index) => {
                     const isSelected = activePlayerSlot.selectedSkillId === skill.id;
                     const isDisabled = battle.phase !== 'select' || Boolean(battle.winner);
+                    const isDefense = isDefenseSkill(skill);
                     const borderUrl = resolveAssetUrl(sharedBorderPath);
                     const tooltipText = escapeAttribute([
                         skill.name,
-                        `${skill.damageType.toUpperCase()} | ${getSkillPowerLabel(skill)}`,
-                        `Offense ${getSkillOffenseLevel(unit, skill)}`,
+                        `${isDefense ? 'DEFENSE' : skill.damageType.toUpperCase()} | ${getSkillPowerLabel(skill)}`,
+                        `${isDefense ? 'Defense' : 'Offense'} ${getSkillOffenseLevel(unit, skill)}`,
                         skill.description,
                     ].join('\n'));
 
                     return `
                         <button
-                            class="echoes-battle-panel__planner-skill${isSelected ? ' is-selected' : ''}"
+                            class="echoes-battle-panel__planner-skill${isSelected ? ' is-selected' : ''}${isDefense ? ' is-defense' : ''}"
                             type="button"
                             data-action="select-skill"
                             data-slot-id="${activePlayerSlot.id}"
                             data-skill-id="${skill.id}"
-                            draggable="${isDisabled ? 'false' : 'true'}"
-                            data-drag-skill="true"
+                            draggable="${isDisabled || isDefense ? 'false' : 'true'}"
+                            ${isDefense ? '' : 'data-drag-skill="true"'}
                             title="${tooltipText}"
                             aria-label="${tooltipText}"
                             ${isDisabled ? 'disabled' : ''}
                         >
                             <span class="echoes-battle-panel__planner-skill-border" style="background-image: url('${borderUrl}')"></span>
-                            <span class="echoes-battle-panel__planner-skill-rank">${index + 1}</span>
+                            <span class="echoes-battle-panel__planner-skill-rank">${isDefense ? skill.name.charAt(0) : index + 1}</span>
                         </button>
                     `;
                 })
@@ -1038,7 +1061,9 @@
                             <strong>${selectedSkill ? selectedSkill.name : 'Select a skill'}</strong>
                         </div>
                         <div class="echoes-battle-panel__planner-summary">
-                            ${targetUnit
+                            ${selectedSkill && isDefenseSkill(selectedSkill)
+                                ? `${activeUnit?.name || 'Slot'} will use ${selectedSkill.name} reactively when attacked.`
+                                : targetUnit
                                 ? `${activeUnit?.name || 'Slot'} -> ${targetUnit.name}`
                                 : 'Drag a skill onto an enemy, or click an enemy after selecting a skill.'}
                         </div>
