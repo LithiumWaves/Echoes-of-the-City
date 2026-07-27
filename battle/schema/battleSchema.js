@@ -9,11 +9,16 @@
         'applyStatus',
         'queueStatus',
         'adjustSanity',
+        'healHp',
+        'adjustStatus',
         'modifyContext',
         'modifyCoinMap',
         'setFollowUpSkill',
         'modifyPhysicalResistance',
+        'modifySinResistance',
         'modifyDefenseLevel',
+        'modifySpeed',
+        'retargetSlot',
         'consumeStatus',
     ]);
     const CONTEXT_FIELDS = new Set([
@@ -43,6 +48,13 @@
         'turnEnd',
         'unitDefeated',
         'battleEnd',
+    ]);
+    const RETARGET_SELECTORS = new Set([
+        'sourceUnit',
+        'targetUnit',
+        'firstLivingOpponent',
+        'firstLivingAlly',
+        'mirrorOpponent',
     ]);
 
     function cloneDefinition(definition) {
@@ -168,12 +180,31 @@
             }
             break;
         case 'adjustSanity':
+        case 'healHp':
         case 'modifyDefenseLevel':
+        case 'modifySpeed':
             if (!isFiniteNumber(effect.value)) {
                 pushError(errors, `${path}.value`, 'must be a number.');
             }
             if (effect.reason != null && typeof effect.reason !== 'string') {
                 pushError(errors, `${path}.reason`, 'must be a string when provided.');
+            }
+            if (effect.type === 'modifySpeed' && effect.operation != null && !['add', 'set'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
+            }
+            break;
+        case 'adjustStatus':
+            if (!effect.statusId || typeof effect.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
+            }
+            if (effect.potencyDelta != null && !isFiniteNumber(effect.potencyDelta)) {
+                pushError(errors, `${path}.potencyDelta`, 'must be a number when provided.');
+            }
+            if (effect.countDelta != null && !isFiniteNumber(effect.countDelta)) {
+                pushError(errors, `${path}.countDelta`, 'must be a number when provided.');
+            }
+            if (effect.potencyDelta == null && effect.countDelta == null) {
+                pushError(errors, `${path}`, 'must provide potencyDelta, countDelta, or both.');
             }
             break;
         case 'modifyContext':
@@ -231,6 +262,25 @@
             }
             if (effect.operation != null && !['multiplyBase', 'multiplyCurrent'].includes(effect.operation)) {
                 pushError(errors, `${path}.operation`, 'must be omitted, "multiplyBase", or "multiplyCurrent".');
+            }
+            break;
+        case 'modifySinResistance':
+            if (!effect.sinType || !SIN_TYPES.has(effect.sinType)) {
+                pushError(errors, `${path}.sinType`, 'must be a supported Sin affinity.');
+            }
+            if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (effect.operation != null && !['multiplyBase', 'multiplyCurrent'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'must be omitted, "multiplyBase", or "multiplyCurrent".');
+            }
+            break;
+        case 'retargetSlot':
+            if (!effect.selector || !RETARGET_SELECTORS.has(effect.selector)) {
+                pushError(errors, `${path}.selector`, 'must be a supported retarget selector.');
+            }
+            if (effect.lockTarget != null && typeof effect.lockTarget !== 'boolean') {
+                pushError(errors, `${path}.lockTarget`, 'must be a boolean when provided.');
             }
             break;
         default:

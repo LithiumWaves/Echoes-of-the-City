@@ -89,12 +89,39 @@ Supported `type` values (current):
 - `applyStatus`
 - `queueStatus`
 - `adjustSanity`
+- `healHp`
+- `adjustStatus`
 - `modifyContext`
 - `modifyCoinMap`
 - `setFollowUpSkill`
 - `modifyPhysicalResistance`
+- `modifySinResistance`
 - `modifyDefenseLevel`
+- `modifySpeed`
+- `retargetSlot`
 - `consumeStatus`
+
+Selected effect notes:
+- `healHp`
+  - `value: number`
+- `adjustStatus`
+  - `statusId: string`
+  - `potencyDelta?: number`
+  - `countDelta?: number`
+- `modifyPhysicalResistance`
+  - `damageType: "slash" | "pierce" | "blunt"`
+  - `value: number`
+  - `operation?: "multiplyBase" | "multiplyCurrent"`
+- `modifySinResistance`
+  - `sinType: "wrath" | "lust" | "sloth" | "gluttony" | "gloom" | "pride" | "envy"`
+  - `value: number`
+  - `operation?: "multiplyBase" | "multiplyCurrent"`
+- `modifySpeed`
+  - `value: number`
+  - `operation?: "add" | "set"`
+- `retargetSlot`
+  - `selector: "sourceUnit" | "targetUnit" | "firstLivingOpponent" | "firstLivingAlly" | "mirrorOpponent"`
+  - `lockTarget?: boolean`
 
 ## PassiveDefinition
 

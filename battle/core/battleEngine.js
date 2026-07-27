@@ -161,6 +161,18 @@
                     adjustSanity,
                     emitEvent,
                     invokeHooks,
+                    isCountOnlyStatus,
+                    clampStatusValue,
+                    getAllSlots,
+                    getSlotById,
+                    getUnitById,
+                    getSlotsForSide,
+                    getFirstLivingSlotId,
+                    getOpposingSide,
+                    isSlotAlive,
+                    refreshRedirectedTargets,
+                    refreshSpeedOrder,
+                    ensureActivePlayerSlot,
                 });
             }
 
@@ -407,6 +419,18 @@
             }
             if (type === 'status_expired') {
                 return `${data.unitName} ${data.statusId} expired.`;
+            }
+            if (type === 'hp_healed') {
+                return `${data.unitName} recovers ${data.amount} HP (${data.previousHp} -> ${data.nextHp}).`;
+            }
+            if (type === 'speed_modified') {
+                return `${data.unitName} Speed ${data.previousSpeed} -> ${data.nextSpeed}.`;
+            }
+            if (type === 'slot_retargeted') {
+                return `${data.unitName} retargets to ${data.targetUnitName}.`;
+            }
+            if (type === 'resistance_modified') {
+                return `${data.unitName} ${data.key} resistance becomes ${data.value}.`;
             }
             if (type === 'unit_defeated') {
                 return `${data.unitName} falls.`;
@@ -826,7 +850,8 @@
         }
 
         function getPhysicalResistanceMultiplier(unit, damageType) {
-            const dynamic = unit.turnState?.resistanceOverrides?.[damageType];
+            const dynamic = unit.turnState?.physicalResistanceOverrides?.[damageType]
+                ?? unit.turnState?.resistanceOverrides?.[damageType];
             const baseResistance = typeof dynamic === 'number'
                 ? dynamic
                 : (unit.resistances?.physical?.[damageType] || 1);
@@ -838,7 +863,9 @@
                 return 1;
             }
 
-            return unit.resistances?.sin?.[sinType] || 1;
+            return unit.turnState?.sinResistanceOverrides?.[sinType]
+                || unit.resistances?.sin?.[sinType]
+                || 1;
         }
 
         function calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical) {
@@ -869,6 +896,18 @@
                 adjustSanity,
                 emitEvent,
                 invokeHooks,
+                isCountOnlyStatus,
+                clampStatusValue,
+                getAllSlots,
+                getSlotById,
+                getUnitById,
+                getSlotsForSide,
+                getFirstLivingSlotId,
+                getOpposingSide,
+                isSlotAlive,
+                refreshRedirectedTargets,
+                refreshSpeedOrder,
+                ensureActivePlayerSlot,
             })
             : (() => {});
 

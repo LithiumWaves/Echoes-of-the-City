@@ -11,6 +11,18 @@
             adjustSanity,
             emitEvent,
             invokeHooks,
+            isCountOnlyStatus,
+            clampStatusValue,
+            getAllSlots,
+            getSlotById,
+            getUnitById,
+            getSlotsForSide,
+            getFirstLivingSlotId,
+            getOpposingSide,
+            isSlotAlive,
+            refreshRedirectedTargets,
+            refreshSpeedOrder,
+            ensureActivePlayerSlot,
         } = deps || {};
 
         function getRuntimeSourceUnit(runtime) {
@@ -19,6 +31,14 @@
 
         function getRuntimeTargetUnit(runtime) {
             return runtime?.targetUnit || runtime?.opponent || null;
+        }
+
+        function getSlotForUnit(targetBattle, unit) {
+            if (!targetBattle || !unit || typeof getAllSlots !== 'function') {
+                return null;
+            }
+
+            return getAllSlots(targetBattle).find((slot) => slot.unitId === unit.id) || null;
         }
 
         function getEffectTargetUnit(runtime, target = 'opponent') {
@@ -44,6 +64,224 @@
             }
 
             return getStatusPotency(targetUnit, effect.statusId);
+        }
+
+        function adjustUnitStatus(targetBattle, unit, effect) {
+            if (!unit || !effect.statusId || typeof getStatus !== 'function' || typeof removeStatus !== 'function') {
+                return;
+            }
+
+            const potencyDelta = typeof effect.potencyDelta === 'number' ? effect.potencyDelta : 0;
+            const countDelta = typeof effect.countDelta === 'number' ? effect.countDelta : 0;
+            const existing = getStatus(unit, effect.statusId);
+
+            if (!existing) {
+                if (potencyDelta <= 0 && countDelta <= 0) {
+                    return;
+                }
+
+                applyStatus(targetBattle, unit, effect.statusId, {
+                    potency: potencyDelta,
+                    count: countDelta,
+                });
+                return;
+            }
+
+            const previousPotency = existing.potency || 0;
+            const previousCount = existing.count || 0;
+            const nextPotency = typeof isCountOnlyStatus === 'function' && isCountOnlyStatus(effect.statusId)
+                ? 0
+                : (typeof clampStatusValue === 'function'
+                    ? clampStatusValue(previousPotency + potencyDelta, 99)
+                    : Math.max(0, previousPotency + potencyDelta));
+            const nextCount = typeof clampStatusValue === 'function'
+                ? clampStatusValue(previousCount + countDelta, effect.statusId === 'protection' ? 10 : 99)
+                : Math.max(0, previousCount + countDelta);
+
+            existing.potency = nextPotency;
+            existing.count = nextCount;
+            if (typeof emitEvent === 'function') {
+                emitEvent(targetBattle, 'status_changed', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    statusId: effect.statusId,
+                    previousPotency,
+                    previousCount,
+                    nextPotency,
+                    nextCount,
+                });
+            }
+
+            if (nextCount <= 0 && nextPotency <= 0) {
+                removeStatus(unit, effect.statusId);
+                if (typeof emitEvent === 'function') {
+                    emitEvent(targetBattle, 'status_expired', {
+                        unitId: unit.id,
+                        unitName: unit.name,
+                        statusId: effect.statusId,
+                    });
+                }
+            }
+        }
+
+        function modifyResistance(targetBattle, unit, bucket, key, effect) {
+            if (!unit || !key) {
+                return;
+            }
+
+            const baseResistance = unit.resistances?.[bucket]?.[key] || 1;
+            const currentResistance = unit.turnState?.[`${bucket}ResistanceOverrides`]?.[key] || baseResistance;
+            const nextResistance = effect.operation === 'multiplyCurrent'
+                ? currentResistance * (effect.value || 1)
+                : baseResistance * (effect.value || 1);
+
+            unit.turnState[`${bucket}ResistanceOverrides`] = {
+                ...(unit.turnState[`${bucket}ResistanceOverrides`] || {}),
+                [key]: nextResistance,
+            };
+
+            if (typeof emitEvent === 'function') {
+                emitEvent(targetBattle, 'resistance_modified', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    bucket,
+                    key,
+                    value: nextResistance,
+                });
+            }
+        }
+
+        function modifyUnitSpeed(targetBattle, unit, effect) {
+            const slot = getSlotForUnit(targetBattle, unit);
+            if (!slot) {
+                return;
+            }
+
+            const previousSpeed = slot.speed || 0;
+            const nextSpeed = effect.operation === 'set'
+                ? Math.max(0, Math.round(effect.value || 0))
+                : Math.max(0, previousSpeed + Math.round(effect.value || 0));
+
+            slot.speed = nextSpeed;
+            unit.speed = nextSpeed;
+
+            if (typeof emitEvent === 'function') {
+                emitEvent(targetBattle, 'speed_modified', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    previousSpeed,
+                    nextSpeed,
+                });
+            }
+
+            if (typeof refreshRedirectedTargets === 'function') {
+                refreshRedirectedTargets(targetBattle);
+            }
+            if (typeof refreshSpeedOrder === 'function') {
+                refreshSpeedOrder(targetBattle);
+            }
+            if (typeof ensureActivePlayerSlot === 'function') {
+                ensureActivePlayerSlot(targetBattle);
+            }
+        }
+
+        function getFallbackOpponentSlot(targetBattle, sourceUnit) {
+            if (!sourceUnit || typeof getOpposingSide !== 'function' || typeof getFirstLivingSlotId !== 'function' || typeof getSlotById !== 'function') {
+                return null;
+            }
+
+            const slotId = getFirstLivingSlotId(targetBattle, getOpposingSide(sourceUnit.side));
+            return slotId ? getSlotById(targetBattle, slotId) : null;
+        }
+
+        function getAffectedSlot(targetBattle, runtime, effect) {
+            const sourceUnit = getRuntimeSourceUnit(runtime);
+            const targetUnit = getRuntimeTargetUnit(runtime);
+
+            if (effect.target === 'self') {
+                return runtime?.slot || getSlotForUnit(targetBattle, sourceUnit);
+            }
+
+            if (effect.target === 'opponent') {
+                return runtime?.targetSlot
+                    || getSlotForUnit(targetBattle, targetUnit)
+                    || getFallbackOpponentSlot(targetBattle, sourceUnit);
+            }
+
+            return runtime?.slot || getSlotForUnit(targetBattle, sourceUnit);
+        }
+
+        function resolveRetargetSlotId(targetBattle, actingSlot, runtime, effect) {
+            if (!actingSlot) {
+                return null;
+            }
+
+            const sourceUnit = getRuntimeSourceUnit(runtime);
+            const targetUnit = getRuntimeTargetUnit(runtime);
+            const opposingSide = typeof getOpposingSide === 'function' ? getOpposingSide(actingSlot.side) : null;
+
+            if (effect.selector === 'sourceUnit') {
+                return getSlotForUnit(targetBattle, sourceUnit)?.id || null;
+            }
+            if (effect.selector === 'targetUnit') {
+                return getSlotForUnit(targetBattle, targetUnit)?.id || null;
+            }
+            if (effect.selector === 'firstLivingOpponent' && opposingSide && typeof getFirstLivingSlotId === 'function') {
+                return getFirstLivingSlotId(targetBattle, opposingSide);
+            }
+            if (effect.selector === 'firstLivingAlly' && typeof getFirstLivingSlotId === 'function') {
+                return getFirstLivingSlotId(targetBattle, actingSlot.side);
+            }
+            if (effect.selector === 'mirrorOpponent' && opposingSide && typeof getSlotsForSide === 'function') {
+                const opposingSlots = getSlotsForSide(targetBattle, opposingSide);
+                const mirrored = opposingSlots?.[actingSlot.index];
+                if (mirrored && typeof isSlotAlive === 'function' && isSlotAlive(targetBattle, mirrored)) {
+                    return mirrored.id;
+                }
+                return typeof getFirstLivingSlotId === 'function' ? getFirstLivingSlotId(targetBattle, opposingSide) : null;
+            }
+
+            return null;
+        }
+
+        function retargetSlot(targetBattle, runtime, effect) {
+            const affectedSlot = getAffectedSlot(targetBattle, runtime, effect);
+            if (!affectedSlot) {
+                return;
+            }
+
+            const previousTargetSlotId = affectedSlot.targetSlotId || null;
+            const nextTargetSlotId = resolveRetargetSlotId(targetBattle, affectedSlot, runtime, effect);
+            if (!nextTargetSlotId || previousTargetSlotId === nextTargetSlotId) {
+                return;
+            }
+
+            affectedSlot.targetSlotId = nextTargetSlotId;
+            if (affectedSlot.side === 'enemy') {
+                affectedSlot.intentTargetSlotId = nextTargetSlotId;
+            }
+            if (typeof effect.lockTarget === 'boolean') {
+                affectedSlot.manualTargetLock = effect.lockTarget;
+            }
+
+            if (typeof emitEvent === 'function') {
+                const actingUnit = typeof getUnitById === 'function' ? getUnitById(targetBattle, affectedSlot.unitId) : null;
+                const targetUnit = typeof getSlotById === 'function' && typeof getUnitById === 'function'
+                    ? getUnitById(targetBattle, getSlotById(targetBattle, nextTargetSlotId)?.unitId)
+                    : null;
+                emitEvent(targetBattle, 'slot_retargeted', {
+                    unitId: actingUnit?.id || affectedSlot.unitId,
+                    unitName: actingUnit?.name || 'Unknown',
+                    targetUnitName: targetUnit?.name || 'Unknown',
+                });
+            }
+
+            if (typeof refreshRedirectedTargets === 'function') {
+                refreshRedirectedTargets(targetBattle);
+            }
+            if (typeof refreshSpeedOrder === 'function') {
+                refreshSpeedOrder(targetBattle);
+            }
         }
 
         function applyEffects(targetBattle, effects, runtime) {
@@ -148,23 +386,55 @@
                     if (!targetUnit || !effect.damageType) {
                         return;
                     }
-                    {
-                        const baseResistance = targetUnit.resistances?.physical?.[effect.damageType] || 1;
-                        const currentResistance = targetUnit.turnState?.resistanceOverrides?.[effect.damageType] || baseResistance;
-                        const nextResistance = effect.operation === 'multiplyCurrent'
-                            ? currentResistance * (effect.value || 1)
-                            : baseResistance * (effect.value || 1);
-                        targetUnit.turnState.resistanceOverrides = {
-                            ...(targetUnit.turnState.resistanceOverrides || {}),
-                            [effect.damageType]: nextResistance,
-                        };
+                    modifyResistance(targetBattle, targetUnit, 'physical', effect.damageType, effect);
+                    return;
+                case 'modifySinResistance':
+                    if (!targetUnit || !effect.sinType) {
+                        return;
                     }
+                    modifyResistance(targetBattle, targetUnit, 'sin', effect.sinType, effect);
                     return;
                 case 'modifyDefenseLevel':
                     if (!targetUnit) {
                         return;
                     }
                     targetUnit.turnState.defenseLevelModifier = (targetUnit.turnState.defenseLevelModifier || 0) + (effect.value || 0);
+                    return;
+                case 'healHp':
+                    if (!targetUnit || typeof effect.value !== 'number') {
+                        return;
+                    }
+                    {
+                        const previousHp = targetUnit.hp;
+                        targetUnit.hp = Math.min(targetUnit.maxHp, targetUnit.hp + effect.value);
+                        if (targetUnit.hp !== previousHp && typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'hp_healed', {
+                                unitId: targetUnit.id,
+                                unitName: targetUnit.name,
+                                previousHp,
+                                nextHp: targetUnit.hp,
+                                amount: targetUnit.hp - previousHp,
+                            });
+                        }
+                    }
+                    return;
+                case 'adjustStatus':
+                    if (!targetUnit) {
+                        return;
+                    }
+                    adjustUnitStatus(targetBattle, targetUnit, effect);
+                    return;
+                case 'modifySpeed':
+                    if (!targetUnit || typeof effect.value !== 'number') {
+                        return;
+                    }
+                    modifyUnitSpeed(targetBattle, targetUnit, effect);
+                    return;
+                case 'retargetSlot':
+                    if (!effect.selector) {
+                        return;
+                    }
+                    retargetSlot(targetBattle, runtime, effect);
                     return;
                 case 'consumeStatus':
                     if (!targetUnit || !effect.statusId || typeof getStatus !== 'function' || typeof removeStatus !== 'function') {
