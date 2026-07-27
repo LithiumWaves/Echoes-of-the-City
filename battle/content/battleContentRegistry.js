@@ -45,7 +45,8 @@
         assertContentRegistryReady();
 
         const validator = getBattleDefinitionValidator();
-        const { normalizedDefinition, errors, message } = validator(definition);
+        const resolvedDefinition = resolveBattleDefinitionComposition(definition);
+        const { normalizedDefinition, errors, message } = validator(resolvedDefinition);
         if (Array.isArray(errors) && errors.length) {
             throw new Error(message || 'Battle definition is invalid.');
         }
@@ -104,7 +105,8 @@
             return null;
         }
 
-        return battleDefinitions[definitionId] || null;
+        const definition = battleDefinitions[definitionId] || null;
+        return definition ? cloneContentValue(definition) : null;
     }
 
     function getUnitDefinition(definitionId) {
@@ -132,11 +134,50 @@
         }));
     }
 
+    function resolveUnitList(definitionIds, pathLabel) {
+        if (!Array.isArray(definitionIds) || !definitionIds.length) {
+            return null;
+        }
+
+        return definitionIds.map((definitionId, index) => {
+            if (typeof definitionId !== 'string' || !definitionId) {
+                throw new Error(`${pathLabel}[${index}] must be a non-empty unit id string.`);
+            }
+
+            const unitDefinition = getUnitDefinition(definitionId);
+            if (!unitDefinition) {
+                throw new Error(`${pathLabel}[${index}] references unknown unit "${definitionId}".`);
+            }
+
+            return unitDefinition;
+        });
+    }
+
+    function resolveBattleDefinitionComposition(definition) {
+        const sourceDefinition = cloneContentValue(definition || {});
+        const playerUnitIds = sourceDefinition.playerUnitIds || sourceDefinition.playerUnitsById || null;
+        const enemyUnitIds = sourceDefinition.enemyUnitIds || sourceDefinition.enemyUnitsById || null;
+
+        if (!playerUnitIds && !enemyUnitIds) {
+            return sourceDefinition;
+        }
+
+        const resolvedPlayerUnits = resolveUnitList(playerUnitIds, 'battle.playerUnitIds');
+        const resolvedEnemyUnits = resolveUnitList(enemyUnitIds, 'battle.enemyUnitIds');
+
+        return {
+            ...sourceDefinition,
+            playerUnits: resolvedPlayerUnits || sourceDefinition.playerUnits,
+            enemyUnits: resolvedEnemyUnits || sourceDefinition.enemyUnits,
+        };
+    }
+
     battleModules.content = {
         ...(battleModules.content || {}),
         registerUnitDefinition,
         getUnitDefinition,
         listUnitDefinitions,
+        resolveBattleDefinitionComposition,
         registerBattleDefinition,
         getBattleDefinition,
         listBattleDefinitions,
@@ -147,6 +188,7 @@
         registerUnitDefinition,
         getUnitDefinition,
         listUnitDefinitions,
+        resolveBattleDefinitionComposition,
         registerBattleDefinition,
         getBattleDefinition,
         listBattleDefinitions,

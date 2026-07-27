@@ -1,30 +1,29 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
     const registerBattleDefinition = battleModules.content?.registerBattleDefinition;
-    const getUnitDefinition = battleModules.content?.getUnitDefinition;
 
-    if (typeof registerBattleDefinition !== 'function' || typeof getUnitDefinition !== 'function') {
+    if (typeof registerBattleDefinition !== 'function') {
         throw new Error('Battle content registry is not available.');
-    }
-
-    const playerUnits = [
-        getUnitDefinition('vergilius'),
-        getUnitDefinition('bamboo-hatted-kim'),
-    ];
-    const enemyUnits = [
-        getUnitDefinition('ring-nursefather-hong-lu'),
-        getUnitDefinition('dongbaek'),
-    ];
-
-    if (playerUnits.some((unit) => !unit) || enemyUnits.some((unit) => !unit)) {
-        throw new Error('Debug fight requires all referenced unit definitions to load first.');
     }
 
     const debugFightDefinition = {
         id: 'debug-fight',
         name: 'Echoes Debug Battle',
-        playerUnits,
-        enemyUnits,
+        description: 'Development encounter assembled from reusable unit definitions.',
+        playerUnitIds: [
+            'vergilius',
+            'bamboo-hatted-kim',
+        ],
+        enemyUnitIds: [
+            'ring-nursefather-hong-lu',
+            'dongbaek',
+        ],
+        rules: {
+            encounterType: 'focused',
+            maxTurns: 100,
+            victoryCondition: 'defeat-all-enemies',
+            failureCondition: 'all-allies-defeated',
+        },
     };
 
     const registeredDefinition = registerBattleDefinition(debugFightDefinition, {
