@@ -1,0 +1,345 @@
+(() => {
+    const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
+
+    const PHYSICAL_DAMAGE_TYPES = new Set(['slash', 'pierce', 'blunt']);
+    const SIN_TYPES = new Set(['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy']);
+    const SKILL_TYPES = new Set(['attack', 'evade', 'counter']);
+    const EFFECT_TRIGGERS = new Set(['onSelect', 'onHit', 'onClashWin', 'onClashLose', 'onAttackEnd']);
+    const EFFECT_TYPES = new Set([
+        'applyStatus',
+        'queueStatus',
+        'adjustSanity',
+        'modifyContext',
+        'modifyCoinMap',
+        'setFollowUpSkill',
+        'modifyPhysicalResistance',
+        'modifyDefenseLevel',
+        'consumeStatus',
+    ]);
+    const CONTEXT_FIELDS = new Set([
+        'coinPowerBonus',
+        'flatPowerBonus',
+        'clashPowerBonus',
+        'damageMultiplier',
+        'damageReductionMultiplier',
+    ]);
+    const COIN_MAP_FIELDS = new Set([
+        'extraCritDamageByCoin',
+        'critFinalPowerBonusByCoin',
+    ]);
+
+    function cloneDefinition(definition) {
+        if (typeof window.structuredClone === 'function') {
+            return window.structuredClone(definition);
+        }
+
+        return JSON.parse(JSON.stringify(definition));
+    }
+
+    function normalizeBattleDefinition(definition) {
+        const source = cloneDefinition(definition || {});
+        const normalized = {
+            id: source.id || 'custom-battle',
+            name: source.name || 'Custom Battle',
+            playerUnits: Array.isArray(source.playerUnits)
+                ? source.playerUnits
+                : (source.hero ? [source.hero] : []),
+            enemyUnits: Array.isArray(source.enemyUnits)
+                ? source.enemyUnits
+                : (source.enemy ? [source.enemy] : []),
+            rules: {
+                encounterType: source.rules?.encounterType || 'focused',
+                maxTurns: source.rules?.maxTurns || 100,
+                victoryCondition: source.rules?.victoryCondition || 'defeat-all-enemies',
+                failureCondition: source.rules?.failureCondition || 'all-allies-defeated',
+            },
+        };
+
+        if (source.description) {
+            normalized.description = source.description;
+        }
+
+        return normalized;
+    }
+
+    function pushError(errors, path, message) {
+        errors.push(`${path}: ${message}`);
+    }
+
+    function isFiniteNumber(value) {
+        return typeof value === 'number' && Number.isFinite(value);
+    }
+
+    function validateResistanceBucket(errors, unitPath, bucket, source, allowedKeys) {
+        if (source == null) {
+            return;
+        }
+
+        if (typeof source !== 'object' || Array.isArray(source)) {
+            pushError(errors, `${unitPath}.resistances.${bucket}`, 'must be an object.');
+            return;
+        }
+
+        Object.entries(source).forEach(([key, value]) => {
+            if (!allowedKeys.has(key)) {
+                pushError(errors, `${unitPath}.resistances.${bucket}.${key}`, 'is not a supported resistance key.');
+                return;
+            }
+
+            if (!isFiniteNumber(value) || value <= 0) {
+                pushError(errors, `${unitPath}.resistances.${bucket}.${key}`, 'must be a positive number.');
+            }
+        });
+    }
+
+    function validateEffect(errors, unitSkillIds, effect, path) {
+        if (!effect || typeof effect !== 'object' || Array.isArray(effect)) {
+            pushError(errors, path, 'must be an object.');
+            return;
+        }
+
+        if (!EFFECT_TRIGGERS.has(effect.trigger)) {
+            pushError(errors, `${path}.trigger`, 'is missing or unsupported.');
+        }
+
+        if (!EFFECT_TYPES.has(effect.type)) {
+            pushError(errors, `${path}.type`, 'is missing or unsupported.');
+            return;
+        }
+
+        if (effect.target != null && !['self', 'opponent'].includes(effect.target)) {
+            pushError(errors, `${path}.target`, 'must be "self" or "opponent".');
+        }
+
+        if (effect.coinIndex != null && (!Number.isInteger(effect.coinIndex) || effect.coinIndex <= 0)) {
+            pushError(errors, `${path}.coinIndex`, 'must be a positive integer.');
+        }
+
+        switch (effect.type) {
+        case 'applyStatus':
+        case 'queueStatus':
+        case 'consumeStatus':
+            if (!effect.statusId || typeof effect.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
+            }
+            break;
+        case 'adjustSanity':
+        case 'modifyDefenseLevel':
+            if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'modifyContext':
+            if (!CONTEXT_FIELDS.has(effect.field)) {
+                pushError(errors, `${path}.field`, 'is missing or unsupported for context modification.');
+            }
+            if (!effect.operation || typeof effect.operation !== 'string') {
+                pushError(errors, `${path}.operation`, 'must be provided.');
+            }
+            if (!['add', 'addStatusPotencyScaled', 'setToOneMinusStatusPotencyScaled'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'is not a supported context operation.');
+            }
+            if (effect.operation === 'add' && !isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number for add operations.');
+            }
+            break;
+        case 'modifyCoinMap':
+            if (!COIN_MAP_FIELDS.has(effect.field)) {
+                pushError(errors, `${path}.field`, 'is missing or unsupported for coin-map modification.');
+            }
+            if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'setFollowUpSkill':
+            if (!effect.skillId || typeof effect.skillId !== 'string') {
+                pushError(errors, `${path}.skillId`, 'must be a non-empty string.');
+            } else if (!unitSkillIds.has(effect.skillId)) {
+                pushError(errors, `${path}.skillId`, 'must reference another skill on the same unit.');
+            }
+            break;
+        case 'modifyPhysicalResistance':
+            if (!effect.damageType || !PHYSICAL_DAMAGE_TYPES.has(effect.damageType)) {
+                pushError(errors, `${path}.damageType`, 'must be slash, pierce, or blunt.');
+            }
+            if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (effect.operation != null && !['multiplyBase', 'multiplyCurrent'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'must be omitted, "multiplyBase", or "multiplyCurrent".');
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    function validateSkill(errors, skill, path, unitSkillIds) {
+        if (!skill || typeof skill !== 'object' || Array.isArray(skill)) {
+            pushError(errors, path, 'must be an object.');
+            return;
+        }
+
+        if (!skill.id || typeof skill.id !== 'string') {
+            pushError(errors, `${path}.id`, 'must be a non-empty string.');
+        }
+        if (!skill.name || typeof skill.name !== 'string') {
+            pushError(errors, `${path}.name`, 'must be a non-empty string.');
+        }
+        if (!isFiniteNumber(skill.basePower)) {
+            pushError(errors, `${path}.basePower`, 'must be a number.');
+        }
+        if (!isFiniteNumber(skill.coinPower)) {
+            pushError(errors, `${path}.coinPower`, 'must be a number.');
+        }
+        if (!Number.isInteger(skill.coinCount) || skill.coinCount <= 0) {
+            pushError(errors, `${path}.coinCount`, 'must be a positive integer.');
+        }
+        if (skill.skillType != null && !SKILL_TYPES.has(skill.skillType)) {
+            pushError(errors, `${path}.skillType`, 'must be attack, evade, or counter.');
+        }
+        if (skill.damageType != null && !PHYSICAL_DAMAGE_TYPES.has(skill.damageType)) {
+            pushError(errors, `${path}.damageType`, 'must be slash, pierce, or blunt.');
+        }
+        if (skill.sinType != null && !SIN_TYPES.has(skill.sinType)) {
+            pushError(errors, `${path}.sinType`, 'must be a supported Sin affinity.');
+        }
+        if (skill.borderPath != null && typeof skill.borderPath !== 'string') {
+            pushError(errors, `${path}.borderPath`, 'must be a string when provided.');
+        }
+        if (skill.showInPlanner != null && typeof skill.showInPlanner !== 'boolean') {
+            pushError(errors, `${path}.showInPlanner`, 'must be a boolean when provided.');
+        }
+
+        if (Array.isArray(skill.effects)) {
+            skill.effects.forEach((effect, index) => {
+                validateEffect(errors, unitSkillIds, effect, `${path}.effects[${index}]`);
+            });
+        } else if (skill.effects != null) {
+            pushError(errors, `${path}.effects`, 'must be an array when provided.');
+        }
+    }
+
+    function validateUnit(errors, unit, path) {
+        if (!unit || typeof unit !== 'object' || Array.isArray(unit)) {
+            pushError(errors, path, 'must be an object.');
+            return;
+        }
+
+        if (!unit.id || typeof unit.id !== 'string') {
+            pushError(errors, `${path}.id`, 'must be a non-empty string.');
+        }
+        if (!unit.name || typeof unit.name !== 'string') {
+            pushError(errors, `${path}.name`, 'must be a non-empty string.');
+        }
+        if (!isFiniteNumber(unit.maxHp) || unit.maxHp <= 0) {
+            pushError(errors, `${path}.maxHp`, 'must be a positive number.');
+        }
+        if (!Array.isArray(unit.speedRange) || unit.speedRange.length !== 2 || !unit.speedRange.every((value) => Number.isInteger(value))) {
+            pushError(errors, `${path}.speedRange`, 'must be a two-number integer array.');
+        }
+        if (!Array.isArray(unit.skills) || !unit.skills.length) {
+            pushError(errors, `${path}.skills`, 'must contain at least one skill.');
+        }
+
+        if (unit.sprites == null || typeof unit.sprites !== 'object' || Array.isArray(unit.sprites)) {
+            pushError(errors, `${path}.sprites`, 'must be an object.');
+        } else if (!unit.sprites.idle || typeof unit.sprites.idle !== 'string') {
+            pushError(errors, `${path}.sprites.idle`, 'must be a string.');
+        }
+
+        if (unit.staggerThresholds != null) {
+            if (!Array.isArray(unit.staggerThresholds)) {
+                pushError(errors, `${path}.staggerThresholds`, 'must be an array when provided.');
+            } else {
+                unit.staggerThresholds.forEach((threshold, index) => {
+                    if (!isFiniteNumber(threshold) || threshold <= 0) {
+                        pushError(errors, `${path}.staggerThresholds[${index}]`, 'must be a positive number.');
+                    }
+                });
+            }
+        }
+
+        if (unit.resistances != null && (typeof unit.resistances !== 'object' || Array.isArray(unit.resistances))) {
+            pushError(errors, `${path}.resistances`, 'must be an object.');
+        } else {
+            const hasNestedBuckets = Boolean(unit.resistances?.physical || unit.resistances?.sin);
+            validateResistanceBucket(
+                errors,
+                path,
+                hasNestedBuckets ? 'physical' : 'physical',
+                hasNestedBuckets ? unit.resistances?.physical : unit.resistances,
+                PHYSICAL_DAMAGE_TYPES,
+            );
+            validateResistanceBucket(errors, path, 'sin', unit.resistances?.sin, SIN_TYPES);
+        }
+
+        const unitSkillIds = new Set((Array.isArray(unit.skills) ? unit.skills : []).map((skill) => skill?.id).filter(Boolean));
+        const duplicateSkillIds = (Array.isArray(unit.skills) ? unit.skills : [])
+            .map((skill) => skill?.id)
+            .filter(Boolean)
+            .filter((id, index, items) => items.indexOf(id) !== index);
+        [...new Set(duplicateSkillIds)].forEach((id) => {
+            pushError(errors, `${path}.skills`, `contains duplicate skill id "${id}".`);
+        });
+        (Array.isArray(unit.skills) ? unit.skills : []).forEach((skill, index) => {
+            validateSkill(errors, skill, `${path}.skills[${index}]`, unitSkillIds);
+        });
+    }
+
+    function validateBattleDefinition(definition) {
+        const normalizedDefinition = normalizeBattleDefinition(definition);
+        const errors = [];
+
+        if (!normalizedDefinition.id || typeof normalizedDefinition.id !== 'string') {
+            pushError(errors, 'battle.id', 'must be a non-empty string.');
+        }
+        if (!normalizedDefinition.name || typeof normalizedDefinition.name !== 'string') {
+            pushError(errors, 'battle.name', 'must be a non-empty string.');
+        }
+        if (!Array.isArray(normalizedDefinition.playerUnits) || !normalizedDefinition.playerUnits.length) {
+            pushError(errors, 'battle.playerUnits', 'must contain at least one unit.');
+        }
+        if (!Array.isArray(normalizedDefinition.enemyUnits) || !normalizedDefinition.enemyUnits.length) {
+            pushError(errors, 'battle.enemyUnits', 'must contain at least one unit.');
+        }
+
+        normalizedDefinition.playerUnits.forEach((unit, index) => validateUnit(errors, unit, `battle.playerUnits[${index}]`));
+        normalizedDefinition.enemyUnits.forEach((unit, index) => validateUnit(errors, unit, `battle.enemyUnits[${index}]`));
+
+        const allUnits = [...normalizedDefinition.playerUnits, ...normalizedDefinition.enemyUnits];
+        const duplicateUnitIds = allUnits
+            .map((unit) => unit?.id)
+            .filter(Boolean)
+            .filter((id, index, items) => items.indexOf(id) !== index);
+        [...new Set(duplicateUnitIds)].forEach((id) => {
+            pushError(errors, 'battle.units', `contains duplicate unit id "${id}".`);
+        });
+
+        return {
+            normalizedDefinition,
+            errors,
+        };
+    }
+
+    function formatBattleDefinitionErrors(errors) {
+        if (!Array.isArray(errors) || !errors.length) {
+            return 'Battle definition is invalid.';
+        }
+
+        return [
+            'Battle definition is invalid:',
+            ...errors.map((error) => `- ${error}`),
+        ].join('\n');
+    }
+
+    battleModules.normalizeBattleDefinition = normalizeBattleDefinition;
+    battleModules.validateBattleDefinition = validateBattleDefinition;
+    battleModules.formatBattleDefinitionErrors = formatBattleDefinitionErrors;
+
+    window.EchoesOfTheCityBattle = {
+        ...window.EchoesOfTheCityBattle,
+        normalizeBattleDefinition,
+        validateBattleDefinition,
+    };
+})();

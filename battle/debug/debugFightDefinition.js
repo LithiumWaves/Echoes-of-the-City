@@ -48,6 +48,8 @@
     };
 
     const debugFightDefinition = {
+        id: 'debug-fight',
+        name: 'Echoes Debug Battle',
         playerUnits: [
             {
                 id: 'vergilius',

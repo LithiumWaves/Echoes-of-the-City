@@ -12,6 +12,8 @@
             storageKeyPrefix = 'echoes-of-the-city:battle',
             engineFactory = battleModules.createBattleEngine,
             rendererFactory = battleModules.createBattleRenderer,
+            validateBattleDefinition = battleModules.validateBattleDefinition,
+            formatBattleDefinitionErrors = battleModules.formatBattleDefinitionErrors,
         } = options;
         const PLAYBACK_TIMINGS = {
             approach: 420,
@@ -28,9 +30,23 @@
             throw new Error('Battle modules are incomplete.');
         }
 
+        const validationResult = typeof validateBattleDefinition === 'function'
+            ? validateBattleDefinition(battleDefinition)
+            : { normalizedDefinition: battleDefinition, errors: [] };
+
+        if (Array.isArray(validationResult.errors) && validationResult.errors.length) {
+            throw new Error(
+                typeof formatBattleDefinitionErrors === 'function'
+                    ? formatBattleDefinitionErrors(validationResult.errors)
+                    : validationResult.errors.join('\n'),
+            );
+        }
+
+        const resolvedBattleDefinition = validationResult.normalizedDefinition || battleDefinition;
+
         const engine = engineFactory({
             clamp,
-            battleDefinition,
+            battleDefinition: resolvedBattleDefinition,
             peekRollToken: debugRollManager?.peekToken?.bind(debugRollManager),
             consumeRollToken: debugRollManager?.consumeToken?.bind(debugRollManager),
             onTurnStarted: debugRollManager?.handleTurnStarted?.bind(debugRollManager),

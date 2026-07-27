@@ -8,6 +8,7 @@
     const DRAG_THRESHOLD = 6;
     const PANEL_ASPECT_RATIO = 1640 / 4120;
     const BATTLE_SCRIPT_RELATIVE_PATHS = [
+        'battle/core/battleSchema.js',
         'battle/core/battleEngine.js',
         'battle/core/battleRenderer.js',
         'battle/core/battleHandler.js',
