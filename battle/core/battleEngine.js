@@ -926,6 +926,15 @@
         }
 
         function buildDamageContext(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical) {
+            const currentCoinIndex = attackContext?.currentCoinIndex || 0;
+            const getCoinScopedBonus = (context, field) => {
+                if (!context) {
+                    return 0;
+                }
+
+                return (context[field] || 0) + (context[`${field}ByCoin`]?.[currentCoinIndex] || 0);
+            };
+
             return {
                 attacker,
                 defender,
@@ -939,17 +948,17 @@
                 modifiers: {
                     attack: {
                         damageMultiplier: attackContext?.damageMultiplier || 1,
-                        staticDamageBonus: attackContext?.staticDamageBonus || 0,
-                        dynamicDamageBonus: attackContext?.dynamicDamageBonus || 0,
-                        clashRoundBonus: attackContext?.clashRoundBonus || 0,
-                        observationBonus: attackContext?.observationBonus || 0,
-                        additiveDamage: attackContext?.additiveDamage || 0,
-                        extraCritDamage: attackContext?.extraCritDamageByCoin?.[attackContext?.currentCoinIndex] || 0,
-                        currentCoinIndex: attackContext?.currentCoinIndex || 0,
+                        staticDamageBonus: getCoinScopedBonus(attackContext, 'staticDamageBonus'),
+                        dynamicDamageBonus: getCoinScopedBonus(attackContext, 'dynamicDamageBonus'),
+                        clashRoundBonus: getCoinScopedBonus(attackContext, 'clashRoundBonus'),
+                        observationBonus: getCoinScopedBonus(attackContext, 'observationBonus'),
+                        additiveDamage: getCoinScopedBonus(attackContext, 'additiveDamage'),
+                        criticalBonus: getCoinScopedBonus(attackContext, 'criticalBonus') + (attackContext?.extraCritDamageByCoin?.[currentCoinIndex] || 0),
+                        currentCoinIndex,
                     },
                     defense: {
-                        staticDamageBonus: defendContext?.staticDamageBonus || 0,
-                        dynamicDamageBonus: defendContext?.dynamicDamageBonus || 0,
+                        staticDamageBonus: getCoinScopedBonus(defendContext, 'staticDamageBonus'),
+                        dynamicDamageBonus: getCoinScopedBonus(defendContext, 'dynamicDamageBonus'),
                         damageReductionMultiplier: defendContext?.damageReductionMultiplier ?? 1,
                     },
                 },
@@ -968,7 +977,7 @@
             const protection = getStatusCount(defender, 'protection');
             const protectionModifier = protection > 0 ? Math.max(0, 1 - (Math.min(protection, 10) * 0.1)) : 1;
             const critDamageMultiplier = isCritical
-                ? 1.2 * (1 + damageContext.modifiers.attack.extraCritDamage)
+                ? 1.2 * (1 + damageContext.modifiers.attack.criticalBonus)
                 : 1;
             return Math.max(
                 1,
@@ -1038,11 +1047,18 @@
                 clashPowerBonus: 0,
                 damageMultiplier: 1,
                 damageReductionMultiplier: 1,
+                criticalBonus: 0,
                 staticDamageBonus: 0,
                 dynamicDamageBonus: 0,
                 clashRoundBonus: 0,
                 observationBonus: 0,
                 additiveDamage: 0,
+                criticalBonusByCoin: {},
+                staticDamageBonusByCoin: {},
+                dynamicDamageBonusByCoin: {},
+                clashRoundBonusByCoin: {},
+                observationBonusByCoin: {},
+                additiveDamageByCoin: {},
                 extraCritDamageByCoin: {},
                 critFinalPowerBonusByCoin: {},
                 followUpSkillIdOnClashLose: null,

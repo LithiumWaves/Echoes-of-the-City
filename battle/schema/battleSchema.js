@@ -13,6 +13,7 @@
         'clashPowerBonus',
         'damageMultiplier',
         'damageReductionMultiplier',
+        'criticalBonus',
         'staticDamageBonus',
         'dynamicDamageBonus',
         'clashRoundBonus',
@@ -21,6 +22,12 @@
         'forceCoinZero',
     ]);
     const COIN_MAP_FIELDS = new Set([
+        'criticalBonusByCoin',
+        'staticDamageBonusByCoin',
+        'dynamicDamageBonusByCoin',
+        'clashRoundBonusByCoin',
+        'observationBonusByCoin',
+        'additiveDamageByCoin',
         'extraCritDamageByCoin',
         'critFinalPowerBonusByCoin',
     ]);

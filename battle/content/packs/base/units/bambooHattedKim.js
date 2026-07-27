@@ -79,8 +79,8 @@
                 effects: [
                     { trigger: 'onSelect', type: 'modifyContext', field: 'coinPowerBonus', operation: 'add', value: 1, statusId: 'poise', minStatusPotency: 7 },
                     { trigger: 'onSelect', type: 'applyStatus', target: 'self', statusId: 'poise', potency: 0, count: 3 },
-                    { trigger: 'onSelect', type: 'modifyCoinMap', field: 'extraCritDamageByCoin', coinIndex: 2, value: 0.2 },
-                    { trigger: 'onSelect', type: 'modifyCoinMap', field: 'extraCritDamageByCoin', coinIndex: 3, value: 0.4 },
+                    { trigger: 'onSelect', type: 'modifyCoinMap', field: 'criticalBonusByCoin', coinIndex: 2, value: 0.2 },
+                    { trigger: 'onSelect', type: 'modifyCoinMap', field: 'criticalBonusByCoin', coinIndex: 3, value: 0.4 },
                     { trigger: 'onClashWin', type: 'applyStatus', target: 'self', statusId: 'poise', potency: 2, count: 0 },
                     { trigger: 'onHit', type: 'applyStatus', target: 'self', statusId: 'poise', potency: 4, count: 0, coinIndex: 1 },
                     { trigger: 'onHit', type: 'applyStatus', statusId: 'bleed', potency: 0, count: 3, coinIndex: 4 },
@@ -101,7 +101,7 @@
                 effects: [
                     { trigger: 'onSelect', type: 'modifyContext', field: 'dynamicDamageBonus', operation: 'addStatusPotencyScaled', statusId: 'poise', multiplier: 0.02, cap: 0.8, direction: 'subtract' },
                     { trigger: 'onSelect', type: 'modifyContext', field: 'clashPowerBonus', operation: 'addStatusPotencyScaled', statusId: 'poise', multiplier: 1, cap: 30, direction: 'subtract' },
-                    { trigger: 'onSelect', type: 'modifyCoinMap', field: 'extraCritDamageByCoin', coinIndex: 1, value: 1.5 },
+                    { trigger: 'onSelect', type: 'modifyCoinMap', field: 'criticalBonusByCoin', coinIndex: 1, value: 1.5 },
                     { trigger: 'onSelect', type: 'setFollowUpSkill', skillId: 'to-claim-their-bones' },
                     { trigger: 'onClashWin', type: 'applyStatus', target: 'self', statusId: 'poise', potency: 5, count: 0 },
                     { trigger: 'onHit', type: 'modifyPhysicalResistance', target: 'opponent', damageType: 'slash', value: 1.25, coinIndex: 1, criticalOnly: true },

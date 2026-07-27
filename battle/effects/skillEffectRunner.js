@@ -531,7 +531,7 @@
     }
 
     function effectMatchesRuntime(effect, runtime, getEffectStatusPotency) {
-        if (typeof effect.coinIndex === 'number' && effect.coinIndex !== runtime.coinIndex) {
+        if (typeof effect.coinIndex === 'number' && typeof runtime.coinIndex === 'number' && effect.coinIndex !== runtime.coinIndex) {
             return false;
         }
 

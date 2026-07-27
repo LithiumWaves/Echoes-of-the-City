@@ -44,7 +44,7 @@
                 return 0;
             }
 
-            return CRITICAL_DAMAGE_BONUS + ((attackModifiers.extraCritDamage || 0) * (1 + CRITICAL_DAMAGE_BONUS));
+            return CRITICAL_DAMAGE_BONUS + ((attackModifiers.criticalBonus || 0) * (1 + CRITICAL_DAMAGE_BONUS));
         }
 
         function calculateDamage(context) {
