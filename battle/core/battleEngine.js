@@ -1061,7 +1061,9 @@
                 unit,
                 opposingUnits: getUnitsForSide(targetBattle, getOpposingSide(unit.side)),
                 skill,
+                slot,
                 targetUnit,
+                attackContext: context,
             });
 
             return context;

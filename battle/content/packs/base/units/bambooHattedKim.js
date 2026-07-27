@@ -99,7 +99,7 @@
                 offenseLevel: 2,
                 targeting: 'highestMaxPower',
                 effects: [
-                    { trigger: 'onSelect', type: 'modifyContext', field: 'damageReductionMultiplier', operation: 'setToOneMinusStatusPotencyScaled', statusId: 'poise', multiplier: 0.02, cap: 0.8 },
+                    { trigger: 'onSelect', type: 'modifyContext', field: 'dynamicDamageBonus', operation: 'addStatusPotencyScaled', statusId: 'poise', multiplier: 0.02, cap: 0.8, direction: 'subtract' },
                     { trigger: 'onSelect', type: 'modifyContext', field: 'clashPowerBonus', operation: 'addStatusPotencyScaled', statusId: 'poise', multiplier: 1, cap: 30, direction: 'subtract' },
                     { trigger: 'onSelect', type: 'modifyCoinMap', field: 'extraCritDamageByCoin', coinIndex: 1, value: 1.5 },
                     { trigger: 'onSelect', type: 'setFollowUpSkill', skillId: 'to-claim-their-bones' },
