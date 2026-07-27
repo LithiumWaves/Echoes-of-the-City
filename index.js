@@ -8,6 +8,7 @@
     const DRAG_THRESHOLD = 6;
     const PANEL_ASPECT_RATIO = 1640 / 4120;
     const BATTLE_SCRIPT_RELATIVE_PATHS = [
+        'battle/registry/battleRegistry.js',
         'battle/schema/battleSchema.js',
         'battle/effects/skillEffectRunner.js',
         'battle/ai/enemyAi.js',

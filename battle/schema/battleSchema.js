@@ -1,26 +1,12 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
+    const registry = battleModules.registry || {};
 
     const PHYSICAL_DAMAGE_TYPES = new Set(['slash', 'pierce', 'blunt']);
     const SIN_TYPES = new Set(['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy']);
     const SKILL_TYPES = new Set(['attack', 'evade', 'counter']);
     const EFFECT_TRIGGERS = new Set(['onSelect', 'onHit', 'onClashWin', 'onClashLose', 'onAttackEnd']);
-    const EFFECT_TYPES = new Set([
-        'applyStatus',
-        'queueStatus',
-        'adjustSanity',
-        'healHp',
-        'adjustStatus',
-        'modifyContext',
-        'modifyCoinMap',
-        'setFollowUpSkill',
-        'modifyPhysicalResistance',
-        'modifySinResistance',
-        'modifyDefenseLevel',
-        'modifySpeed',
-        'retargetSlot',
-        'consumeStatus',
-    ]);
+    const EFFECT_TYPES = new Set(Object.keys(registry.effectDefinitions || {}));
     const CONTEXT_FIELDS = new Set([
         'coinPowerBonus',
         'flatPowerBonus',
@@ -34,21 +20,7 @@
     ]);
     const ENEMY_AI_SKILLS = new Set(['cycle', 'random', 'first']);
     const ENEMY_AI_TARGETS = new Set(['mirror', 'firstLiving', 'lowestHp', 'random']);
-    const PASSIVE_HOOKS = new Set([
-        'battleStart',
-        'turnStart',
-        'skillSelected',
-        'hitDealt',
-        'hitTaken',
-        'damageDealt',
-        'damageTaken',
-        'statusInflicted',
-        'statusReceived',
-        'attackEnd',
-        'turnEnd',
-        'unitDefeated',
-        'battleEnd',
-    ]);
+    const PASSIVE_HOOKS = new Set(Object.keys(registry.passiveHookLabels || {}));
     const RETARGET_SELECTORS = new Set([
         'sourceUnit',
         'targetUnit',
@@ -177,6 +149,8 @@
         case 'consumeStatus':
             if (!effect.statusId || typeof effect.statusId !== 'string') {
                 pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id.');
             }
             break;
         case 'adjustSanity':
@@ -196,6 +170,8 @@
         case 'adjustStatus':
             if (!effect.statusId || typeof effect.statusId !== 'string') {
                 pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id.');
             }
             if (effect.potencyDelta != null && !isFiniteNumber(effect.potencyDelta)) {
                 pushError(errors, `${path}.potencyDelta`, 'must be a number when provided.');

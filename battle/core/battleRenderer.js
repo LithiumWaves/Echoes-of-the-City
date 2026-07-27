@@ -1,28 +1,12 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
+    const registry = battleModules.registry || {};
 
     function createBattleRenderer(options) {
         const { mountElement, resolveAssetUrl } = options;
         const staggerOverlayPath = 'assets/statuseffects/states/stagger/stagger.png';
         const physicalDamageTypes = ['slash', 'pierce', 'blunt'];
         const sinTypes = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
-        const keywordStatusIconPaths = {
-            bleed: 'assets/statuseffects/keywordstatus/Bleed.png',
-            burn: 'assets/statuseffects/keywordstatus/Burn.png',
-            charge: 'assets/statuseffects/keywordstatus/Charge.png',
-            poise: 'assets/statuseffects/keywordstatus/Poise.png',
-            rupture: 'assets/statuseffects/keywordstatus/Rupture.png',
-            sinking: 'assets/statuseffects/keywordstatus/Sinking.png',
-            tremor: 'assets/statuseffects/keywordstatus/Tremor.png',
-        };
-        const countOnlyStatuses = new Set([
-            'protection',
-            'paralyze',
-            'plus_coin_boost',
-            'plus_coin_drop',
-            'minus_coin_boost',
-            'minus_coin_drop',
-        ]);
         const fieldPositions = {
             player: [
                 { x: 20, y: 56 },
@@ -111,33 +95,21 @@
         }
 
         function getStatusLabel(statusId) {
-            const labels = {
-                bleed: 'Bleed',
-                burn: 'Burn',
-                protection: 'Protection',
-                charge: 'Charge',
-                paralyze: 'Paralyze',
-                poise: 'Poise',
-                plus_coin_boost: 'Plus Coin Boost',
-                plus_coin_drop: 'Plus Coin Drop',
-                minus_coin_boost: 'Minus Coin Boost',
-                minus_coin_drop: 'Minus Coin Drop',
-                rupture: 'Rupture',
-                sinking: 'Sinking',
-                tremor: 'Tremor',
-                slash: 'Slash',
-                pierce: 'Pierce',
-                blunt: 'Blunt',
-                wrath: 'Wrath',
-                lust: 'Lust',
-                sloth: 'Sloth',
-                gluttony: 'Gluttony',
-                gloom: 'Gloom',
-                pride: 'Pride',
-                envy: 'Envy',
-            };
+            return typeof registry.getStatusLabel === 'function'
+                ? registry.getStatusLabel(statusId)
+                : statusId;
+        }
 
-            return labels[statusId] || statusId;
+        function isCountOnlyStatus(statusId) {
+            return typeof registry.isCountOnlyStatus === 'function'
+                ? registry.isCountOnlyStatus(statusId)
+                : false;
+        }
+
+        function getStatusIconPath(statusId) {
+            return typeof registry.getStatusIconPath === 'function'
+                ? registry.getStatusIconPath(statusId)
+                : null;
         }
 
         function getResistanceDescriptor(value) {
@@ -226,7 +198,7 @@
                     return false;
                 }
 
-                if (countOnlyStatuses.has(status.id)) {
+                if (isCountOnlyStatus(status.id)) {
                     return (status.count || 0) > 0;
                 }
 
@@ -290,7 +262,7 @@
             const intentSkill = intentSkillId ? getSkillById(unit, intentSkillId) : null;
             const nextStaggerThreshold = getNextStaggerThreshold(unit);
             const statuses = getRenderableStatuses(unit)
-                .map((status) => countOnlyStatuses.has(status.id)
+                .map((status) => isCountOnlyStatus(status.id)
                     ? `${getStatusLabel(status.id)} ${status.count}`
                     : `${getStatusLabel(status.id)} ${status.potency || 0}/${status.count || 0}`)
                 .join(', ');
@@ -321,9 +293,9 @@
                 <div class="echoes-battle-panel__field-statuses">
                     ${statuses.map((status) => {
                         const statusLabel = getStatusLabel(status.id);
-                        const iconPath = keywordStatusIconPaths[status.id];
+                        const iconPath = getStatusIconPath(status.id);
                         const iconUrl = iconPath ? resolveAssetUrl(iconPath) : '';
-                        const numberLabel = countOnlyStatuses.has(status.id)
+                        const numberLabel = isCountOnlyStatus(status.id)
                             ? `${status.count}`
                             : `${status.potency || 0}/${status.count || 0}`;
 
@@ -1089,6 +1061,24 @@
             `;
         }
 
+        function renderEffectDescriptions(effects, options = {}) {
+            if (!Array.isArray(effects) || !effects.length) {
+                return '';
+            }
+
+            return `
+                <div class="echoes-battle-panel__inspect-effects">
+                    ${effects.map((effect) => `
+                        <span>${escapeAttribute(
+                            typeof registry.describeEffect === 'function'
+                                ? registry.describeEffect(effect, options)
+                                : (effect.type || 'Effect'),
+                        )}</span>
+                    `).join('')}
+                </div>
+            `;
+        }
+
         function renderInspectOverlay(battle, uiState) {
             const inspectState = uiState?.inspect;
             if (!inspectState?.isOpen) {
@@ -1119,7 +1109,7 @@
 
             const statuses = unit
                 ? getRenderableStatuses(unit)
-                    .map((status) => countOnlyStatuses.has(status.id)
+                    .map((status) => isCountOnlyStatus(status.id)
                         ? `${getStatusLabel(status.id)} ${status.count}`
                         : `${getStatusLabel(status.id)} ${status.potency || 0}/${status.count || 0}`)
                     .join(', ')
@@ -1133,6 +1123,11 @@
                     <div class="echoes-battle-panel__inspect-skill">
                         <strong>${passive.name}</strong>
                         <span>${passive.description || 'Passive'}</span>
+                        ${passive.hooks && typeof passive.hooks === 'object'
+                            ? Object.entries(passive.hooks).map(([hookName, hookDefinition]) => Array.isArray(hookDefinition)
+                                ? renderEffectDescriptions(hookDefinition, { hookName })
+                                : '').join('')
+                            : ''}
                     </div>
                 `).join('')
                 : '';
@@ -1141,6 +1136,7 @@
                     <div class="echoes-battle-panel__inspect-skill">
                         <strong>${skill.name}</strong>
                         <span>${getSkillDamageProfileLabel(skill)} | ${getSkillPowerLabel(skill)}</span>
+                        ${renderEffectDescriptions(skill.effects, { includeTrigger: true })}
                     </div>
                 `).join('')
                 : '';

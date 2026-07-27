@@ -2050,6 +2050,17 @@
     color: rgba(255, 220, 183, 0.78);
 }
 
+.echoes-battle-panel__inspect-effects {
+    display: grid;
+    gap: 0.16rem;
+    margin-top: 0.16rem;
+}
+
+.echoes-battle-panel__inspect-effects span {
+    font: 0.6rem/1.4 "Segoe UI", Tahoma, sans-serif;
+    color: rgba(255, 214, 176, 0.72);
+}
+
 .echoes-battle-panel__planner-skill {
     position: relative;
     flex: 0 0 4.75rem;

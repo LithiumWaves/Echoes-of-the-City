@@ -1,14 +1,7 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
+    const registry = battleModules.registry || {};
 
-    const COUNT_ONLY_STATUS_IDS = new Set([
-        'protection',
-        'paralyze',
-        'plus_coin_boost',
-        'plus_coin_drop',
-        'minus_coin_boost',
-        'minus_coin_drop',
-    ]);
     const PHYSICAL_DAMAGE_TYPES = ['slash', 'pierce', 'blunt'];
     const SIN_TYPES = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
 
@@ -315,7 +308,15 @@
         }
 
         function isCountOnlyStatus(statusId) {
-            return COUNT_ONLY_STATUS_IDS.has(statusId);
+            return typeof registry.isCountOnlyStatus === 'function'
+                ? registry.isCountOnlyStatus(statusId)
+                : false;
+        }
+
+        function getStatusLabel(statusId) {
+            return typeof registry.getStatusLabel === 'function'
+                ? registry.getStatusLabel(statusId)
+                : statusId;
         }
 
         function getStatus(unit, statusId) {
@@ -386,15 +387,15 @@
             }
             if (type === 'status_applied') {
                 if (isCountOnlyStatus(data.statusId)) {
-                    return `${data.unitName} gains ${data.statusId} ${data.count}.`;
+                    return `${data.unitName} gains ${getStatusLabel(data.statusId)} ${data.count}.`;
                 }
-                return `${data.unitName} gains ${data.statusId} ${data.potency}/${data.count}.`;
+                return `${data.unitName} gains ${getStatusLabel(data.statusId)} ${data.potency}/${data.count}.`;
             }
             if (type === 'status_changed') {
                 if (isCountOnlyStatus(data.statusId)) {
-                    return `${data.unitName} ${data.statusId} ${data.previousCount} -> ${data.nextCount}.`;
+                    return `${data.unitName} ${getStatusLabel(data.statusId)} ${data.previousCount} -> ${data.nextCount}.`;
                 }
-                return `${data.unitName} ${data.statusId} ${data.previousPotency}/${data.previousCount} -> ${data.nextPotency}/${data.nextCount}.`;
+                return `${data.unitName} ${getStatusLabel(data.statusId)} ${data.previousPotency}/${data.previousCount} -> ${data.nextPotency}/${data.nextCount}.`;
             }
             if (type === 'status_triggered') {
                 if (data.statusId === 'burn' || data.statusId === 'rupture') {
@@ -409,7 +410,7 @@
                 if (data.statusId === 'evade') {
                     return `${data.unitName} evades ${data.attackerName}'s Coin ${data.index} (${data.evadePower} vs ${data.attackPower}).`;
                 }
-                return `${data.unitName} is affected by ${data.statusId}.`;
+                return `${data.unitName} is affected by ${getStatusLabel(data.statusId)}.`;
             }
             if (type === 'unit_staggered') {
                 return `${data.unitName} is staggered at Threshold ${data.threshold} HP.`;
@@ -418,7 +419,7 @@
                 return `${data.unitName} recovers from Stagger.`;
             }
             if (type === 'status_expired') {
-                return `${data.unitName} ${data.statusId} expired.`;
+                return `${data.unitName} ${getStatusLabel(data.statusId)} expired.`;
             }
             if (type === 'hp_healed') {
                 return `${data.unitName} recovers ${data.amount} HP (${data.previousHp} -> ${data.nextHp}).`;
