@@ -14,6 +14,7 @@
         'battle/ai/enemyAi.js',
         'battle/validation/battleValidation.js',
         'battle/content/battleContentRegistry.js',
+        'battle/content/statuses/burn.js',
         'battle/content/units/vergilius.js',
         'battle/content/units/bambooHattedKim.js',
         'battle/content/units/ringNursefatherCallisto.js',

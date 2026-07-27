@@ -1,6 +1,23 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
 
+    function cloneRegistryValue(value) {
+        if (Array.isArray(value)) {
+            return value.map((entry) => cloneRegistryValue(entry));
+        }
+
+        if (!value || typeof value !== 'object') {
+            return value;
+        }
+
+        return Object.fromEntries(
+            Object.entries(value).map(([key, entry]) => [
+                key,
+                typeof entry === 'function' ? entry : cloneRegistryValue(entry),
+            ]),
+        );
+    }
+
     const statusDefinitions = {
         bleed: { id: 'bleed', label: 'Bleed', iconPath: 'assets/statuseffects/keywordstatus/Bleed.png' },
         burn: { id: 'burn', label: 'Burn', iconPath: 'assets/statuseffects/keywordstatus/Burn.png' },
@@ -65,6 +82,7 @@
     const effectDefinitions = {
         applyStatus: { id: 'applyStatus', label: 'Apply Status' },
         queueStatus: { id: 'queueStatus', label: 'Queue Status' },
+        dealFixedDamage: { id: 'dealFixedDamage', label: 'Deal Fixed Damage' },
         adjustSanity: { id: 'adjustSanity', label: 'Adjust Sanity' },
         healHp: { id: 'healHp', label: 'Heal HP' },
         adjustStatus: { id: 'adjustStatus', label: 'Adjust Status' },
@@ -79,12 +97,56 @@
         consumeStatus: { id: 'consumeStatus', label: 'Consume Status' },
     };
 
+    function getStatusDefinitionValidator() {
+        return battleModules.validation?.validateStatusDefinition
+            || battleModules.validateStatusDefinition
+            || null;
+    }
+
     function getStatusDefinition(statusId) {
-        return statusDefinitions[statusId] || null;
+        const definition = statusDefinitions[statusId] || null;
+        return definition ? cloneRegistryValue(definition) : null;
+    }
+
+    function registerStatusDefinition(definition, options = {}) {
+        const validator = getStatusDefinitionValidator();
+        const { normalizedDefinition, errors, message } = typeof validator === 'function'
+            ? validator(definition)
+            : { normalizedDefinition: definition, errors: [], message: null };
+
+        if (Array.isArray(errors) && errors.length) {
+            throw new Error(message || 'Status definition is invalid.');
+        }
+
+        const registeredDefinition = normalizedDefinition || definition;
+        const definitionId = registeredDefinition?.id;
+        if (!definitionId || typeof definitionId !== 'string') {
+            throw new Error('Registered status definitions must have an id.');
+        }
+
+        statusDefinitions[definitionId] = cloneRegistryValue(registeredDefinition);
+
+        const aliases = Array.isArray(options.aliases) ? options.aliases : [];
+        aliases
+            .filter((alias) => typeof alias === 'string' && alias)
+            .forEach((alias) => {
+                statusDefinitions[alias] = statusDefinitions[definitionId];
+            });
+
+        return getStatusDefinition(definitionId);
+    }
+
+    function listStatusDefinitions() {
+        return Object.entries(statusDefinitions).map(([key, definition]) => ({
+            key,
+            id: definition?.id || null,
+            label: definition?.label || definition?.name || key,
+        }));
     }
 
     function getStatusLabel(statusId) {
-        return getStatusDefinition(statusId)?.label || affinityLabels[statusId] || statusId;
+        const definition = getStatusDefinition(statusId);
+        return definition?.label || definition?.name || affinityLabels[statusId] || statusId;
     }
 
     function getStatusIconPath(statusId) {
@@ -145,6 +207,14 @@
             return `Apply ${formatStatusPayload(effect)} to ${effect.target || 'opponent'}.`;
         case 'queueStatus':
             return `Queue ${formatStatusPayload(effect)} on ${effect.target || 'opponent'} next turn.`;
+        case 'dealFixedDamage':
+            if (typeof effect.amount === 'number') {
+                return `Deal ${effect.amount} fixed damage to ${effect.target || 'opponent'}.`;
+            }
+            if (effect.amount?.statusPotency?.statusId) {
+                return `Deal fixed damage to ${effect.target || 'opponent'} equal to ${getStatusLabel(effect.amount.statusPotency.statusId)} potency.`;
+            }
+            return `Deal fixed damage to ${effect.target || 'opponent'}.`;
         case 'adjustSanity':
             return `Adjust ${effect.target || 'opponent'} SP by ${formatSignedNumber(effect.value || 0)}.`;
         case 'healHp':
@@ -187,6 +257,8 @@
         statusDefinitions,
         effectDefinitions,
         passiveHookLabels,
+        registerStatusDefinition,
+        listStatusDefinitions,
         getStatusDefinition,
         getStatusLabel,
         getStatusIconPath,

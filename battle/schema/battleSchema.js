@@ -81,6 +81,36 @@
         return typeof value === 'number' && Number.isFinite(value);
     }
 
+    function validateAmountDefinition(errors, amount, path) {
+        if (isFiniteNumber(amount)) {
+            return;
+        }
+
+        if (!amount || typeof amount !== 'object' || Array.isArray(amount)) {
+            pushError(errors, path, 'must be a number or amount definition object.');
+            return;
+        }
+
+        if (amount.statusPotency) {
+            const statusPotency = amount.statusPotency;
+            if (typeof statusPotency !== 'object' || Array.isArray(statusPotency)) {
+                pushError(errors, `${path}.statusPotency`, 'must be an object.');
+                return;
+            }
+            if (!statusPotency.statusId || typeof statusPotency.statusId !== 'string') {
+                pushError(errors, `${path}.statusPotency.statusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(statusPotency.statusId)) {
+                pushError(errors, `${path}.statusPotency.statusId`, 'must reference a supported status id.');
+            }
+            if (statusPotency.target != null && !['self', 'opponent'].includes(statusPotency.target)) {
+                pushError(errors, `${path}.statusPotency.target`, 'must be "self" or "opponent" when provided.');
+            }
+            return;
+        }
+
+        pushError(errors, path, 'must contain a supported amount definition.');
+    }
+
     function validateResistanceBucket(errors, unitPath, bucket, source, allowedKeys) {
         if (source == null) {
             return;
@@ -151,6 +181,14 @@
                 pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
             } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
                 pushError(errors, `${path}.statusId`, 'must reference a supported status id.');
+            }
+            break;
+        case 'dealFixedDamage':
+            validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            if (effect.statusId != null && typeof effect.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a string when provided.');
+            } else if (typeof effect.statusId === 'string' && typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id when provided.');
             }
             break;
         case 'adjustSanity':
@@ -425,6 +463,110 @@
         });
     }
 
+    function validateStatusDefinition(definition) {
+        const normalizedDefinition = cloneDefinition(definition || {});
+        const errors = [];
+        const path = 'status';
+
+        if (!normalizedDefinition.id || typeof normalizedDefinition.id !== 'string') {
+            pushError(errors, `${path}.id`, 'must be a non-empty string.');
+        }
+        if (!normalizedDefinition.label && !normalizedDefinition.name) {
+            pushError(errors, `${path}.label`, 'must provide label or name.');
+        }
+        if (normalizedDefinition.label != null && typeof normalizedDefinition.label !== 'string') {
+            pushError(errors, `${path}.label`, 'must be a string when provided.');
+        }
+        if (normalizedDefinition.name != null && typeof normalizedDefinition.name !== 'string') {
+            pushError(errors, `${path}.name`, 'must be a string when provided.');
+        }
+        if (normalizedDefinition.description != null && typeof normalizedDefinition.description !== 'string') {
+            pushError(errors, `${path}.description`, 'must be a string when provided.');
+        }
+        if (normalizedDefinition.iconPath != null && typeof normalizedDefinition.iconPath !== 'string') {
+            pushError(errors, `${path}.iconPath`, 'must be a string when provided.');
+        }
+        if (normalizedDefinition.countOnly != null && typeof normalizedDefinition.countOnly !== 'boolean') {
+            pushError(errors, `${path}.countOnly`, 'must be a boolean when provided.');
+        }
+
+        const stackModel = normalizedDefinition.stackModel;
+        if (stackModel != null) {
+            if (typeof stackModel !== 'object' || Array.isArray(stackModel)) {
+                pushError(errors, `${path}.stackModel`, 'must be an object when provided.');
+            } else {
+                ['potency', 'count'].forEach((bucket) => {
+                    if (stackModel[bucket] == null) {
+                        return;
+                    }
+
+                    if (typeof stackModel[bucket] !== 'object' || Array.isArray(stackModel[bucket])) {
+                        pushError(errors, `${path}.stackModel.${bucket}`, 'must be an object.');
+                        return;
+                    }
+
+                    const bucketDefinition = stackModel[bucket];
+                    if (bucketDefinition.enabled != null && typeof bucketDefinition.enabled !== 'boolean') {
+                        pushError(errors, `${path}.stackModel.${bucket}.enabled`, 'must be a boolean when provided.');
+                    }
+                    if (bucketDefinition.min != null && (!isFiniteNumber(bucketDefinition.min) || bucketDefinition.min < 0)) {
+                        pushError(errors, `${path}.stackModel.${bucket}.min`, 'must be a non-negative number when provided.');
+                    }
+                    if (bucketDefinition.max != null && (!isFiniteNumber(bucketDefinition.max) || bucketDefinition.max < 0)) {
+                        pushError(errors, `${path}.stackModel.${bucket}.max`, 'must be a non-negative number when provided.');
+                    }
+                    if (bucketDefinition.application != null && !['add', 'set'].includes(bucketDefinition.application)) {
+                        pushError(errors, `${path}.stackModel.${bucket}.application`, 'must be "add" or "set" when provided.');
+                    }
+                });
+
+                if (stackModel.expireWhen != null) {
+                    if (typeof stackModel.expireWhen !== 'object' || Array.isArray(stackModel.expireWhen)) {
+                        pushError(errors, `${path}.stackModel.expireWhen`, 'must be an object when provided.');
+                    } else {
+                        if (stackModel.expireWhen.countLte != null && !isFiniteNumber(stackModel.expireWhen.countLte)) {
+                            pushError(errors, `${path}.stackModel.expireWhen.countLte`, 'must be a number when provided.');
+                        }
+                        if (stackModel.expireWhen.potencyLte != null && !isFiniteNumber(stackModel.expireWhen.potencyLte)) {
+                            pushError(errors, `${path}.stackModel.expireWhen.potencyLte`, 'must be a number when provided.');
+                        }
+                    }
+                }
+            }
+        }
+
+        if (normalizedDefinition.hooks != null) {
+            if (typeof normalizedDefinition.hooks !== 'object' || Array.isArray(normalizedDefinition.hooks)) {
+                pushError(errors, `${path}.hooks`, 'must be an object when provided.');
+            } else {
+                Object.entries(normalizedDefinition.hooks).forEach(([hookName, hookDefinition]) => {
+                    if (!PASSIVE_HOOKS.has(hookName)) {
+                        pushError(errors, `${path}.hooks.${hookName}`, 'is not a supported status hook.');
+                        return;
+                    }
+
+                    if (!Array.isArray(hookDefinition)) {
+                        pushError(errors, `${path}.hooks.${hookName}`, 'must be an array of effect definitions.');
+                        return;
+                    }
+
+                    hookDefinition.forEach((effect, index) => {
+                        validateEffect(errors, new Set(), effect, `${path}.hooks.${hookName}[${index}]`, { requireTrigger: false });
+                    });
+                });
+            }
+        }
+
+        if (!normalizedDefinition.label && typeof normalizedDefinition.name === 'string') {
+            normalizedDefinition.label = normalizedDefinition.name;
+        }
+
+        return {
+            normalizedDefinition,
+            errors,
+        };
+    }
+
     function validateBattleDefinition(definition) {
         const normalizedDefinition = normalizeBattleDefinition(definition);
         const errors = [];
@@ -509,11 +651,13 @@
     battleModules.schema.normalizeBattleDefinition = normalizeBattleDefinition;
     battleModules.schema.validateBattleDefinition = validateBattleDefinition;
     battleModules.schema.validateUnitDefinition = validateUnitDefinition;
+    battleModules.schema.validateStatusDefinition = validateStatusDefinition;
     battleModules.schema.formatBattleDefinitionErrors = formatBattleDefinitionErrors;
 
     battleModules.normalizeBattleDefinition = normalizeBattleDefinition;
     battleModules.validateBattleDefinition = validateBattleDefinition;
     battleModules.validateUnitDefinition = validateUnitDefinition;
+    battleModules.validateStatusDefinition = validateStatusDefinition;
     battleModules.formatBattleDefinitionErrors = formatBattleDefinitionErrors;
 
     window.EchoesOfTheCityBattle = {
@@ -521,5 +665,6 @@
         normalizeBattleDefinition,
         validateBattleDefinition,
         validateUnitDefinition,
+        validateStatusDefinition,
     };
 })();

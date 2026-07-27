@@ -151,6 +151,7 @@
                     removeStatus,
                     applyStatus,
                     queueStatusForNextTurn,
+                    applyFixedDamage,
                     adjustSanity,
                     emitEvent,
                     invokeHooks,
@@ -311,6 +312,55 @@
             return typeof registry.isCountOnlyStatus === 'function'
                 ? registry.isCountOnlyStatus(statusId)
                 : false;
+        }
+
+        function getStatusDefinition(statusId) {
+            return typeof registry.getStatusDefinition === 'function'
+                ? registry.getStatusDefinition(statusId)
+                : null;
+        }
+
+        function cloneStatusStackModel(stackModel) {
+            if (!stackModel || typeof stackModel !== 'object' || Array.isArray(stackModel)) {
+                return null;
+            }
+
+            return {
+                ...stackModel,
+                potency: stackModel.potency ? { ...stackModel.potency } : undefined,
+                count: stackModel.count ? { ...stackModel.count } : undefined,
+                expireWhen: stackModel.expireWhen ? { ...stackModel.expireWhen } : undefined,
+            };
+        }
+
+        function getStatusPotencyCap(statusId) {
+            const maxPotency = getStatusDefinition(statusId)?.stackModel?.potency?.max;
+            return isFinite(maxPotency) ? maxPotency : 99;
+        }
+
+        function getStatusCountCap(statusId) {
+            const maxCount = getStatusDefinition(statusId)?.stackModel?.count?.max;
+            if (isFinite(maxCount)) {
+                return maxCount;
+            }
+
+            return statusId === 'protection' ? 10 : 99;
+        }
+
+        function shouldExpireStatus(status) {
+            if (!status) {
+                return false;
+            }
+
+            const expireWhen = status.stackModel?.expireWhen;
+            if (typeof expireWhen?.countLte === 'number' && (status.count || 0) <= expireWhen.countLte) {
+                return true;
+            }
+            if (typeof expireWhen?.potencyLte === 'number' && (status.potency || 0) <= expireWhen.potencyLte) {
+                return true;
+            }
+
+            return (status.count || 0) <= 0;
         }
 
         function getStatusLabel(statusId) {
@@ -480,13 +530,14 @@
         function applyStatus(targetBattle, unit, statusId, payload) {
             const potencyDelta = typeof payload?.potency === 'number' ? payload.potency : 0;
             const countDelta = typeof payload?.count === 'number' ? payload.count : 0;
-            const maxCount = statusId === 'protection' ? 10 : 99;
+            const statusDefinition = getStatusDefinition(statusId);
+            const maxCount = getStatusCountCap(statusId);
             const existing = getStatus(unit, statusId);
             const previousPotency = existing?.potency || 0;
             const previousCount = existing?.count || 0;
             const nextPotency = isCountOnlyStatus(statusId)
                 ? 0
-                : clampStatusValue(previousPotency + potencyDelta, 99);
+                : clampStatusValue(previousPotency + potencyDelta, getStatusPotencyCap(statusId));
             const nextCount = clampStatusValue(previousCount + countDelta, maxCount);
 
             if (!existing) {
@@ -494,6 +545,8 @@
                     id: statusId,
                     potency: nextPotency,
                     count: nextCount,
+                    hooks: cloneHookMap(statusDefinition?.hooks),
+                    stackModel: cloneStatusStackModel(statusDefinition?.stackModel),
                 };
                 unit.statuses.push(status);
                 emitEvent(targetBattle, 'status_applied', {
@@ -508,6 +561,12 @@
 
             existing.potency = nextPotency;
             existing.count = nextCount;
+            if (!existing.hooks && statusDefinition?.hooks) {
+                existing.hooks = cloneHookMap(statusDefinition.hooks);
+            }
+            if (!existing.stackModel && statusDefinition?.stackModel) {
+                existing.stackModel = cloneStatusStackModel(statusDefinition.stackModel);
+            }
             emitEvent(targetBattle, 'status_changed', {
                 unitId: unit.id,
                 unitName: unit.name,
@@ -527,7 +586,7 @@
             }
 
             const previousCount = existing.count || 0;
-            existing.count = clampStatusValue(nextCount, statusId === 'protection' ? 10 : 99);
+            existing.count = clampStatusValue(nextCount, getStatusCountCap(statusId));
             emitEvent(targetBattle, 'status_changed', {
                 unitId: unit.id,
                 unitName: unit.name,
@@ -537,7 +596,7 @@
                 nextPotency: existing.potency || 0,
                 nextCount: existing.count,
             });
-            if (existing.count <= 0) {
+            if (shouldExpireStatus(existing)) {
                 removeStatus(unit, statusId);
                 emitEvent(targetBattle, 'status_expired', {
                     unitId: unit.id,
@@ -619,7 +678,7 @@
 
         function processBurnAtTurnEnd(targetBattle, unit) {
             const burn = getStatus(unit, 'burn');
-            if (!burn || burn.count <= 0 || burn.potency <= 0 || unit.hp <= 0) {
+            if (!burn || burn.hooks?.turnEnd || burn.count <= 0 || burn.potency <= 0 || unit.hp <= 0) {
                 return;
             }
 
@@ -893,6 +952,7 @@
                 getStatus,
                 removeStatus,
                 applyStatus,
+                applyFixedDamage,
                 queueStatusForNextTurn,
                 adjustSanity,
                 emitEvent,
@@ -2357,7 +2417,7 @@
                 return false;
             }
 
-            unit.statuses.push(status);
+            applyStatus(battle, unit, status.id, status);
             return true;
         }
 

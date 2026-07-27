@@ -7,6 +7,7 @@
             getStatus,
             removeStatus,
             applyStatus,
+            applyFixedDamage,
             queueStatusForNextTurn,
             adjustSanity,
             emitEvent,
@@ -66,6 +67,47 @@
             return getStatusPotency(targetUnit, effect.statusId);
         }
 
+        function resolveEffectAmount(runtime, effect) {
+            if (typeof effect.amount === 'number') {
+                return effect.amount;
+            }
+
+            const amountDefinition = effect.amount;
+            if (amountDefinition?.statusPotency) {
+                const statusSource = amountDefinition.statusPotency;
+                const targetUnit = getEffectTargetUnit(runtime, statusSource.target || 'self');
+                if (!targetUnit || !statusSource.statusId || typeof getStatusPotency !== 'function') {
+                    return 0;
+                }
+
+                return getStatusPotency(targetUnit, statusSource.statusId);
+            }
+
+            if (typeof effect.value === 'number') {
+                return effect.value;
+            }
+
+            return 0;
+        }
+
+        function shouldExpireStatus(status, statusId) {
+            if (!status) {
+                return false;
+            }
+
+            const expireWhen = status.stackModel?.expireWhen;
+            if (typeof expireWhen?.countLte === 'number' && (status.count || 0) <= expireWhen.countLte) {
+                return true;
+            }
+            if (typeof expireWhen?.potencyLte === 'number' && (status.potency || 0) <= expireWhen.potencyLte) {
+                return true;
+            }
+
+            return typeof isCountOnlyStatus === 'function' && isCountOnlyStatus(statusId)
+                ? (status.count || 0) <= 0
+                : (status.count || 0) <= 0 && (status.potency || 0) <= 0;
+        }
+
         function adjustUnitStatus(targetBattle, unit, effect) {
             if (!unit || !effect.statusId || typeof getStatus !== 'function' || typeof removeStatus !== 'function') {
                 return;
@@ -112,7 +154,7 @@
                 });
             }
 
-            if (nextCount <= 0 && nextPotency <= 0) {
+            if (shouldExpireStatus(existing, effect.statusId)) {
                 removeStatus(unit, effect.statusId);
                 if (typeof emitEvent === 'function') {
                     emitEvent(targetBattle, 'status_expired', {
@@ -327,6 +369,12 @@
                         potency: effect.potency,
                         count: effect.count,
                     });
+                    return;
+                case 'dealFixedDamage':
+                    if (!targetUnit || typeof applyFixedDamage !== 'function') {
+                        return;
+                    }
+                    applyFixedDamage(targetBattle, targetUnit, effect.statusId || 'effect', resolveEffectAmount(runtime, effect));
                     return;
                 case 'adjustSanity':
                     if (!targetUnit || typeof adjustSanity !== 'function') {
