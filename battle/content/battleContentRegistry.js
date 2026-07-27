@@ -66,7 +66,7 @@
                 battleDefinitions[alias] = registeredDefinition;
             });
 
-        if (options.setAsDefault || !battleModules.defaultBattleDefinition) {
+        if (options.setAsDefault) {
             battleModules.defaultBattleDefinition = registeredDefinition;
         }
 
@@ -116,6 +116,12 @@
 
         const definition = unitDefinitions[definitionId] || null;
         return definition ? cloneContentValue(definition) : null;
+    }
+
+    function getDefaultBattleDefinition() {
+        return battleModules.defaultBattleDefinition
+            ? cloneContentValue(battleModules.defaultBattleDefinition)
+            : null;
     }
 
     function listBattleDefinitions() {
@@ -180,6 +186,7 @@
         resolveBattleDefinitionComposition,
         registerBattleDefinition,
         getBattleDefinition,
+        getDefaultBattleDefinition,
         listBattleDefinitions,
     };
 
@@ -191,6 +198,7 @@
         resolveBattleDefinitionComposition,
         registerBattleDefinition,
         getBattleDefinition,
+        getDefaultBattleDefinition,
         listBattleDefinitions,
     };
 })();

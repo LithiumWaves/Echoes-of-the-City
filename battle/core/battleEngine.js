@@ -490,7 +490,7 @@
                 if (data.winner === 'draw') {
                     return 'Battle ends in a draw.';
                 }
-                return `${data.winnerName} wins the debug fight.`;
+                return `${data.winnerName} wins the battle.`;
             }
 
             return null;

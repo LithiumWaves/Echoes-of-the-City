@@ -17,5 +17,4 @@
     battleDefinitions.debugFight = debugFightDefinition;
     battleDefinitions[debugFightDefinition.id] = debugFightDefinition;
     battleModules.debugFightTemplate = debugFightDefinition;
-    battleModules.defaultBattleDefinition = battleModules.defaultBattleDefinition || debugFightDefinition;
 })();

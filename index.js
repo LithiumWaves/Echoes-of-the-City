@@ -7,7 +7,7 @@
     const PANEL_GAP = 24;
     const DRAG_THRESHOLD = 6;
     const PANEL_ASPECT_RATIO = 1640 / 4120;
-    const BATTLE_SCRIPT_RELATIVE_PATHS = [
+    const BATTLE_CORE_SCRIPT_RELATIVE_PATHS = [
         'battle/registry/battleRegistry.js',
         'battle/schema/battleSchema.js',
         'battle/effects/skillEffectRunner.js',
@@ -29,6 +29,8 @@
         'battle/core/battleRenderer.js',
         'battle/core/battleHandler.js',
         'battle/content/definitions/debugFight.js',
+    ];
+    const BATTLE_DEBUG_SCRIPT_RELATIVE_PATHS = [
         'battle/debug/debugRollManager.js',
         'battle/debug/debugBattleController.js',
     ];
@@ -43,7 +45,11 @@
         isOpen: false,
         activeScreen: 'main-menu',
         battleHandler: null,
-        battleModulePromise: null,
+        battleCoreModulePromise: null,
+        battleDebugModulePromise: null,
+        battleSelectionPromise: null,
+        availableBattles: [],
+        selectedBattleId: null,
         audioEnabled: false,
         audioUnlocked: false,
         audioUnlockPromise: null,
@@ -83,14 +89,14 @@
             : null;
     const audioBuffers = new Map();
 
-    async function ensureBattleModuleLoaded() {
-        if (window.EchoesOfTheCityBattle?.createBattleHandler) {
+    async function loadBattleScriptGroup(relativePaths, stateKey, readyCheck, missingMessage) {
+        if (readyCheck()) {
             return;
         }
 
-        if (!state.battleModulePromise) {
-            state.battleModulePromise = (async () => {
-                for (const relativePath of BATTLE_SCRIPT_RELATIVE_PATHS) {
+        if (!state[stateKey]) {
+            state[stateKey] = (async () => {
+                for (const relativePath of relativePaths) {
                     const scriptUrl = resolveExtensionUrl(relativePath);
                     const response = await fetch(scriptUrl);
                     if (!response.ok) {
@@ -105,16 +111,35 @@
                     }
                 }
 
-                if (!window.EchoesOfTheCityBattle?.createBattleHandler) {
-                    throw new Error('Battle module did not expose a battle handler factory.');
+                if (!readyCheck()) {
+                    throw new Error(missingMessage);
                 }
             })().catch((error) => {
-                state.battleModulePromise = null;
+                state[stateKey] = null;
                 throw error;
             });
         }
 
-        await state.battleModulePromise;
+        await state[stateKey];
+    }
+
+    async function ensureBattleModuleLoaded() {
+        await loadBattleScriptGroup(
+            BATTLE_CORE_SCRIPT_RELATIVE_PATHS,
+            'battleCoreModulePromise',
+            () => Boolean(window.EchoesOfTheCityBattle?.createBattleHandler),
+            'Battle module did not expose a battle handler factory.',
+        );
+    }
+
+    async function ensureDebugBattleModuleLoaded() {
+        await ensureBattleModuleLoaded();
+        await loadBattleScriptGroup(
+            BATTLE_DEBUG_SCRIPT_RELATIVE_PATHS,
+            'battleDebugModulePromise',
+            () => Boolean(window.EchoesOfTheCityBattle?.createDebugBattleController),
+            'Debug battle module did not expose a debug battle controller factory.',
+        );
     }
 
     function formatCombatModuleError(error) {
@@ -129,6 +154,87 @@
         return error.stack || error.message || String(error);
     }
 
+    function isDebugBattleId(battleId) {
+        return battleId === 'debug-fight' || battleId === 'debugFight';
+    }
+
+    function getBattleContentApi() {
+        return window.EchoesOfTheCityBattle || {};
+    }
+
+    function getAvailableBattleDefinitions() {
+        const api = getBattleContentApi();
+        const listedBattles = typeof api.listBattleDefinitions === 'function'
+            ? api.listBattleDefinitions()
+            : [];
+        const uniqueBattles = [];
+        const seenIds = new Set();
+
+        listedBattles.forEach((entry) => {
+            if (!entry?.id || seenIds.has(entry.id)) {
+                return;
+            }
+
+            seenIds.add(entry.id);
+            uniqueBattles.push({
+                id: entry.id,
+                name: entry.name || entry.id,
+                isDebug: isDebugBattleId(entry.id),
+                description: typeof api.getBattleDefinition === 'function'
+                    ? api.getBattleDefinition(entry.id)?.description || ''
+                    : '',
+            });
+        });
+
+        uniqueBattles.sort((left, right) => {
+            if (left.isDebug !== right.isDebug) {
+                return left.isDebug ? 1 : -1;
+            }
+
+            return left.name.localeCompare(right.name);
+        });
+
+        return uniqueBattles;
+    }
+
+    function refreshBattleSelectionState() {
+        const api = getBattleContentApi();
+        const availableBattles = getAvailableBattleDefinitions();
+        const defaultBattleId = typeof api.getDefaultBattleDefinition === 'function'
+            ? api.getDefaultBattleDefinition()?.id || null
+            : null;
+        const preferredBattleId = defaultBattleId
+            || availableBattles.find((battle) => !battle.isDebug)?.id
+            || availableBattles[0]?.id
+            || null;
+
+        state.availableBattles = availableBattles;
+
+        if (!state.selectedBattleId || !availableBattles.some((battle) => battle.id === state.selectedBattleId)) {
+            state.selectedBattleId = preferredBattleId;
+        }
+    }
+
+    async function prepareBattleSelection() {
+        if (state.battleSelectionPromise) {
+            return state.battleSelectionPromise;
+        }
+
+        state.battleSelectionPromise = (async () => {
+            await ensureBattleModuleLoaded();
+            refreshBattleSelectionState();
+        })().catch((error) => {
+            state.battleSelectionPromise = null;
+            throw error;
+        });
+
+        try {
+            await state.battleSelectionPromise;
+        } finally {
+            state.battleSelectionPromise = null;
+        }
+    }
+
     function renderBattleStartScreen() {
         if (!elements.combatContent) {
             return;
@@ -139,41 +245,111 @@
             return;
         }
 
+        if (!state.availableBattles.length) {
+            if (!state.battleSelectionPromise) {
+                void prepareBattleSelection()
+                    .then(() => {
+                        if (!state.battleHandler) {
+                            renderBattleStartScreen();
+                        }
+                    })
+                    .catch((error) => {
+                        console.error(`${EXTENSION_ID}: battle selection initialization failed.`, error);
+                        renderCombatLoadError(error);
+                    });
+            }
+
+            elements.combatContent.innerHTML = `
+                <div class="echoes-battle-panel__combat-debug">
+                    <div class="echoes-battle-panel__combat-toolbar">
+                        <div class="echoes-battle-panel__combat-pills">
+                            <span class="echoes-battle-panel__combat-pill">Battle Simulator</span>
+                        </div>
+                    </div>
+                    <div class="echoes-battle-panel__planner-empty">
+                        Loading registered battle definitions...
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        const selectedBattle = state.availableBattles.find((battle) => battle.id === state.selectedBattleId) || state.availableBattles[0];
+        const selectionMarkup = state.availableBattles
+            .map((battle) => `
+                <button
+                    class="echoes-battle-panel__combat-button"
+                    type="button"
+                    data-action="select-battle"
+                    data-battle-id="${escapeHtml(battle.id)}"
+                    style="justify-content: space-between; ${battle.id === selectedBattle?.id ? 'outline: 2px solid rgba(255,255,255,0.55);' : ''}"
+                >
+                    <span>${escapeHtml(battle.name)}</span>
+                    ${battle.isDebug ? '<span class="echoes-battle-panel__combat-pill">Debug</span>' : ''}
+                </button>
+            `)
+            .join('');
+
         elements.combatContent.innerHTML = `
             <div class="echoes-battle-panel__combat-debug">
                 <div class="echoes-battle-panel__combat-toolbar">
                     <div class="echoes-battle-panel__combat-pills">
-                        <span class="echoes-battle-panel__combat-pill">Debug Battle</span>
+                        <span class="echoes-battle-panel__combat-pill">Battle Simulator</span>
+                        ${selectedBattle?.isDebug ? '<span class="echoes-battle-panel__combat-pill">Debug Tools Available</span>' : ''}
                     </div>
                 </div>
-                <div class="echoes-battle-panel__planner-empty">
-                    Launch the hard-coded debug fight when you are ready.
+                <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
+                    ${escapeHtml(selectedBattle?.description || 'Choose a registered battle definition to launch combat.')}
+                </div>
+                <div style="margin-top: 0.8rem; display: grid; gap: 0.55rem;">
+                    ${selectionMarkup}
                 </div>
                 <div style="margin-top: 0.8rem; display: flex; justify-content: center;">
                     <button
                         class="echoes-battle-panel__combat-button"
                         type="button"
-                        data-action="start-debug-battle"
+                        data-action="launch-selected-battle"
+                        ${selectedBattle ? '' : 'disabled'}
                     >
-                        Start Debug Battle
+                        ${selectedBattle?.isDebug ? 'Launch Debug Battle' : 'Launch Battle'}
                     </button>
                 </div>
             </div>
         `;
     }
 
-    async function initializeBattleHandler() {
+    async function initializeBattleHandler(battleId = state.selectedBattleId) {
         if (!elements.combatContent) {
             return;
         }
 
-        await ensureBattleModuleLoaded();
+        await prepareBattleSelection();
 
-        state.battleHandler = window.EchoesOfTheCityBattle.createDebugBattleController({
-            mountElement: elements.combatContent,
-            clamp,
-            resolveAssetUrl: resolveExtensionUrl,
-        });
+        const selectedBattleId = battleId || state.selectedBattleId;
+        const battleDefinition = window.EchoesOfTheCityBattle.getBattleDefinition?.(selectedBattleId);
+        if (!battleDefinition) {
+            throw new Error(`Battle definition "${selectedBattleId}" is not available.`);
+        }
+
+        state.selectedBattleId = battleDefinition.id;
+
+        if (isDebugBattleId(battleDefinition.id)) {
+            await ensureDebugBattleModuleLoaded();
+            state.battleHandler = window.EchoesOfTheCityBattle.createDebugBattleController({
+                mountElement: elements.combatContent,
+                clamp,
+                resolveAssetUrl: resolveExtensionUrl,
+            });
+        } else {
+            state.battleHandler = window.EchoesOfTheCityBattle.createBattleHandler({
+                mountElement: elements.combatContent,
+                clamp,
+                resolveAssetUrl: resolveExtensionUrl,
+                battleDefinition,
+                enableDebugTools: false,
+                storageKeyPrefix: `echoes-of-the-city:battle:${battleDefinition.id}`,
+            });
+        }
 
         state.battleHandler.render();
     }
@@ -187,15 +363,28 @@
         renderBattleStartScreen();
     }
 
-    function resetDebugBattle() {
+    function resetBattle() {
         state.battleHandler?.reset();
     }
 
     async function handleCombatContentClick(event) {
-        const actionTarget = event.target.closest('[data-action="start-debug-battle"]');
-        if (actionTarget) {
+        const actionTarget = event.target.closest('[data-action]');
+        if (!actionTarget) {
+            state.battleHandler?.handleClick(event);
+            return;
+        }
+
+        const { action, battleId } = actionTarget.dataset;
+
+        if (action === 'select-battle' && battleId) {
+            state.selectedBattleId = battleId;
+            renderBattleStartScreen();
+            return;
+        }
+
+        if (action === 'launch-selected-battle') {
             try {
-                await initializeBattleHandler();
+                await initializeBattleHandler(state.selectedBattleId);
             } catch (error) {
                 console.error(`${EXTENSION_ID}: combat module initialization failed.`, error);
                 renderCombatLoadError(error);
@@ -778,6 +967,10 @@
 
         state.activeScreen = 'combat';
         syncPanelState();
+        void prepareBattleSelection().catch((error) => {
+            console.error(`${EXTENSION_ID}: battle selection initialization failed.`, error);
+            renderCombatLoadError(error);
+        });
         renderCombatScreen();
     }
 
@@ -968,7 +1161,8 @@
             openBattlePanel,
             closeBattlePanel,
             toggleBattlePanel,
-            resetDebugBattle,
+            resetBattle,
+            resetDebugBattle: resetBattle,
         };
     }
 
