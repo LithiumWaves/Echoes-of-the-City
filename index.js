@@ -13,11 +13,12 @@
         'battle/effects/skillEffectRunner.js',
         'battle/ai/enemyAi.js',
         'battle/validation/battleValidation.js',
+        'battle/content/battleContentRegistry.js',
         'battle/ui/inspect/inspectState.js',
         'battle/core/battleEngine.js',
         'battle/core/battleRenderer.js',
         'battle/core/battleHandler.js',
-        'battle/debug/debugFightDefinition.js',
+        'battle/content/definitions/debugFight.js',
         'battle/debug/debugRollManager.js',
         'battle/debug/debugBattleController.js',
     ];

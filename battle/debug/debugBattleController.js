@@ -8,10 +8,19 @@
         if (typeof battleModules.createDebugRollManager !== 'function') {
             throw new Error('Debug roll manager is not loaded.');
         }
+        const debugBattleDefinition = typeof battleModules.content?.getBattleDefinition === 'function'
+            ? (
+                battleModules.content.getBattleDefinition('debugFight')
+                || battleModules.content.getBattleDefinition('debug-fight')
+            )
+            : (battleModules.battleDefinitions?.debugFight || battleModules.debugFightTemplate);
+        if (!debugBattleDefinition) {
+            throw new Error('Debug battle definition is not loaded.');
+        }
 
         return window.EchoesOfTheCityBattle.createBattleHandler({
             ...options,
-            battleDefinition: battleModules.battleDefinitions?.debugFight || battleModules.debugFightTemplate,
+            battleDefinition: debugBattleDefinition,
             enableDebugTools: true,
             debugRollManager: battleModules.createDebugRollManager(),
             storageKeyPrefix: 'echoes-of-the-city:debug-battle',
