@@ -13,6 +13,10 @@
         'clashPowerBonus',
         'damageMultiplier',
         'damageReductionMultiplier',
+        'staticDamageBonus',
+        'dynamicDamageBonus',
+        'clashRoundBonus',
+        'observationBonus',
         'additiveDamage',
         'forceCoinZero',
     ]);

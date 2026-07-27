@@ -939,11 +939,17 @@
                 modifiers: {
                     attack: {
                         damageMultiplier: attackContext?.damageMultiplier || 1,
+                        staticDamageBonus: attackContext?.staticDamageBonus || 0,
+                        dynamicDamageBonus: attackContext?.dynamicDamageBonus || 0,
+                        clashRoundBonus: attackContext?.clashRoundBonus || 0,
+                        observationBonus: attackContext?.observationBonus || 0,
                         additiveDamage: attackContext?.additiveDamage || 0,
                         extraCritDamage: attackContext?.extraCritDamageByCoin?.[attackContext?.currentCoinIndex] || 0,
                         currentCoinIndex: attackContext?.currentCoinIndex || 0,
                     },
                     defense: {
+                        staticDamageBonus: defendContext?.staticDamageBonus || 0,
+                        dynamicDamageBonus: defendContext?.dynamicDamageBonus || 0,
                         damageReductionMultiplier: defendContext?.damageReductionMultiplier ?? 1,
                     },
                 },
@@ -1032,6 +1038,10 @@
                 clashPowerBonus: 0,
                 damageMultiplier: 1,
                 damageReductionMultiplier: 1,
+                staticDamageBonus: 0,
+                dynamicDamageBonus: 0,
+                clashRoundBonus: 0,
+                observationBonus: 0,
                 additiveDamage: 0,
                 extraCritDamageByCoin: {},
                 critFinalPowerBonusByCoin: {},
