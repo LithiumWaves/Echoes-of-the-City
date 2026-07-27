@@ -1,7 +1,7 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
 
-    function createSkillEffectRunner(deps) {
+    function createEffectExecutor(deps) {
         const {
             getStatusPotency,
             getStatus,
@@ -13,13 +13,21 @@
             invokeHooks,
         } = deps || {};
 
+        function getRuntimeSourceUnit(runtime) {
+            return runtime?.sourceUnit || runtime?.unit || null;
+        }
+
+        function getRuntimeTargetUnit(runtime) {
+            return runtime?.targetUnit || runtime?.opponent || null;
+        }
+
         function getEffectTargetUnit(runtime, target = 'opponent') {
             if (target === 'self') {
-                return runtime.sourceUnit || null;
+                return getRuntimeSourceUnit(runtime);
             }
 
             if (target === 'opponent') {
-                return runtime.targetUnit || null;
+                return getRuntimeTargetUnit(runtime);
             }
 
             return null;
@@ -38,37 +46,12 @@
             return getStatusPotency(targetUnit, effect.statusId);
         }
 
-        function effectMatchesRuntime(effect, runtime) {
-            if (typeof effect.coinIndex === 'number' && effect.coinIndex !== runtime.coinIndex) {
-                return false;
-            }
-
-            if (effect.criticalOnly && !runtime.isCritical) {
-                return false;
-            }
-
-            if (effect.outcome && effect.outcome !== runtime.outcome) {
-                return false;
-            }
-
-            if (typeof effect.minStatusPotency === 'number' && getEffectStatusPotency(runtime, effect) < effect.minStatusPotency) {
-                return false;
-            }
-
-            return true;
-        }
-
-        function applySkillEffects(targetBattle, trigger, runtime) {
-            const skill = runtime?.skill;
-            const effects = Array.isArray(skill?.effects) ? skill.effects : [];
-            effects.forEach((effect) => {
-                if (effect?.trigger !== trigger || !effectMatchesRuntime(effect, runtime)) {
-                    return;
-                }
-
-                const sourceUnit = runtime.sourceUnit || null;
+        function applyEffects(targetBattle, effects, runtime) {
+            (Array.isArray(effects) ? effects : []).forEach((effect) => {
+                const sourceUnit = getRuntimeSourceUnit(runtime);
                 const targetUnit = getEffectTargetUnit(runtime, effect.target || 'opponent');
                 const context = runtime.attackContext || runtime.defendContext || null;
+                const skill = runtime?.skill || null;
 
                 switch (effect.type) {
                 case 'applyStatus':
@@ -208,14 +191,68 @@
             });
         }
 
+        return {
+            applyEffects,
+            getEffectStatusPotency,
+        };
+    }
+
+    function effectMatchesRuntime(effect, runtime, getEffectStatusPotency) {
+        if (typeof effect.coinIndex === 'number' && effect.coinIndex !== runtime.coinIndex) {
+            return false;
+        }
+
+        if (effect.criticalOnly && !runtime.isCritical) {
+            return false;
+        }
+
+        if (effect.outcome && effect.outcome !== runtime.outcome) {
+            return false;
+        }
+
+        if (typeof effect.minStatusPotency === 'number' && getEffectStatusPotency(runtime, effect) < effect.minStatusPotency) {
+            return false;
+        }
+
+        return true;
+    }
+
+    function createSkillEffectRunner(deps) {
+        const { applyEffects, getEffectStatusPotency } = createEffectExecutor(deps);
+
+        function applySkillEffects(targetBattle, trigger, runtime) {
+            const skill = runtime?.skill;
+            const effects = Array.isArray(skill?.effects)
+                ? skill.effects.filter((effect) => effect?.trigger === trigger && effectMatchesRuntime(effect, runtime, getEffectStatusPotency))
+                : [];
+            applyEffects(targetBattle, effects, runtime);
+        }
+
         return applySkillEffects;
     }
 
+    function createPassiveEffectRunner(deps) {
+        const { applyEffects, getEffectStatusPotency } = createEffectExecutor(deps);
+
+        function applyPassiveEffects(targetBattle, hookName, hookEffects, runtime) {
+            const effects = Array.isArray(hookEffects)
+                ? hookEffects.filter((effect) => effectMatchesRuntime(effect, runtime, getEffectStatusPotency))
+                : [];
+            applyEffects(targetBattle, effects, {
+                ...runtime,
+                hookName,
+            });
+        }
+
+        return applyPassiveEffects;
+    }
+
     battleModules.createSkillEffectRunner = createSkillEffectRunner;
+    battleModules.createPassiveEffectRunner = createPassiveEffectRunner;
 
     window.EchoesOfTheCityBattle = {
         ...window.EchoesOfTheCityBattle,
         createSkillEffectRunner,
+        createPassiveEffectRunner,
     };
 })();
-

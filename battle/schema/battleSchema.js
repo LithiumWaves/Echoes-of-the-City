@@ -29,13 +29,37 @@
     ]);
     const ENEMY_AI_SKILLS = new Set(['cycle', 'random', 'first']);
     const ENEMY_AI_TARGETS = new Set(['mirror', 'firstLiving', 'lowestHp', 'random']);
+    const PASSIVE_HOOKS = new Set([
+        'battleStart',
+        'turnStart',
+        'skillSelected',
+        'hitDealt',
+        'hitTaken',
+        'damageDealt',
+        'damageTaken',
+        'statusInflicted',
+        'statusReceived',
+        'attackEnd',
+        'turnEnd',
+        'unitDefeated',
+        'battleEnd',
+    ]);
 
     function cloneDefinition(definition) {
-        if (typeof window.structuredClone === 'function') {
-            return window.structuredClone(definition);
+        if (Array.isArray(definition)) {
+            return definition.map((value) => cloneDefinition(value));
         }
 
-        return JSON.parse(JSON.stringify(definition));
+        if (!definition || typeof definition !== 'object') {
+            return definition;
+        }
+
+        return Object.fromEntries(
+            Object.entries(definition).map(([key, value]) => [
+                key,
+                typeof value === 'function' ? value : cloneDefinition(value),
+            ]),
+        );
     }
 
     function normalizeBattleDefinition(definition) {
@@ -95,13 +119,14 @@
         });
     }
 
-    function validateEffect(errors, unitSkillIds, effect, path) {
+    function validateEffect(errors, unitSkillIds, effect, path, options = {}) {
+        const { requireTrigger = true } = options;
         if (!effect || typeof effect !== 'object' || Array.isArray(effect)) {
             pushError(errors, path, 'must be an object.');
             return;
         }
 
-        if (!EFFECT_TRIGGERS.has(effect.trigger)) {
+        if (requireTrigger && !EFFECT_TRIGGERS.has(effect.trigger)) {
             pushError(errors, `${path}.trigger`, 'is missing or unsupported.');
         }
 
@@ -259,7 +284,7 @@
         }
     }
 
-    function validatePassive(errors, passive, path) {
+    function validatePassive(errors, passive, path, unitSkillIds) {
         if (!passive || typeof passive !== 'object' || Array.isArray(passive)) {
             pushError(errors, path, 'must be an object.');
             return;
@@ -276,6 +301,26 @@
         }
         if (passive.hooks != null && (typeof passive.hooks !== 'object' || Array.isArray(passive.hooks))) {
             pushError(errors, `${path}.hooks`, 'must be an object when provided.');
+        } else if (passive.hooks) {
+            Object.entries(passive.hooks).forEach(([hookName, hookDefinition]) => {
+                if (!PASSIVE_HOOKS.has(hookName)) {
+                    pushError(errors, `${path}.hooks.${hookName}`, 'is not a supported passive hook.');
+                    return;
+                }
+
+                if (typeof hookDefinition === 'function') {
+                    return;
+                }
+
+                if (!Array.isArray(hookDefinition)) {
+                    pushError(errors, `${path}.hooks.${hookName}`, 'must be a function or an array of effect definitions.');
+                    return;
+                }
+
+                hookDefinition.forEach((effect, index) => {
+                    validateEffect(errors, unitSkillIds, effect, `${path}.hooks.${hookName}[${index}]`, { requireTrigger: false });
+                });
+            });
         }
     }
 
@@ -319,11 +364,13 @@
             }
         }
 
+        const unitSkillIds = new Set((Array.isArray(unit.skills) ? unit.skills : []).map((skill) => skill?.id).filter(Boolean));
+
         if (unit.passives != null) {
             if (!Array.isArray(unit.passives)) {
                 pushError(errors, `${path}.passives`, 'must be an array when provided.');
             } else {
-                unit.passives.forEach((passive, index) => validatePassive(errors, passive, `${path}.passives[${index}]`));
+                unit.passives.forEach((passive, index) => validatePassive(errors, passive, `${path}.passives[${index}]`, unitSkillIds));
             }
         }
 
@@ -340,8 +387,6 @@
             );
             validateResistanceBucket(errors, path, 'sin', unit.resistances?.sin, SIN_TYPES);
         }
-
-        const unitSkillIds = new Set((Array.isArray(unit.skills) ? unit.skills : []).map((skill) => skill?.id).filter(Boolean));
         const duplicateSkillIds = (Array.isArray(unit.skills) ? unit.skills : [])
             .map((skill) => skill?.id)
             .filter(Boolean)

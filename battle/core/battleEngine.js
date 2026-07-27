@@ -52,6 +52,35 @@
             .sort((left, right) => right - left);
     }
 
+    function cloneHookDefinition(hookDefinition) {
+        if (Array.isArray(hookDefinition)) {
+            return hookDefinition.map((effect) => ({ ...effect }));
+        }
+
+        return hookDefinition;
+    }
+
+    function cloneHookMap(hooks) {
+        if (!hooks || typeof hooks !== 'object' || Array.isArray(hooks)) {
+            return {};
+        }
+
+        return Object.fromEntries(
+            Object.entries(hooks).map(([hookName, hookDefinition]) => [hookName, cloneHookDefinition(hookDefinition)]),
+        );
+    }
+
+    function clonePassiveDefinitions(passives) {
+        if (!Array.isArray(passives)) {
+            return [];
+        }
+
+        return passives.map((passive) => ({
+            ...passive,
+            hooks: cloneHookMap(passive?.hooks),
+        }));
+    }
+
     function createBattleUnit(template, side, index) {
         return {
             ...template,
@@ -61,7 +90,7 @@
             sp: template.sp,
             speed: 0,
             statuses: [],
-            passives: [],
+            passives: clonePassiveDefinitions(template.passives),
             pendingStatuses: [],
             turnState: {},
             resistances: normalizeUnitResistances(template.resistances),
@@ -103,6 +132,10 @@
             onTurnStarted = null,
         } = options;
         let nextEventId = 1;
+        let passiveEffectRunner = null;
+        const enemyAi = typeof battleModules.createEnemyAi === 'function'
+            ? battleModules.createEnemyAi(battleDefinition?.rules?.enemyAiProfile || battleDefinition?.enemyAiProfile || null)
+            : null;
         let battle = createDebugBattleState();
 
         function safeInvoke(fn, payload) {
@@ -115,6 +148,23 @@
             } catch (error) {
                 return;
             }
+        }
+
+        function ensurePassiveEffectRunner() {
+            if (!passiveEffectRunner && typeof battleModules.createPassiveEffectRunner === 'function') {
+                passiveEffectRunner = battleModules.createPassiveEffectRunner({
+                    getStatusPotency,
+                    getStatus,
+                    removeStatus,
+                    applyStatus,
+                    queueStatusForNextTurn,
+                    adjustSanity,
+                    emitEvent,
+                    invokeHooks,
+                });
+            }
+
+            return passiveEffectRunner;
         }
 
         function getAllUnits(targetBattle) {
@@ -217,14 +267,31 @@
                 return;
             }
 
+            const hookContext = {
+                ...context,
+                unit: context?.unit || unit,
+                sourceUnit: context?.sourceUnit || context?.unit || unit,
+                opponent: context?.opponent || context?.targetUnit || null,
+                targetUnit: context?.targetUnit || context?.opponent || null,
+            };
+
+            const invokeHookDefinition = (hookDefinition) => {
+                if (Array.isArray(hookDefinition) && hookContext.battle) {
+                    ensurePassiveEffectRunner()?.(hookContext.battle, hookName, hookDefinition, hookContext);
+                    return;
+                }
+
+                safeInvoke(hookDefinition, hookContext);
+            };
+
             const statuses = Array.isArray(unit.statuses) ? unit.statuses : [];
             statuses.forEach((status) => {
-                safeInvoke(status?.hooks?.[hookName], context);
+                invokeHookDefinition(status?.hooks?.[hookName]);
             });
 
             const passives = Array.isArray(unit.passives) ? unit.passives : [];
             passives.forEach((passive) => {
-                safeInvoke(passive?.hooks?.[hookName], context);
+                invokeHookDefinition(passive?.hooks?.[hookName]);
             });
         }
 
@@ -1003,6 +1070,14 @@
                     winner: 'draw',
                     winnerName: 'Draw',
                 });
+                getAllUnits(targetBattle).forEach((unit) => {
+                    invokeHooks(unit, 'battleEnd', {
+                        battle: targetBattle,
+                        unit,
+                        outcome: 'draw',
+                        winner: 'draw',
+                    });
+                });
                 return;
             }
 
@@ -1014,6 +1089,15 @@
                     winnerId: winnerUnit.id,
                     winnerName: winnerUnit.name,
                 });
+                getAllUnits(targetBattle).forEach((unit) => {
+                    invokeHooks(unit, 'battleEnd', {
+                        battle: targetBattle,
+                        unit,
+                        winner: 'player',
+                        winnerUnit,
+                        outcome: unit.side === 'player' ? 'win' : 'lose',
+                    });
+                });
                 return;
             }
 
@@ -1023,6 +1107,15 @@
                 winner: 'enemy',
                 winnerId: winnerUnit.id,
                 winnerName: winnerUnit.name,
+            });
+            getAllUnits(targetBattle).forEach((unit) => {
+                invokeHooks(unit, 'battleEnd', {
+                    battle: targetBattle,
+                    unit,
+                    winner: 'enemy',
+                    winnerUnit,
+                    outcome: unit.side === 'enemy' ? 'win' : 'lose',
+                });
             });
         }
 
@@ -1798,10 +1891,6 @@
             targetBattle.speedOrder = queue.map((slot) => slot.id);
         }
 
-        const enemyAi = typeof battleModules.createEnemyAi === 'function'
-            ? battleModules.createEnemyAi(battleDefinition?.rules?.enemyAiProfile || battleDefinition?.enemyAiProfile || null)
-            : null;
-
         function pickEnemySkillId(currentBattle, slot) {
             const enemyUnit = getUnitById(currentBattle, slot.unitId);
             const aiPick = enemyAi?.pickEnemySkillId?.(currentBattle, slot, enemyUnit);
@@ -1924,6 +2013,13 @@
             emitEvent(nextBattle, 'battle_started', {
                 playerTeamName: playerUnits.map((unit) => unit.name).join(', '),
                 enemyTeamName: enemyUnits.map((unit) => unit.name).join(', '),
+            });
+            getAllUnits(nextBattle).forEach((unit) => {
+                invokeHooks(unit, 'battleStart', {
+                    battle: nextBattle,
+                    unit,
+                    opposingUnits: getUnitsForSide(nextBattle, getOpposingSide(unit.side)),
+                });
             });
             startDebugBattleTurn(nextBattle);
             return nextBattle;

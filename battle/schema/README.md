@@ -81,6 +81,8 @@ Common optional filters:
 - `coinIndex?: number`
 - `criticalOnly?: boolean`
 - `minStatusPotency?: number` (uses `statusId` + `statusSource`)
+- `statusSource?: "self" | "opponent"`
+- `outcome?: "win" | "lose"`
 - `target?: "self" | "opponent"`
 
 Supported `type` values (current):
@@ -102,5 +104,23 @@ Required:
 
 Optional:
 - `description: string`
-- `hooks: Record<string, Function>`
+- `hooks: Record<PassiveHookName, EffectDefinition[] | Function>`
 
+Supported passive hook names (current):
+- `battleStart`
+- `turnStart`
+- `skillSelected`
+- `hitDealt`
+- `hitTaken`
+- `damageDealt`
+- `damageTaken`
+- `statusInflicted`
+- `statusReceived`
+- `attackEnd`
+- `turnEnd`
+- `unitDefeated`
+- `battleEnd`
+
+Notes:
+- Passive hook effect arrays use the same effect shape as skills, but the hook key replaces `trigger`.
+- Function hooks still work for JS-authored content, but data-driven hook effect arrays are the preferred authoring path.

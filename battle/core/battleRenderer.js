@@ -1128,6 +1128,14 @@
             const physicalRes = unit ? getResistanceSummary(unit, physicalDamageTypes, 'physical') : '';
             const sinRes = unit ? getResistanceSummary(unit, sinTypes, 'sin') : '';
             const thresholds = unit ? getStaggerThresholdSummary(unit) : '';
+            const passiveMarkup = unit && Array.isArray(unit.passives) && unit.passives.length
+                ? unit.passives.map((passive) => `
+                    <div class="echoes-battle-panel__inspect-skill">
+                        <strong>${passive.name}</strong>
+                        <span>${passive.description || 'Passive'}</span>
+                    </div>
+                `).join('')
+                : '';
             const skillMarkup = unit
                 ? unit.skills.map((skill) => `
                     <div class="echoes-battle-panel__inspect-skill">
@@ -1170,6 +1178,12 @@
                         <div class="echoes-battle-panel__inspect-block">
                             <strong>Statuses</strong>
                             <span>${statuses || 'None'}</span>
+                        </div>
+                        <div class="echoes-battle-panel__inspect-block">
+                            <strong>Passives</strong>
+                            <div class="echoes-battle-panel__inspect-skills">
+                                ${passiveMarkup || '<span>None</span>'}
+                            </div>
                         </div>
                         <div class="echoes-battle-panel__inspect-block">
                             <strong>Skills</strong>
