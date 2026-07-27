@@ -7,6 +7,20 @@
     const PANEL_GAP = 24;
     const DRAG_THRESHOLD = 6;
     const PANEL_ASPECT_RATIO = 1640 / 4120;
+    const BATTLE_BASE_PACK_SCRIPT_RELATIVE_PATHS = [
+        'battle/content/packs/base/statuses/bleed.js',
+        'battle/content/packs/base/statuses/burn.js',
+        'battle/content/packs/base/statuses/rupture.js',
+        'battle/content/packs/base/statuses/sinking.js',
+        'battle/content/packs/base/statuses/poise.js',
+        'battle/content/packs/base/statuses/paralyze.js',
+        'battle/content/packs/base/units/vergilius.js',
+        'battle/content/packs/base/units/bambooHattedKim.js',
+        'battle/content/packs/base/units/ringNursefatherCallisto.js',
+        'battle/content/packs/base/units/dongbaek.js',
+        'battle/content/packs/base/battles/cityGateSkirmish.js',
+        'battle/content/packs/base/battles/debugFight.js',
+    ];
     const BATTLE_CORE_SCRIPT_RELATIVE_PATHS = [
         'battle/registry/battleRegistry.js',
         'battle/schema/battleSchema.js',
@@ -14,22 +28,11 @@
         'battle/ai/enemyAi.js',
         'battle/validation/battleValidation.js',
         'battle/content/battleContentRegistry.js',
-        'battle/content/statuses/bleed.js',
-        'battle/content/statuses/burn.js',
-        'battle/content/statuses/rupture.js',
-        'battle/content/statuses/sinking.js',
-        'battle/content/statuses/poise.js',
-        'battle/content/statuses/paralyze.js',
-        'battle/content/units/vergilius.js',
-        'battle/content/units/bambooHattedKim.js',
-        'battle/content/units/ringNursefatherCallisto.js',
-        'battle/content/units/dongbaek.js',
+        ...BATTLE_BASE_PACK_SCRIPT_RELATIVE_PATHS,
         'battle/ui/inspect/inspectState.js',
         'battle/core/battleEngine.js',
         'battle/core/battleRenderer.js',
         'battle/core/battleHandler.js',
-        'battle/content/definitions/cityGateSkirmish.js',
-        'battle/content/definitions/debugFight.js',
     ];
     const BATTLE_DEBUG_SCRIPT_RELATIVE_PATHS = [
         'battle/debug/debugRollManager.js',

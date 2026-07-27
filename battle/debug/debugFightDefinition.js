@@ -11,7 +11,7 @@
         : (battleDefinitions.debugFight || battleModules.debugFightTemplate || null);
 
     if (!debugFightDefinition) {
-        throw new Error('Debug battle definition moved to battle/content/definitions/debugFight.js and must load first.');
+        throw new Error('Debug battle definition moved to battle/content/packs/base/battles/debugFight.js and must load first.');
     }
 
     battleDefinitions.debugFight = debugFightDefinition;

@@ -129,7 +129,7 @@
         const enemyAi = typeof battleModules.createEnemyAi === 'function'
             ? battleModules.createEnemyAi(battleDefinition?.rules?.enemyAiProfile || battleDefinition?.enemyAiProfile || null)
             : null;
-        let battle = createDebugBattleState();
+        let battle = createBattleState();
 
         function safeInvoke(fn, payload) {
             if (typeof fn !== 'function') {
@@ -2095,7 +2095,7 @@
             return battleDefinition.enemy ? [battleDefinition.enemy] : [];
         }
 
-        function createDebugBattleState() {
+        function createBattleState() {
             const playerUnits = getPlayerTemplates().map((template, index) => createBattleUnit(template, 'player', index));
             const enemyUnits = getEnemyTemplates().map((template, index) => createBattleUnit(template, 'enemy', index));
             const playerSlots = playerUnits.map((unit, index) => createBattleSlot(unit, 'player', index));
@@ -2131,11 +2131,11 @@
                     opposingUnits: getUnitsForSide(nextBattle, getOpposingSide(unit.side)),
                 });
             });
-            startDebugBattleTurn(nextBattle);
+            startBattleTurn(nextBattle);
             return nextBattle;
         }
 
-        function startDebugBattleTurn(targetBattle) {
+        function startBattleTurn(targetBattle) {
             if (targetBattle.winner) {
                 return;
             }
@@ -2412,13 +2412,13 @@
                 return false;
             }
 
-            startDebugBattleTurn(battle);
+            startBattleTurn(battle);
             return true;
         }
 
         function reset() {
             nextEventId = 1;
-            battle = createDebugBattleState();
+            battle = createBattleState();
         }
 
         function addStatus(side, status, unitIndex = 0) {

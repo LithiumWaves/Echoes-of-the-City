@@ -11,15 +11,15 @@ The project already has the beginnings of a generic battle system:
 - The content registry can register battle definitions, unit definitions, aliases, and defaults.
 - The schema already describes reusable battle, unit, skill, effect, and passive definitions.
 
-However, the app is still debug-first:
+The Phase 1 launcher work is now in place:
 
-- The combat UI currently launches a Debug Battle screen.
-- The main app path still calls `createDebugBattleController()`.
-- Debug scripts are loaded as part of the normal combat module list.
-- The debug fight is registered as the default battle.
-- Some engine internals still use debug-oriented names such as `createDebugBattleState()` and `startDebugBattleTurn()`.
+- The combat UI can launch any registered battle through the generic battle selector.
+- The debug controller is only loaded for debug-tagged battles.
+- Debug scripts are split from the normal core battle module list.
+- The default battle is now the shipped `city-gate-skirmish` encounter.
+- Engine helpers now use generic names such as `createBattleState()` and `startBattleTurn()`.
 
-In short: the engine is becoming generic, but the app still boots through the debug battle path.
+In short: the engine now boots through a generic battle path, and the remaining work is focused on richer content authoring and pack-based expansion.
 
 ## Goal
 
