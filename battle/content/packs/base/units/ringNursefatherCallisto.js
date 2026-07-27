@@ -31,6 +31,27 @@
                 envy: 1,
             },
         },
+        passives: [
+            {
+                id: 'emergency-procedure',
+                name: 'Emergency Procedure',
+                description: 'At turn start, if below 50% HP, gain +2 Speed once per turn.',
+                hooks: {
+                    turnStart: [
+                        {
+                            id: 'emergency-procedure-haste',
+                            oncePer: 'turn',
+                            conditions: [
+                                { type: 'hpPercentAtOrBelow', target: 'self', value: 0.5 },
+                            ],
+                            actions: [
+                                { type: 'modifySpeed', target: 'self', value: 2 },
+                            ],
+                        },
+                    ],
+                },
+            },
+        ],
         sprites: {
             idle: 'assets/debugsprites/The_Ring_Nursefather_-_Callisto_Idle_Sprite.png',
             moving: 'assets/debugsprites/The_Ring_Nursefather_-_Callisto_Moving_Sprite.png',

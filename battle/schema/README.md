@@ -188,4 +188,5 @@ Notes:
   - `skillSelected` + `statusCountAtLeast` to reward self-buffs applied during `onSelect`
   - `skillSelected` + `spAtOrBelow` for low-SP conditionals
   - `hitDealt` + `damageAtLeast` for damage-triggered follow-up effects
+  - `turnStart` + `hpPercentAtOrBelow` for low-HP survival passives
 - Function hooks still work for JS-authored content, but data-driven hook effect arrays are the preferred authoring path.
