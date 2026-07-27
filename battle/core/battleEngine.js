@@ -348,10 +348,11 @@
                 targetUnit: context?.targetUnit || context?.opponent || null,
             };
 
-            const invokeHookDefinition = (hookDefinition, hookOwner) => {
+            const invokeHookDefinition = (hookDefinition, hookOwner, hookOwnerType) => {
                 if (hookDefinition && typeof hookDefinition === 'object' && hookContext.battle) {
                     ensurePassiveEffectRunner()?.(hookContext.battle, hookName, hookDefinition, hookContext, {
                         hookOwner,
+                        hookOwnerType,
                     });
                     return;
                 }
@@ -359,6 +360,7 @@
                 if (Array.isArray(hookDefinition) && hookContext.battle) {
                     ensurePassiveEffectRunner()?.(hookContext.battle, hookName, hookDefinition, hookContext, {
                         hookOwner,
+                        hookOwnerType,
                     });
                     return;
                 }
@@ -368,12 +370,12 @@
 
             const statuses = Array.isArray(unit.statuses) ? unit.statuses : [];
             statuses.forEach((status) => {
-                invokeHookDefinition(status?.hooks?.[hookName], status);
+                invokeHookDefinition(status?.hooks?.[hookName], status, 'status');
             });
 
             const passives = Array.isArray(unit.passives) ? unit.passives : [];
             passives.forEach((passive) => {
-                invokeHookDefinition(passive?.hooks?.[hookName], passive);
+                invokeHookDefinition(passive?.hooks?.[hookName], passive, 'passive');
             });
         }
 
@@ -462,6 +464,54 @@
             unit.statuses = (Array.isArray(unit.statuses) ? unit.statuses : []).filter((status) => status?.id !== statusId);
         }
 
+        function triggerStatusLifecycleHook(targetBattle, unit, hookName, statusId, payload = {}) {
+            if (!targetBattle || !unit || !statusId) {
+                return;
+            }
+
+            invokeHooks(unit, hookName, {
+                battle: targetBattle,
+                unit,
+                statusId,
+                status: payload.status || getStatus(unit, statusId),
+                ...payload,
+            });
+        }
+
+        function expireStatus(targetBattle, unit, statusId, status = getStatus(unit, statusId)) {
+            if (!unit || !statusId || !status) {
+                return false;
+            }
+
+            removeStatus(unit, statusId);
+            emitEvent(targetBattle, 'status_expired', {
+                unitId: unit.id,
+                unitName: unit.name,
+                statusId,
+            });
+            triggerStatusLifecycleHook(targetBattle, unit, 'statusExpired', statusId, {
+                status: { ...status },
+            });
+            return true;
+        }
+
+        function consumeStatus(targetBattle, unit, statusId, status = getStatus(unit, statusId)) {
+            if (!unit || !statusId || !status) {
+                return false;
+            }
+
+            removeStatus(unit, statusId);
+            emitEvent(targetBattle, 'status_consumed', {
+                unitId: unit.id,
+                unitName: unit.name,
+                statusId,
+            });
+            triggerStatusLifecycleHook(targetBattle, unit, 'statusConsumed', statusId, {
+                status: { ...status },
+            });
+            return true;
+        }
+
         function eventToLogLine(event) {
             const { type, data } = event;
 
@@ -546,6 +596,9 @@
             }
             if (type === 'status_expired') {
                 return `${data.unitName} ${getStatusLabel(data.statusId)} expired.`;
+            }
+            if (type === 'status_consumed') {
+                return `${data.unitName} ${getStatusLabel(data.statusId)} is consumed.`;
             }
             if (type === 'hp_healed') {
                 return `${data.unitName} recovers ${data.amount} HP (${data.previousHp} -> ${data.nextHp}).`;
@@ -640,6 +693,9 @@
                     potency: status.potency,
                     count: status.count,
                 });
+                triggerStatusLifecycleHook(targetBattle, unit, 'statusApplied', statusId, {
+                    status,
+                });
                 return status;
             }
 
@@ -656,6 +712,13 @@
                 unitId: unit.id,
                 unitName: unit.name,
                 statusId,
+                previousPotency,
+                previousCount,
+                nextPotency,
+                nextCount,
+            });
+            triggerStatusLifecycleHook(targetBattle, unit, 'statusChanged', statusId, {
+                status: existing,
                 previousPotency,
                 previousCount,
                 nextPotency,
@@ -681,13 +744,15 @@
                 nextPotency: existing.potency || 0,
                 nextCount: existing.count,
             });
+            triggerStatusLifecycleHook(targetBattle, unit, 'statusChanged', statusId, {
+                status: existing,
+                previousPotency: existing.potency || 0,
+                previousCount,
+                nextPotency: existing.potency || 0,
+                nextCount: existing.count,
+            });
             if (shouldExpireStatus(existing)) {
-                removeStatus(unit, statusId);
-                emitEvent(targetBattle, 'status_expired', {
-                    unitId: unit.id,
-                    unitName: unit.name,
-                    statusId,
-                });
+                expireStatus(targetBattle, unit, statusId, { ...existing });
             }
         }
 
@@ -749,6 +814,15 @@
             }
 
             const previousHp = unit.hp;
+            invokeHooks(unit, 'beforeDamage', {
+                battle: targetBattle,
+                unit,
+                sourceUnit: null,
+                statusId,
+                damage: appliedDamage,
+                previousHp,
+                nextHp: Math.max(0, unit.hp - appliedDamage),
+            });
             unit.hp = clamp(unit.hp - appliedDamage, 0, unit.maxHp);
             emitEvent(targetBattle, 'status_triggered', {
                 unitId: unit.id,
@@ -758,95 +832,16 @@
                 hp: unit.hp,
             });
             applyStaggerFromDamage(targetBattle, unit, null, previousHp, unit.hp);
+            invokeHooks(unit, 'afterDamage', {
+                battle: targetBattle,
+                unit,
+                sourceUnit: null,
+                statusId,
+                damage: appliedDamage,
+                previousHp,
+                nextHp: unit.hp,
+            });
             return appliedDamage;
-        }
-
-        function processBurnAtTurnEnd(targetBattle, unit) {
-            const burn = getStatus(unit, 'burn');
-            if (!burn || burn.hooks?.turnEnd || burn.count <= 0 || burn.potency <= 0 || unit.hp <= 0) {
-                return;
-            }
-
-            applyFixedDamage(targetBattle, unit, 'burn', burn.potency);
-            setStatusCount(targetBattle, unit, 'burn', burn.count - 1);
-        }
-
-        function processPoiseAtTurnEnd(targetBattle, unit) {
-            const poise = getStatus(unit, 'poise');
-            if (!poise || poise.hooks?.turnEnd || poise.count <= 0) {
-                return;
-            }
-
-            setStatusCount(targetBattle, unit, 'poise', poise.count - 1);
-        }
-
-        function expireTurnStatuses(targetBattle, unit) {
-            ['protection', 'paralyze', 'plus_coin_boost', 'plus_coin_drop', 'minus_coin_boost', 'minus_coin_drop'].forEach((statusId) => {
-                const status = getStatus(unit, statusId);
-                if (!status || status.hooks?.turnEnd) {
-                    return;
-                }
-
-                removeStatus(unit, statusId);
-                emitEvent(targetBattle, 'status_expired', {
-                    unitId: unit.id,
-                    unitName: unit.name,
-                    statusId,
-                });
-            });
-        }
-
-        function triggerBleedOnCoinRoll(targetBattle, unit) {
-            const bleed = getStatus(unit, 'bleed');
-            if (!bleed || bleed.hooks?.coinRoll || bleed.count <= 0 || bleed.potency <= 0 || unit.hp <= 0) {
-                return;
-            }
-
-            applyFixedDamage(targetBattle, unit, 'bleed', bleed.potency);
-            setStatusCount(targetBattle, unit, 'bleed', bleed.count - 1);
-        }
-
-        function triggerRuptureOnHit(targetBattle, unit) {
-            const rupture = getStatus(unit, 'rupture');
-            if (!rupture || rupture.hooks?.hitTaken || rupture.count <= 0 || rupture.potency <= 0 || unit.hp <= 0) {
-                return;
-            }
-
-            applyFixedDamage(targetBattle, unit, 'rupture', rupture.potency);
-            setStatusCount(targetBattle, unit, 'rupture', rupture.count - 1);
-        }
-
-        function triggerSinkingOnHit(targetBattle, unit) {
-            const sinking = getStatus(unit, 'sinking');
-            if (!sinking || sinking.hooks?.hitTaken || sinking.count <= 0 || sinking.potency <= 0 || unit.hp <= 0) {
-                return;
-            }
-
-            const { previousSp, nextSp } = adjustSanity(unit, -sinking.potency);
-            emitEvent(targetBattle, 'status_triggered', {
-                unitId: unit.id,
-                unitName: unit.name,
-                statusId: 'sinking',
-                damage: sinking.potency,
-                hp: unit.hp,
-            });
-            emitEvent(targetBattle, 'sanity_changed', {
-                unitName: unit.name,
-                previousSp,
-                nextSp,
-                reason: 'sinking',
-            });
-            setStatusCount(targetBattle, unit, 'sinking', sinking.count - 1);
-        }
-
-        function spendParalyzeForCoin(targetBattle, unit) {
-            const paralyze = getStatus(unit, 'paralyze');
-            if (!paralyze || paralyze.hooks?.coinRoll || paralyze.count <= 0) {
-                return false;
-            }
-
-            setStatusCount(targetBattle, unit, 'paralyze', paralyze.count - 1);
-            return true;
         }
 
         function getCoinHeadChance(unit) {
@@ -892,20 +887,23 @@
 
         function rollSingleCoin(targetBattle, unit, skill, attackContext, forcedIsHeads = null) {
             attackContext.forceCoinZero = false;
-            invokeHooks(unit, 'coinRoll', {
+            const rollContext = {
                 battle: targetBattle,
                 unit,
                 sourceUnit: unit,
                 skill,
                 attackContext,
                 slot: attackContext.slotId ? getSlotById(targetBattle, attackContext.slotId) : null,
+            };
+            invokeHooks(unit, 'beforeCoinRoll', rollContext);
+            invokeHooks(unit, 'coinRoll', {
+                ...rollContext,
             });
-            triggerBleedOnCoinRoll(targetBattle, unit);
             if (unit.hp <= 0) {
                 return null;
             }
 
-            const forcedZero = Boolean(attackContext.forceCoinZero) || spendParalyzeForCoin(targetBattle, unit);
+            const forcedZero = Boolean(attackContext.forceCoinZero);
             let isHeads = false;
             if (!forcedZero) {
                 if (typeof forcedIsHeads === 'boolean') {
@@ -926,11 +924,19 @@
                 power += effectiveCoinPower;
             }
 
-            return {
+            const rollResult = {
                 isHeads,
                 forcedZero,
                 power,
             };
+            invokeHooks(unit, 'afterCoinRoll', {
+                ...rollContext,
+                roll: rollResult,
+                isHeads,
+                forcedZero,
+                power,
+            });
+            return rollResult;
         }
 
         function flipCoins(targetBattle, unit, skill, coinCount, attackContext) {
@@ -1392,10 +1398,34 @@
                 const damage = calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
                 const previousHp = defender.hp;
 
+                invokeHooks(defender, 'beforeDamage', {
+                    battle: targetBattle,
+                    unit: defender,
+                    sourceUnit: attacker,
+                    opponent: attacker,
+                    targetUnit: defender,
+                    skill,
+                    finalPower,
+                    damage,
+                    previousHp,
+                    nextHp: Math.max(0, defender.hp - damage),
+                    isCritical,
+                });
                 defender.hp = clamp(defender.hp - damage, 0, defender.maxHp);
                 applyStaggerFromDamage(targetBattle, defender, attacker, previousHp, defender.hp);
-                triggerRuptureOnHit(targetBattle, defender);
-                triggerSinkingOnHit(targetBattle, defender);
+                invokeHooks(defender, 'afterDamage', {
+                    battle: targetBattle,
+                    unit: defender,
+                    sourceUnit: attacker,
+                    opponent: attacker,
+                    targetUnit: defender,
+                    skill,
+                    finalPower,
+                    damage,
+                    previousHp,
+                    nextHp: defender.hp,
+                    isCritical,
+                });
 
                 hits.push({
                     finalPower,
@@ -1737,10 +1767,34 @@
 
                 const damage = calculateHitDamage(attacker, attackSkill, defender, finalPower, attackContext, { damageReductionMultiplier: 1 }, isCritical);
                 const previousHp = defender.hp;
+                invokeHooks(defender, 'beforeDamage', {
+                    battle: targetBattle,
+                    unit: defender,
+                    sourceUnit: attacker,
+                    opponent: attacker,
+                    targetUnit: defender,
+                    skill: attackSkill,
+                    finalPower,
+                    damage,
+                    previousHp,
+                    nextHp: Math.max(0, defender.hp - damage),
+                    isCritical,
+                });
                 defender.hp = clamp(defender.hp - damage, 0, defender.maxHp);
                 applyStaggerFromDamage(targetBattle, defender, attacker, previousHp, defender.hp);
-                triggerRuptureOnHit(targetBattle, defender);
-                triggerSinkingOnHit(targetBattle, defender);
+                invokeHooks(defender, 'afterDamage', {
+                    battle: targetBattle,
+                    unit: defender,
+                    sourceUnit: attacker,
+                    opponent: attacker,
+                    targetUnit: defender,
+                    skill: attackSkill,
+                    finalPower,
+                    damage,
+                    previousHp,
+                    nextHp: defender.hp,
+                    isCritical,
+                });
 
                 hits.push({
                     finalPower,
@@ -2536,16 +2590,6 @@
                     unit,
                     opposingUnits,
                 });
-            });
-
-            getAllUnits(battle).forEach((unit) => {
-                processBurnAtTurnEnd(battle, unit);
-            });
-            getAllUnits(battle).forEach((unit) => {
-                processPoiseAtTurnEnd(battle, unit);
-            });
-            getAllUnits(battle).forEach((unit) => {
-                expireTurnStatuses(battle, unit);
             });
 
             finalizeBattleOnDeaths(battle);

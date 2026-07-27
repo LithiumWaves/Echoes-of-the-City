@@ -109,6 +109,20 @@
                 : (status.count || 0) <= 0 && (status.potency || 0) <= 0;
         }
 
+        function triggerStatusLifecycleHook(targetBattle, unit, hookName, statusId, payload = {}) {
+            if (!targetBattle || !unit || !statusId || typeof invokeHooks !== 'function') {
+                return;
+            }
+
+            invokeHooks(unit, hookName, {
+                battle: targetBattle,
+                unit,
+                statusId,
+                status: payload.status || (typeof getStatus === 'function' ? getStatus(unit, statusId) : null),
+                ...payload,
+            });
+        }
+
         function adjustUnitStatus(targetBattle, unit, effect) {
             if (!unit || !effect.statusId || typeof getStatus !== 'function' || typeof removeStatus !== 'function') {
                 return;
@@ -123,10 +137,15 @@
                     return;
                 }
 
-                applyStatus(targetBattle, unit, effect.statusId, {
+                const appliedStatus = applyStatus(targetBattle, unit, effect.statusId, {
                     potency: potencyDelta,
                     count: countDelta,
                 });
+                if (appliedStatus) {
+                    triggerStatusLifecycleHook(targetBattle, unit, 'statusApplied', effect.statusId, {
+                        status: appliedStatus,
+                    });
+                }
                 return;
             }
 
@@ -154,8 +173,16 @@
                     nextCount,
                 });
             }
+            triggerStatusLifecycleHook(targetBattle, unit, 'statusChanged', effect.statusId, {
+                status: existing,
+                previousPotency,
+                previousCount,
+                nextPotency,
+                nextCount,
+            });
 
             if (shouldExpireStatus(existing, effect.statusId)) {
+                const expiredStatus = { ...existing };
                 removeStatus(unit, effect.statusId);
                 if (typeof emitEvent === 'function') {
                     emitEvent(targetBattle, 'status_expired', {
@@ -164,6 +191,9 @@
                         statusId: effect.statusId,
                     });
                 }
+                triggerStatusLifecycleHook(targetBattle, unit, 'statusExpired', effect.statusId, {
+                    status: expiredStatus,
+                });
             }
         }
 
@@ -510,12 +540,15 @@
                         }
                         removeStatus(targetUnit, effect.statusId);
                         if (typeof emitEvent === 'function') {
-                            emitEvent(targetBattle, 'status_expired', {
+                            emitEvent(targetBattle, 'status_consumed', {
                                 unitId: targetUnit.id,
                                 unitName: targetUnit.name,
                                 statusId: effect.statusId,
                             });
                         }
+                        triggerStatusLifecycleHook(targetBattle, targetUnit, 'statusConsumed', effect.statusId, {
+                            status: { ...status },
+                        });
                     }
                     return;
                 default:
@@ -745,14 +778,37 @@
 
     function createPassiveEffectRunner(deps) {
         const { applyEffects, getEffectStatusPotency } = createEffectExecutor(deps);
-        const { getStatus } = deps || {};
+        const { getStatus, invokeHooks } = deps || {};
 
         function applyPassiveEffects(targetBattle, hookName, hookEffects, runtime, options = {}) {
             const hookRuntime = {
                 ...runtime,
                 hookName,
+                statusOwner: options.hookOwnerType === 'status' ? options.hookOwner : null,
             };
             const hookBlocks = normalizeHookBlocks(hookEffects);
+            const shouldEmitStatusTriggerLifecycle = options.hookOwnerType === 'status'
+                && typeof invokeHooks === 'function'
+                && hookRuntime.unit
+                && hookName !== 'beforeStatusTrigger'
+                && hookName !== 'afterStatusTrigger';
+
+            const emitStatusTriggerLifecycle = (lifecycleHookName) => {
+                if (!shouldEmitStatusTriggerLifecycle) {
+                    return;
+                }
+
+                invokeHooks(hookRuntime.unit, lifecycleHookName, {
+                    battle: targetBattle,
+                    unit: hookRuntime.unit,
+                    sourceUnit: hookRuntime.sourceUnit || hookRuntime.unit,
+                    opponent: hookRuntime.opponent || hookRuntime.targetUnit || null,
+                    targetUnit: hookRuntime.targetUnit || hookRuntime.opponent || null,
+                    statusId: options.hookOwner?.id || null,
+                    status: options.hookOwner || null,
+                    triggerHookName: hookName,
+                });
+            };
 
             if (hookBlocks) {
                 hookBlocks.forEach((block, index) => {
@@ -769,8 +825,9 @@
                     if (!canUseHookBlock(block, hookName, hookRuntime, options.hookOwner, index)) {
                         return;
                     }
-
+                    emitStatusTriggerLifecycle('beforeStatusTrigger');
                     applyEffects(targetBattle, actions, hookRuntime);
+                    emitStatusTriggerLifecycle('afterStatusTrigger');
                 });
                 return;
             }
@@ -778,7 +835,13 @@
             const effects = Array.isArray(hookEffects)
                 ? hookEffects.filter((effect) => effectMatchesRuntime(effect, hookRuntime, getEffectStatusPotency))
                 : [];
+            if (effects.length) {
+                emitStatusTriggerLifecycle('beforeStatusTrigger');
+            }
             applyEffects(targetBattle, effects, hookRuntime);
+            if (effects.length) {
+                emitStatusTriggerLifecycle('afterStatusTrigger');
+            }
         }
 
         return applyPassiveEffects;

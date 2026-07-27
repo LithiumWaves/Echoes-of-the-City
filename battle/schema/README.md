@@ -136,7 +136,18 @@ Optional:
 Supported passive hook names (current):
 - `battleStart`
 - `turnStart`
+- `beforeCoinRoll`
 - `skillSelected`
+- `statusApplied`
+- `statusChanged`
+- `statusExpired`
+- `statusConsumed`
+- `beforeStatusTrigger`
+- `afterStatusTrigger`
+- `beforeDamage`
+- `afterDamage`
+- `coinRoll`
+- `afterCoinRoll`
 - `hitDealt`
 - `hitTaken`
 - `damageDealt`
