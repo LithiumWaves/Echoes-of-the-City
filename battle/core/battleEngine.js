@@ -793,39 +793,188 @@
             return rawDamage;
         }
 
-        function applyGenericSkillEffects(targetBattle, trigger, attacker, defender, skill) {
+        function getEffectTargetUnit(runtime, target = 'opponent') {
+            if (target === 'self') {
+                return runtime.sourceUnit || null;
+            }
+
+            if (target === 'opponent') {
+                return runtime.targetUnit || null;
+            }
+
+            return null;
+        }
+
+        function getEffectStatusPotency(runtime, effect) {
+            const targetUnit = getEffectTargetUnit(runtime, effect.statusSource || 'self');
+            if (!targetUnit || !effect.statusId) {
+                return 0;
+            }
+
+            return getStatusPotency(targetUnit, effect.statusId);
+        }
+
+        function effectMatchesRuntime(effect, runtime) {
+            if (typeof effect.coinIndex === 'number' && effect.coinIndex !== runtime.coinIndex) {
+                return false;
+            }
+
+            if (effect.criticalOnly && !runtime.isCritical) {
+                return false;
+            }
+
+            if (effect.outcome && effect.outcome !== runtime.outcome) {
+                return false;
+            }
+
+            if (typeof effect.minStatusPotency === 'number' && getEffectStatusPotency(runtime, effect) < effect.minStatusPotency) {
+                return false;
+            }
+
+            return true;
+        }
+
+        function applySkillEffects(targetBattle, trigger, runtime) {
+            const skill = runtime?.skill;
             const effects = Array.isArray(skill?.effects) ? skill.effects : [];
             effects.forEach((effect) => {
-                if (effect?.trigger !== trigger) {
+                if (effect?.trigger !== trigger || !effectMatchesRuntime(effect, runtime)) {
                     return;
                 }
 
-                if (effect.type === 'applyStatus' && effect.statusId) {
-                    applyStatus(targetBattle, defender, effect.statusId, {
+                const sourceUnit = runtime.sourceUnit || null;
+                const targetUnit = getEffectTargetUnit(runtime, effect.target || 'opponent');
+                const context = runtime.attackContext || runtime.defendContext || null;
+
+                switch (effect.type) {
+                case 'applyStatus':
+                    if (!targetUnit || !effect.statusId) {
+                        return;
+                    }
+                    applyStatus(targetBattle, targetUnit, effect.statusId, {
                         potency: effect.potency,
                         count: effect.count,
                     });
-                    invokeHooks(attacker, 'statusInflicted', { battle: targetBattle, unit: attacker, opponent: defender, skill, statusId: effect.statusId });
-                    invokeHooks(defender, 'statusReceived', { battle: targetBattle, unit: defender, opponent: attacker, skill, statusId: effect.statusId });
+                    if (sourceUnit) {
+                        invokeHooks(sourceUnit, 'statusInflicted', {
+                            battle: targetBattle,
+                            unit: sourceUnit,
+                            opponent: targetUnit,
+                            skill,
+                            statusId: effect.statusId,
+                        });
+                    }
+                    invokeHooks(targetUnit, 'statusReceived', {
+                        battle: targetBattle,
+                        unit: targetUnit,
+                        opponent: sourceUnit,
+                        skill,
+                        statusId: effect.statusId,
+                    });
+                    return;
+                case 'queueStatus':
+                    if (!targetUnit || !effect.statusId) {
+                        return;
+                    }
+                    queueStatusForNextTurn(targetUnit, effect.statusId, {
+                        potency: effect.potency,
+                        count: effect.count,
+                    });
+                    return;
+                case 'adjustSanity':
+                    if (!targetUnit) {
+                        return;
+                    }
+                    {
+                        const sanityChange = adjustSanity(targetUnit, effect.value || 0);
+                        emitEvent(targetBattle, 'sanity_changed', {
+                            unitName: targetUnit.name,
+                            previousSp: sanityChange.previousSp,
+                            nextSp: sanityChange.nextSp,
+                            reason: effect.reason || skill.name,
+                        });
+                    }
+                    return;
+                case 'modifyContext':
+                    if (!context || !effect.field) {
+                        return;
+                    }
+                    if (effect.operation === 'add') {
+                        context[effect.field] = (context[effect.field] || 0) + (effect.value || 0);
+                        return;
+                    }
+                    if (effect.operation === 'addStatusPotencyScaled') {
+                        const potency = getEffectStatusPotency(runtime, effect);
+                        const magnitude = typeof effect.cap === 'number'
+                            ? Math.min(effect.cap, potency * (effect.multiplier || 1))
+                            : potency * (effect.multiplier || 1);
+                        context[effect.field] = (context[effect.field] || 0) + ((effect.direction === 'subtract' ? -1 : 1) * magnitude);
+                        return;
+                    }
+                    if (effect.operation === 'setToOneMinusStatusPotencyScaled') {
+                        const potency = getEffectStatusPotency(runtime, effect);
+                        const reduction = typeof effect.cap === 'number'
+                            ? Math.min(effect.cap, potency * (effect.multiplier || 0))
+                            : potency * (effect.multiplier || 0);
+                        context[effect.field] = 1 - reduction;
+                    }
+                    return;
+                case 'modifyCoinMap':
+                    if (!context || !effect.field || typeof effect.coinIndex !== 'number') {
+                        return;
+                    }
+                    if (!context[effect.field]) {
+                        context[effect.field] = {};
+                    }
+                    context[effect.field][effect.coinIndex] = (context[effect.field][effect.coinIndex] || 0) + (effect.value || 0);
+                    return;
+                case 'setFollowUpSkill':
+                    if (context && effect.skillId) {
+                        context.followUpSkillIdOnClashLose = effect.skillId;
+                    }
+                    return;
+                case 'modifyPhysicalResistance':
+                    if (!targetUnit || !effect.damageType) {
+                        return;
+                    }
+                    {
+                        const baseResistance = targetUnit.resistances?.physical?.[effect.damageType] || 1;
+                        const currentResistance = targetUnit.turnState?.resistanceOverrides?.[effect.damageType] || baseResistance;
+                        const nextResistance = effect.operation === 'multiplyCurrent'
+                            ? currentResistance * (effect.value || 1)
+                            : baseResistance * (effect.value || 1);
+                        targetUnit.turnState.resistanceOverrides = {
+                            ...(targetUnit.turnState.resistanceOverrides || {}),
+                            [effect.damageType]: nextResistance,
+                        };
+                    }
+                    return;
+                case 'modifyDefenseLevel':
+                    if (!targetUnit) {
+                        return;
+                    }
+                    targetUnit.turnState.defenseLevelModifier = (targetUnit.turnState.defenseLevelModifier || 0) + (effect.value || 0);
+                    return;
+                case 'consumeStatus':
+                    if (!targetUnit || !effect.statusId) {
+                        return;
+                    }
+                    {
+                        const status = getStatus(targetUnit, effect.statusId);
+                        if (!status) {
+                            return;
+                        }
+                        removeStatus(targetUnit, effect.statusId);
+                        emitEvent(targetBattle, 'status_expired', {
+                            unitId: targetUnit.id,
+                            unitName: targetUnit.name,
+                            statusId: effect.statusId,
+                        });
+                    }
+                    return;
+                default:
+                    return;
                 }
-            });
-        }
-
-        function gainPoise(targetBattle, unit, potency, count = 0) {
-            applyStatus(targetBattle, unit, 'poise', { potency, count });
-        }
-
-        function consumeAllPoise(targetBattle, unit) {
-            const poise = getStatus(unit, 'poise');
-            if (!poise) {
-                return;
-            }
-
-            removeStatus(unit, 'poise');
-            emitEvent(targetBattle, 'status_expired', {
-                unitId: unit.id,
-                unitName: unit.name,
-                statusId: 'poise',
             });
         }
 
@@ -842,57 +991,15 @@
                 extraCritDamageByCoin: {},
                 critFinalPowerBonusByCoin: {},
                 followUpSkillIdOnClashLose: null,
-                consumePoiseAtAttackEnd: false,
                 currentCoinIndex: 0,
             };
-
-            const poisePotency = getStatusPotency(unit, 'poise');
-
-            switch (skill.id) {
-            case 'draw-of-the-sword':
-                if (poisePotency >= 5) {
-                    context.coinPowerBonus += 1;
-                }
-                gainPoise(targetBattle, unit, 0, 2);
-                break;
-            case 'acupuncture':
-                if (poisePotency >= 7) {
-                    context.coinPowerBonus += 1;
-                }
-                gainPoise(targetBattle, unit, 0, 3);
-                context.extraCritDamageByCoin[2] = 0.2;
-                context.extraCritDamageByCoin[3] = 0.4;
-                break;
-            case 'yield-my-flesh':
-                context.damageReductionMultiplier = 1 - Math.min(0.8, poisePotency * 0.02);
-                context.clashPowerBonus -= Math.min(30, poisePotency);
-                context.extraCritDamageByCoin[1] = 1.5;
-                context.followUpSkillIdOnClashLose = 'to-claim-their-bones';
-                break;
-            case 'to-claim-their-bones':
-                if (poisePotency >= 10) {
-                    context.coinPowerBonus += 1;
-                }
-                gainPoise(targetBattle, unit, 0, 4);
-                context.critFinalPowerBonusByCoin[1] = 2;
-                context.critFinalPowerBonusByCoin[2] = 2;
-                context.critFinalPowerBonusByCoin[3] = 2;
-                context.consumePoiseAtAttackEnd = true;
-                break;
-            case 'sink-it-all': {
-                const sanityChange = adjustSanity(unit, -30);
-                emitEvent(targetBattle, 'sanity_changed', {
-                    unitName: unit.name,
-                    previousSp: sanityChange.previousSp,
-                    nextSp: sanityChange.nextSp,
-                    reason: 'Sink It All',
-                });
-                applyStatus(targetBattle, unit, 'sinking', { potency: 5, count: 5 });
-                break;
-            }
-            default:
-                break;
-            }
+            applySkillEffects(targetBattle, 'onSelect', {
+                sourceUnit: unit,
+                targetUnit,
+                skill,
+                attackContext: context,
+                slot,
+            });
 
             invokeHooks(unit, 'skillSelected', {
                 battle: targetBattle,
@@ -903,38 +1010,6 @@
             });
 
             return context;
-        }
-
-        function applyCustomClashOutcome(targetBattle, outcome, unit, opponent, skill) {
-            switch (skill.id) {
-            case 'draw-of-the-sword':
-                if (outcome === 'win') {
-                    gainPoise(targetBattle, unit, 3, 0);
-                }
-                break;
-            case 'acupuncture':
-                if (outcome === 'win') {
-                    gainPoise(targetBattle, unit, 2, 0);
-                }
-                break;
-            case 'yield-my-flesh':
-                if (outcome === 'win') {
-                    gainPoise(targetBattle, unit, 5, 0);
-                }
-                break;
-            case 'stinging-memories': {
-                const sanityChange = adjustSanity(unit, outcome === 'win' ? 8 : -5);
-                emitEvent(targetBattle, 'sanity_changed', {
-                    unitName: unit.name,
-                    previousSp: sanityChange.previousSp,
-                    nextSp: sanityChange.nextSp,
-                    reason: outcome === 'win' ? 'clash win' : 'clash loss',
-                });
-                break;
-            }
-            default:
-                break;
-            }
         }
 
         function rollCritical(targetBattle, attacker) {
@@ -951,75 +1026,13 @@
             return isCritical;
         }
 
-        function applyCustomCoinEffects(targetBattle, attacker, defender, skill, coinIndex, isCritical) {
-            switch (skill.id) {
-            case 'draw-of-the-sword':
-                if (coinIndex === 1) {
-                    gainPoise(targetBattle, attacker, 3, 0);
-                }
-                if (coinIndex === 2) {
-                    gainPoise(targetBattle, attacker, 3, 0);
-                    applyStatus(targetBattle, defender, 'bleed', { potency: 5, count: 1 });
-                }
-                if (isCritical) {
-                    applyStatus(targetBattle, defender, 'bleed', { potency: 0, count: 2 });
-                }
-                break;
-            case 'acupuncture':
-                if (coinIndex === 1) {
-                    gainPoise(targetBattle, attacker, 4, 0);
-                }
-                if (coinIndex === 4) {
-                    applyStatus(targetBattle, defender, 'bleed', { potency: 0, count: 3 });
-                }
-                break;
-            case 'yield-my-flesh':
-                if (coinIndex === 1 && isCritical) {
-                    defender.turnState.resistanceOverrides = {
-                        ...(defender.turnState.resistanceOverrides || {}),
-                        slash: (defender.resistances.physical?.slash || 1) * 1.25,
-                    };
-                    defender.turnState.defenseLevelModifier = (defender.turnState.defenseLevelModifier || 0) - 4;
-                }
-                break;
-            case 'to-claim-their-bones':
-                if (coinIndex === 4) {
-                    applyStatus(targetBattle, defender, 'bleed', { potency: 10, count: 3 });
-                    queueStatusForNextTurn(defender, 'paralyze', { count: 2 });
-                }
-                break;
-            case 'stinging-memories':
-                applyStatus(targetBattle, defender, 'sinking', { potency: 2, count: 1 });
-                applyStatus(targetBattle, defender, 'rupture', { potency: 2, count: 1 });
-                break;
-            case 'aching-heart':
-                if (coinIndex === 1) {
-                    applyStatus(targetBattle, defender, 'rupture', { potency: 3, count: 1 });
-                }
-                if (coinIndex === 2) {
-                    applyStatus(targetBattle, defender, 'rupture', { potency: 0, count: 3 });
-                }
-                break;
-            case 'sink-it-all': {
-                const sanityChange = adjustSanity(defender, -15);
-                emitEvent(targetBattle, 'sanity_changed', {
-                    unitName: defender.name,
-                    previousSp: sanityChange.previousSp,
-                    nextSp: sanityChange.nextSp,
-                    reason: 'Sink It All',
-                });
-                applyStatus(targetBattle, defender, 'sinking', { potency: 8, count: 1 });
-                break;
-            }
-            default:
-                break;
-            }
-        }
-
         function applyAttackEndEffects(targetBattle, attacker, skill, attackContext) {
-            if (attackContext.consumePoiseAtAttackEnd) {
-                consumeAllPoise(targetBattle, attacker);
-            }
+            applySkillEffects(targetBattle, 'onAttackEnd', {
+                sourceUnit: attacker,
+                targetUnit: null,
+                skill,
+                attackContext,
+            });
 
             invokeHooks(attacker, 'attackEnd', {
                 battle: targetBattle,
@@ -1236,8 +1249,15 @@
                 invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, damage });
                 invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, damage });
 
-                applyCustomCoinEffects(targetBattle, attacker, defender, skill, coinIndex + 1, isCritical);
-                applyGenericSkillEffects(targetBattle, 'onHit', attacker, defender, skill);
+                applySkillEffects(targetBattle, 'onHit', {
+                    sourceUnit: attacker,
+                    targetUnit: defender,
+                    skill,
+                    attackContext,
+                    defendContext,
+                    coinIndex: coinIndex + 1,
+                    isCritical,
+                });
 
                 if (defender.hp <= 0) {
                     break;
@@ -1574,8 +1594,15 @@
                 invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, damage });
                 invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill: attackSkill, damage });
 
-                applyCustomCoinEffects(targetBattle, attacker, defender, attackSkill, coinIndex + 1, isCritical);
-                applyGenericSkillEffects(targetBattle, 'onHit', attacker, defender, attackSkill);
+                applySkillEffects(targetBattle, 'onHit', {
+                    sourceUnit: attacker,
+                    targetUnit: defender,
+                    skill: attackSkill,
+                    attackContext,
+                    defendContext,
+                    coinIndex: coinIndex + 1,
+                    isCritical,
+                });
             }
 
             return {
@@ -1669,8 +1696,20 @@
                 loserName: clashLoserUnit.name,
                 remainingCoins,
             });
-            applyCustomClashOutcome(targetBattle, 'win', clashWinnerUnit, clashLoserUnit, winnerSkill);
-            applyCustomClashOutcome(targetBattle, 'lose', clashLoserUnit, clashWinnerUnit, loserSkill);
+            applySkillEffects(targetBattle, 'onClashWin', {
+                sourceUnit: clashWinnerUnit,
+                targetUnit: clashLoserUnit,
+                skill: winnerSkill,
+                attackContext: winnerContext,
+                outcome: 'win',
+            });
+            applySkillEffects(targetBattle, 'onClashLose', {
+                sourceUnit: clashLoserUnit,
+                targetUnit: clashWinnerUnit,
+                skill: loserSkill,
+                attackContext: loserContext,
+                outcome: 'lose',
+            });
 
             const winnerSanity = adjustSanity(clashWinnerUnit, 5);
             const loserSanity = adjustSanity(clashLoserUnit, -5);

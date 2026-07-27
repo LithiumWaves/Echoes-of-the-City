@@ -933,17 +933,13 @@
             }
 
             const unit = getUnitById(battle, activePlayerSlot.unitId);
-            const sharedBorderPath = unit.id === 'bamboo-hatted-kim'
-                ? 'assets/skillborders/Pride1.png'
-                : 'assets/skillborders/Wrath1.png';
-
             return unit.skills
-                .filter((skill) => !(unit.id === 'bamboo-hatted-kim' && skill.id === 'to-claim-their-bones'))
+                .filter((skill) => skill.showInPlanner !== false)
                 .map((skill, index) => {
                     const isSelected = activePlayerSlot.selectedSkillId === skill.id;
                     const isDisabled = battle.phase !== 'select' || Boolean(battle.winner);
                     const isDefense = isDefenseSkill(skill);
-                    const borderUrl = resolveAssetUrl(sharedBorderPath);
+                    const borderUrl = resolveAssetUrl(skill.borderPath);
                     const tooltipText = escapeAttribute([
                         skill.name,
                         `${getSkillDamageProfileLabel(skill)} | ${getSkillPowerLabel(skill)}`,
