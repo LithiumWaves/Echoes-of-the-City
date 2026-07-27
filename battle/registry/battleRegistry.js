@@ -33,6 +33,7 @@
         sinking: { id: 'sinking', label: 'Sinking', iconPath: 'assets/statuseffects/keywordstatus/Sinking.png' },
         tremor: { id: 'tremor', label: 'Tremor', iconPath: 'assets/statuseffects/keywordstatus/Tremor.png' },
     };
+    const statusDefinitionAliases = battleModules.statusDefinitionAliases || (battleModules.statusDefinitionAliases = {});
 
     const affinityLabels = {
         slash: 'Slash',
@@ -109,6 +110,16 @@
         return definition ? cloneRegistryValue(definition) : null;
     }
 
+    function isSeedStatusDefinition(definition) {
+        if (!definition || typeof definition !== 'object') {
+            return false;
+        }
+
+        return !definition.description
+            && !definition.stackModel
+            && !definition.hooks;
+    }
+
     function registerStatusDefinition(definition, options = {}) {
         const validator = getStatusDefinitionValidator();
         const { normalizedDefinition, errors, message } = typeof validator === 'function'
@@ -125,16 +136,52 @@
             throw new Error('Registered status definitions must have an id.');
         }
 
+        const existingDefinition = statusDefinitions[definitionId];
+        if (
+            existingDefinition
+            && existingDefinition.id === definitionId
+            && !options.allowOverwrite
+            && !isSeedStatusDefinition(existingDefinition)
+        ) {
+            throw new Error(`Status definition "${definitionId}" is already registered.`);
+        }
+
         statusDefinitions[definitionId] = cloneRegistryValue(registeredDefinition);
 
         const aliases = Array.isArray(options.aliases) ? options.aliases : [];
+        statusDefinitionAliases[definitionId] = aliases
+            .filter((alias) => typeof alias === 'string' && alias);
+
         aliases
             .filter((alias) => typeof alias === 'string' && alias)
             .forEach((alias) => {
+                const existingAliasDefinition = statusDefinitions[alias];
+                if (existingAliasDefinition && existingAliasDefinition.id !== definitionId && !options.allowOverwrite) {
+                    throw new Error(`Status alias "${alias}" is already registered.`);
+                }
                 statusDefinitions[alias] = statusDefinitions[definitionId];
             });
 
         return getStatusDefinition(definitionId);
+    }
+
+    function unregisterStatusDefinition(definitionId) {
+        if (!definitionId || typeof definitionId !== 'string') {
+            return false;
+        }
+
+        const existingDefinition = statusDefinitions[definitionId];
+        if (!existingDefinition || existingDefinition.id !== definitionId) {
+            return false;
+        }
+
+        const aliases = statusDefinitionAliases[definitionId] || [];
+        delete statusDefinitions[definitionId];
+        aliases.forEach((alias) => {
+            delete statusDefinitions[alias];
+        });
+        delete statusDefinitionAliases[definitionId];
+        return true;
     }
 
     function listStatusDefinitions() {
@@ -267,6 +314,7 @@
         effectDefinitions,
         passiveHookLabels,
         registerStatusDefinition,
+        unregisterStatusDefinition,
         listStatusDefinitions,
         getStatusDefinition,
         getStatusLabel,

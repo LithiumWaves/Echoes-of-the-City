@@ -64,6 +64,8 @@
         dragStartButton: { x: 0, y: 0 },
         buttonPosition: { x: 0, y: 0 },
         extensionBaseUrl: null,
+        contentJsonInput: '',
+        contentImportMessage: null,
     };
 
     const elements = {
@@ -155,7 +157,164 @@
             return error;
         }
 
-        return error.stack || error.message || String(error);
+        return error.message || error.stack || String(error);
+    }
+
+    function formatContentImportMessage(message) {
+        if (!message?.text) {
+            return '';
+        }
+
+        return message.text;
+    }
+
+    function setContentImportMessage(type, text) {
+        state.contentImportMessage = text
+            ? { type, text }
+            : null;
+    }
+
+    function formatImportSummary(result, sourceLabel) {
+        const statuses = result?.counts?.statuses || 0;
+        const units = result?.counts?.units || 0;
+        const battles = result?.counts?.battles || 0;
+        const summaryParts = [
+            `${battles} battle${battles === 1 ? '' : 's'}`,
+            `${units} unit${units === 1 ? '' : 's'}`,
+            `${statuses} status${statuses === 1 ? '' : 'es'}`,
+        ];
+        return `Imported ${summaryParts.join(', ')} from ${sourceLabel}.`;
+    }
+
+    function sanitizeDownloadFileName(value, fallbackName) {
+        const sanitized = String(value || fallbackName || 'content')
+            .replace(/[^a-z0-9-_]+/gi, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '')
+            .toLowerCase();
+        return sanitized || fallbackName || 'content';
+    }
+
+    function downloadJsonFile(fileName, data) {
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(objectUrl);
+    }
+
+    async function importContentJson(text, sourceLabel = 'pasted JSON') {
+        const trimmedText = String(text || '').trim();
+        if (!trimmedText) {
+            setContentImportMessage('error', 'Paste a battle, unit, status, or content pack JSON object first.');
+            renderBattleStartScreen();
+            return;
+        }
+
+        let parsedPayload;
+        try {
+            parsedPayload = JSON.parse(trimmedText);
+        } catch (error) {
+            setContentImportMessage('error', `Invalid JSON in ${sourceLabel}: ${error?.message || error}`);
+            renderBattleStartScreen();
+            return;
+        }
+
+        try {
+            const api = getBattleContentApi();
+            if (typeof api.importContentPack !== 'function') {
+                throw new Error('Battle content import is not available.');
+            }
+
+            const result = api.importContentPack(parsedPayload);
+            refreshBattleSelectionState();
+            if (Array.isArray(result?.ids?.battles) && result.ids.battles.length) {
+                state.selectedBattleId = result.ids.battles[0];
+            }
+            state.contentJsonInput = '';
+            setContentImportMessage('success', formatImportSummary(result, sourceLabel));
+        } catch (error) {
+            setContentImportMessage('error', formatCombatModuleError(error));
+        }
+
+        renderBattleStartScreen();
+    }
+
+    async function promptContentFileImport() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.json,application/json';
+        fileInput.addEventListener('change', async () => {
+            const file = fileInput.files?.[0];
+            if (!file) {
+                return;
+            }
+
+            try {
+                const fileText = await file.text();
+                state.contentJsonInput = fileText;
+                await importContentJson(fileText, file.name);
+            } catch (error) {
+                setContentImportMessage('error', `Failed to read ${file.name}: ${error?.message || error}`);
+                renderBattleStartScreen();
+            }
+        }, { once: true });
+        fileInput.click();
+    }
+
+    function exportSelectedBattleJson() {
+        const selectedBattleId = state.selectedBattleId;
+        if (!selectedBattleId) {
+            setContentImportMessage('error', 'Select a battle before exporting.');
+            renderBattleStartScreen();
+            return;
+        }
+
+        try {
+            const api = getBattleContentApi();
+            if (typeof api.exportBattleDefinition !== 'function') {
+                throw new Error('Battle export is not available.');
+            }
+
+            const battleDefinition = api.exportBattleDefinition(selectedBattleId);
+            const fileName = `${sanitizeDownloadFileName(selectedBattleId, 'battle')}.json`;
+            downloadJsonFile(fileName, battleDefinition);
+            setContentImportMessage('success', `Exported battle JSON for "${battleDefinition.name || selectedBattleId}".`);
+        } catch (error) {
+            setContentImportMessage('error', formatCombatModuleError(error));
+        }
+
+        renderBattleStartScreen();
+    }
+
+    function exportSelectedBattlePack() {
+        const selectedBattleId = state.selectedBattleId;
+        if (!selectedBattleId) {
+            setContentImportMessage('error', 'Select a battle before exporting its pack.');
+            renderBattleStartScreen();
+            return;
+        }
+
+        try {
+            const api = getBattleContentApi();
+            if (typeof api.exportBattleContentPack !== 'function') {
+                throw new Error('Battle pack export is not available.');
+            }
+
+            const contentPack = api.exportBattleContentPack(selectedBattleId);
+            const fileName = `${sanitizeDownloadFileName(selectedBattleId, 'battle')}-pack.json`;
+            downloadJsonFile(fileName, contentPack);
+            setContentImportMessage('success', `Exported a reusable content pack for "${selectedBattleId}".`);
+        } catch (error) {
+            setContentImportMessage('error', formatCombatModuleError(error));
+        }
+
+        renderBattleStartScreen();
     }
 
     function isDebugBattleId(battleId) {
@@ -279,6 +438,10 @@
         }
 
         const selectedBattle = state.availableBattles.find((battle) => battle.id === state.selectedBattleId) || state.availableBattles[0];
+        const contentImportMessage = formatContentImportMessage(state.contentImportMessage);
+        const contentImportMessageStyles = state.contentImportMessage?.type === 'error'
+            ? 'background: rgba(120, 24, 24, 0.58); border: 1px solid rgba(255, 110, 110, 0.4);'
+            : 'background: rgba(24, 120, 70, 0.42); border: 1px solid rgba(120, 255, 170, 0.35);';
         const selectionMarkup = state.availableBattles
             .map((battle) => `
                 <button
@@ -317,6 +480,26 @@
                     >
                         ${selectedBattle?.isDebug ? 'Launch Debug Battle' : 'Launch Battle'}
                     </button>
+                </div>
+                <div style="margin-top: 1rem; display: grid; gap: 0.55rem; text-align: left;">
+                    <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
+                        Import a battle, unit, status, or a full content pack JSON object. Export the selected battle by itself or as a reusable dependency pack.
+                    </div>
+                    <textarea
+                        data-action="content-json-input"
+                        rows="8"
+                        style="width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height: 1.35;"
+                        placeholder='{"id":"custom-battle","name":"Custom Battle","playerUnits":[...],"enemyUnits":[...]}'
+                    >${escapeHtml(state.contentJsonInput || '')}</textarea>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="import-content-json">Import JSON</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="import-content-file">Import File</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="export-selected-battle" ${selectedBattle ? '' : 'disabled'}>Export Battle</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="export-selected-pack" ${selectedBattle ? '' : 'disabled'}>Export Battle Pack</button>
+                    </div>
+                    ${contentImportMessage
+                        ? `<div style="padding: 0.65rem 0.75rem; color: rgba(255,255,255,0.92); white-space: pre-wrap; ${contentImportMessageStyles}">${escapeHtml(contentImportMessage)}</div>`
+                        : ''}
                 </div>
             </div>
         `;
@@ -396,10 +579,36 @@
             return;
         }
 
+        if (action === 'import-content-json') {
+            await importContentJson(state.contentJsonInput, 'pasted JSON');
+            return;
+        }
+
+        if (action === 'import-content-file') {
+            await promptContentFileImport();
+            return;
+        }
+
+        if (action === 'export-selected-battle') {
+            exportSelectedBattleJson();
+            return;
+        }
+
+        if (action === 'export-selected-pack') {
+            exportSelectedBattlePack();
+            return;
+        }
+
         state.battleHandler?.handleClick(event);
     }
 
         function handleCombatContentChange(event) {
+            const textarea = event.target.closest('[data-action="content-json-input"]');
+            if (textarea) {
+                state.contentJsonInput = textarea.value || '';
+                return;
+            }
+
             state.battleHandler?.handleChange?.(event);
         }
 
