@@ -20,10 +20,17 @@
         hooks: {
             turnEnd: [
                 {
-                    type: 'adjustStatus',
-                    target: 'self',
-                    statusId: 'poise',
-                    countDelta: -1,
+                    conditions: [
+                        { type: 'always' },
+                    ],
+                    actions: [
+                        {
+                            type: 'adjustStatus',
+                            target: 'self',
+                            statusId: 'poise',
+                            countDelta: -1,
+                        },
+                    ],
                 },
             ],
         },

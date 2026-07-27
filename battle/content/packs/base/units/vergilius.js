@@ -31,6 +31,28 @@
                 envy: 1,
             },
         },
+        passives: [
+            {
+                id: 'smoldering-malice',
+                name: 'Smoldering Malice',
+                description: 'Once per skill, when a Wrath attack deals damage, deal 2 bonus fixed damage.',
+                hooks: {
+                    hitDealt: [
+                        {
+                            id: 'smoldering-malice-bonus-hit',
+                            oncePer: 'skill',
+                            conditions: [
+                                { type: 'skillSinType', value: 'wrath' },
+                                { type: 'damageAtLeast', value: 1 },
+                            ],
+                            actions: [
+                                { type: 'dealFixedDamage', target: 'opponent', amount: 2 },
+                            ],
+                        },
+                    ],
+                },
+            },
+        ],
         sprites: {
             idle: 'assets/debugsprites/Vergilius_Idle_Sprite.png',
             moving: 'assets/debugsprites/Vergilius_Moving_Sprite.png',

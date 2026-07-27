@@ -47,10 +47,19 @@
 
     function cloneHookDefinition(hookDefinition) {
         if (Array.isArray(hookDefinition)) {
-            return hookDefinition.map((effect) => ({ ...effect }));
+            return hookDefinition.map((value) => cloneHookDefinition(value));
         }
 
-        return hookDefinition;
+        if (!hookDefinition || typeof hookDefinition !== 'object') {
+            return hookDefinition;
+        }
+
+        return Object.fromEntries(
+            Object.entries(hookDefinition).map(([key, value]) => [
+                key,
+                typeof value === 'function' ? value : cloneHookDefinition(value),
+            ]),
+        );
     }
 
     function cloneHookMap(hooks) {
@@ -71,7 +80,59 @@
         return passives.map((passive) => ({
             ...passive,
             hooks: cloneHookMap(passive?.hooks),
+            runtimeState: {
+                oncePer: {
+                    battle: {},
+                    turn: {},
+                    skill: {},
+                    coin: {},
+                },
+            },
         }));
+    }
+
+    function ensureHookOwnerRuntimeState(hookOwner) {
+        if (!hookOwner || typeof hookOwner !== 'object') {
+            return null;
+        }
+
+        if (!hookOwner.runtimeState || typeof hookOwner.runtimeState !== 'object' || Array.isArray(hookOwner.runtimeState)) {
+            hookOwner.runtimeState = {};
+        }
+
+        if (!hookOwner.runtimeState.oncePer || typeof hookOwner.runtimeState.oncePer !== 'object' || Array.isArray(hookOwner.runtimeState.oncePer)) {
+            hookOwner.runtimeState.oncePer = {
+                battle: {},
+                turn: {},
+                skill: {},
+                coin: {},
+            };
+        }
+
+        return hookOwner.runtimeState.oncePer;
+    }
+
+    function resetHookOwnerRuntimeState(hookOwner, scopes = ['turn', 'skill', 'coin']) {
+        const oncePer = ensureHookOwnerRuntimeState(hookOwner);
+        if (!oncePer) {
+            return;
+        }
+
+        scopes.forEach((scope) => {
+            oncePer[scope] = {};
+        });
+    }
+
+    function resetUnitHookRuntimeState(unit) {
+        const statuses = Array.isArray(unit?.statuses) ? unit.statuses : [];
+        statuses.forEach((status) => {
+            resetHookOwnerRuntimeState(status);
+        });
+
+        const passives = Array.isArray(unit?.passives) ? unit.passives : [];
+        passives.forEach((passive) => {
+            resetHookOwnerRuntimeState(passive);
+        });
     }
 
     function createBattleUnit(template, side, index) {
@@ -287,9 +348,18 @@
                 targetUnit: context?.targetUnit || context?.opponent || null,
             };
 
-            const invokeHookDefinition = (hookDefinition) => {
+            const invokeHookDefinition = (hookDefinition, hookOwner) => {
+                if (hookDefinition && typeof hookDefinition === 'object' && hookContext.battle) {
+                    ensurePassiveEffectRunner()?.(hookContext.battle, hookName, hookDefinition, hookContext, {
+                        hookOwner,
+                    });
+                    return;
+                }
+
                 if (Array.isArray(hookDefinition) && hookContext.battle) {
-                    ensurePassiveEffectRunner()?.(hookContext.battle, hookName, hookDefinition, hookContext);
+                    ensurePassiveEffectRunner()?.(hookContext.battle, hookName, hookDefinition, hookContext, {
+                        hookOwner,
+                    });
                     return;
                 }
 
@@ -298,12 +368,12 @@
 
             const statuses = Array.isArray(unit.statuses) ? unit.statuses : [];
             statuses.forEach((status) => {
-                invokeHookDefinition(status?.hooks?.[hookName]);
+                invokeHookDefinition(status?.hooks?.[hookName], status);
             });
 
             const passives = Array.isArray(unit.passives) ? unit.passives : [];
             passives.forEach((passive) => {
-                invokeHookDefinition(passive?.hooks?.[hookName]);
+                invokeHookDefinition(passive?.hooks?.[hookName], passive);
             });
         }
 
@@ -553,6 +623,14 @@
                     count: nextCount,
                     hooks: cloneHookMap(statusDefinition?.hooks),
                     stackModel: cloneStatusStackModel(statusDefinition?.stackModel),
+                    runtimeState: {
+                        oncePer: {
+                            battle: {},
+                            turn: {},
+                            skill: {},
+                            coin: {},
+                        },
+                    },
                 };
                 unit.statuses.push(status);
                 emitEvent(targetBattle, 'status_applied', {
@@ -573,6 +651,7 @@
             if (!existing.stackModel && statusDefinition?.stackModel) {
                 existing.stackModel = cloneStatusStackModel(statusDefinition.stackModel);
             }
+            ensureHookOwnerRuntimeState(existing);
             emitEvent(targetBattle, 'status_changed', {
                 unitId: unit.id,
                 unitName: unit.name,
@@ -2225,6 +2304,7 @@
 
             getAllUnits(targetBattle).forEach((unit) => {
                 unit.turnState = {};
+                resetUnitHookRuntimeState(unit);
                 processQueuedStatusesAtTurnStart(targetBattle, unit);
                 progressStaggerTurnState(targetBattle, unit);
             });

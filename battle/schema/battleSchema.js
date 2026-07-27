@@ -41,6 +41,23 @@
         'firstLivingAlly',
         'mirrorOpponent',
     ]);
+    const HOOK_BLOCK_ONCE_PER = new Set(['battle', 'turn', 'skill', 'coin']);
+    const HOOK_CONDITION_TYPES = new Set([
+        'always',
+        'damageAtLeast',
+        'hasStatus',
+        'statusPotencyAtLeast',
+        'statusCountAtLeast',
+        'skillSinType',
+        'skillDamageType',
+        'coinIndex',
+        'criticalHit',
+        'targetStaggered',
+        'hpPercentAtOrBelow',
+        'hpPercentAtOrAbove',
+        'spAtOrBelow',
+        'spAtOrAbove',
+    ]);
 
     function cloneDefinition(definition) {
         if (Array.isArray(definition)) {
@@ -146,6 +163,186 @@
             if (!isFiniteNumber(value) || value <= 0) {
                 pushError(errors, `${unitPath}.resistances.${bucket}.${key}`, 'must be a positive number.');
             }
+        });
+    }
+
+    function isHookBlockDefinition(definition) {
+        return Boolean(definition)
+            && typeof definition === 'object'
+            && !Array.isArray(definition)
+            && Array.isArray(definition.actions);
+    }
+
+    function normalizeHookBlocks(hookDefinition) {
+        if (isHookBlockDefinition(hookDefinition)) {
+            return [hookDefinition];
+        }
+
+        if (!Array.isArray(hookDefinition) || !hookDefinition.length) {
+            return null;
+        }
+
+        return hookDefinition.every((entry) => isHookBlockDefinition(entry))
+            ? hookDefinition
+            : null;
+    }
+
+    function validateHookCondition(errors, condition, path) {
+        if (!condition || typeof condition !== 'object' || Array.isArray(condition)) {
+            pushError(errors, path, 'must be an object.');
+            return;
+        }
+
+        if (!HOOK_CONDITION_TYPES.has(condition.type)) {
+            pushError(errors, `${path}.type`, 'is missing or unsupported.');
+            return;
+        }
+
+        if (condition.target != null && !['self', 'opponent'].includes(condition.target)) {
+            pushError(errors, `${path}.target`, 'must be "self" or "opponent" when provided.');
+        }
+
+        switch (condition.type) {
+        case 'always':
+            break;
+        case 'criticalHit':
+            if (condition.value != null && typeof condition.value !== 'boolean') {
+                pushError(errors, `${path}.value`, 'must be a boolean when provided.');
+            }
+            break;
+        case 'skillSinType':
+            if (typeof condition.value === 'string') {
+                if (!SIN_TYPES.has(condition.value)) {
+                    pushError(errors, `${path}.value`, 'must be a supported Sin affinity.');
+                }
+            } else if (Array.isArray(condition.value)) {
+                condition.value.forEach((entry, index) => {
+                    if (typeof entry !== 'string' || !SIN_TYPES.has(entry)) {
+                        pushError(errors, `${path}.value[${index}]`, 'must be a supported Sin affinity.');
+                    }
+                });
+            } else {
+                pushError(errors, `${path}.value`, 'must be a supported Sin affinity or array of affinities.');
+            }
+            break;
+        case 'skillDamageType':
+            if (typeof condition.value === 'string') {
+                if (!PHYSICAL_DAMAGE_TYPES.has(condition.value)) {
+                    pushError(errors, `${path}.value`, 'must be slash, pierce, or blunt.');
+                }
+            } else if (Array.isArray(condition.value)) {
+                condition.value.forEach((entry, index) => {
+                    if (typeof entry !== 'string' || !PHYSICAL_DAMAGE_TYPES.has(entry)) {
+                        pushError(errors, `${path}.value[${index}]`, 'must be slash, pierce, or blunt.');
+                    }
+                });
+            } else {
+                pushError(errors, `${path}.value`, 'must be a supported damage type or array of damage types.');
+            }
+            break;
+        case 'hasStatus':
+            if (!condition.statusId || typeof condition.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(condition.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id.');
+            }
+            break;
+        case 'statusPotencyAtLeast':
+        case 'statusCountAtLeast':
+            if (!condition.statusId || typeof condition.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(condition.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id.');
+            }
+            if (!isFiniteNumber(condition.value) || condition.value < 0) {
+                pushError(errors, `${path}.value`, 'must be a non-negative number.');
+            }
+            break;
+        case 'coinIndex':
+            if (!Number.isInteger(condition.value) || condition.value <= 0) {
+                pushError(errors, `${path}.value`, 'must be a positive integer.');
+            }
+            break;
+        case 'damageAtLeast':
+        case 'hpPercentAtOrBelow':
+        case 'hpPercentAtOrAbove':
+        case 'spAtOrBelow':
+        case 'spAtOrAbove':
+            if (!isFiniteNumber(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'targetStaggered':
+            if (condition.value != null && typeof condition.value !== 'boolean') {
+                pushError(errors, `${path}.value`, 'must be a boolean when provided.');
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    function validateHookBlock(errors, unitSkillIds, block, path) {
+        if (!block || typeof block !== 'object' || Array.isArray(block)) {
+            pushError(errors, path, 'must be an object.');
+            return;
+        }
+
+        if (block.id != null && typeof block.id !== 'string') {
+            pushError(errors, `${path}.id`, 'must be a string when provided.');
+        }
+
+        if (block.oncePer != null && !HOOK_BLOCK_ONCE_PER.has(block.oncePer)) {
+            pushError(errors, `${path}.oncePer`, 'must be battle, turn, skill, or coin when provided.');
+        }
+
+        if (block.conditions != null) {
+            if (!Array.isArray(block.conditions)) {
+                pushError(errors, `${path}.conditions`, 'must be an array when provided.');
+            } else {
+                block.conditions.forEach((condition, index) => {
+                    validateHookCondition(errors, condition, `${path}.conditions[${index}]`);
+                });
+            }
+        }
+
+        if (!Array.isArray(block.actions) || !block.actions.length) {
+            pushError(errors, `${path}.actions`, 'must be a non-empty array of effect definitions.');
+            return;
+        }
+
+        block.actions.forEach((effect, index) => {
+            validateEffect(errors, unitSkillIds, effect, `${path}.actions[${index}]`, { requireTrigger: false });
+        });
+    }
+
+    function validateHookDefinition(errors, unitSkillIds, hookDefinition, path, options = {}) {
+        const { allowFunction = false } = options;
+
+        if (typeof hookDefinition === 'function') {
+            if (!allowFunction) {
+                pushError(errors, path, 'must be a hook block or an array of effect definitions.');
+            }
+            return;
+        }
+
+        const hookBlocks = normalizeHookBlocks(hookDefinition);
+        if (hookBlocks) {
+            hookBlocks.forEach((block, index) => {
+                validateHookBlock(errors, unitSkillIds, block, `${path}[${index}]`);
+            });
+            return;
+        }
+
+        if (!Array.isArray(hookDefinition)) {
+            pushError(errors, path, allowFunction
+                ? 'must be a function, hook block, or an array of effect definitions.'
+                : 'must be a hook block or an array of effect definitions.');
+            return;
+        }
+
+        hookDefinition.forEach((effect, index) => {
+            validateEffect(errors, unitSkillIds, effect, `${path}[${index}]`, { requireTrigger: false });
         });
     }
 
@@ -405,18 +602,7 @@
                     return;
                 }
 
-                if (typeof hookDefinition === 'function') {
-                    return;
-                }
-
-                if (!Array.isArray(hookDefinition)) {
-                    pushError(errors, `${path}.hooks.${hookName}`, 'must be a function or an array of effect definitions.');
-                    return;
-                }
-
-                hookDefinition.forEach((effect, index) => {
-                    validateEffect(errors, unitSkillIds, effect, `${path}.hooks.${hookName}[${index}]`, { requireTrigger: false });
-                });
+                validateHookDefinition(errors, unitSkillIds, hookDefinition, `${path}.hooks.${hookName}`, { allowFunction: true });
             });
         }
     }
@@ -578,14 +764,7 @@
                         return;
                     }
 
-                    if (!Array.isArray(hookDefinition)) {
-                        pushError(errors, `${path}.hooks.${hookName}`, 'must be an array of effect definitions.');
-                        return;
-                    }
-
-                    hookDefinition.forEach((effect, index) => {
-                        validateEffect(errors, new Set(), effect, `${path}.hooks.${hookName}[${index}]`, { requireTrigger: false });
-                    });
+                    validateHookDefinition(errors, new Set(), hookDefinition, `${path}.hooks.${hookName}`);
                 });
             }
         }

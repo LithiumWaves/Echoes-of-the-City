@@ -550,6 +550,185 @@
         return true;
     }
 
+    function isStructuredHookBlock(block) {
+        return Boolean(block)
+            && typeof block === 'object'
+            && !Array.isArray(block)
+            && Array.isArray(block.actions);
+    }
+
+    function normalizeHookBlocks(hookDefinition) {
+        if (isStructuredHookBlock(hookDefinition)) {
+            return [hookDefinition];
+        }
+
+        if (!Array.isArray(hookDefinition) || !hookDefinition.length) {
+            return null;
+        }
+
+        return hookDefinition.every((entry) => isStructuredHookBlock(entry))
+            ? hookDefinition
+            : null;
+    }
+
+    function getRuntimeCoinIndex(runtime) {
+        if (typeof runtime?.coinIndex === 'number') {
+            return runtime.coinIndex;
+        }
+
+        if (typeof runtime?.currentCoinIndex === 'number') {
+            return runtime.currentCoinIndex;
+        }
+
+        return null;
+    }
+
+    function getHookConditionUnit(runtime, target = 'self') {
+        if (target === 'opponent') {
+            return runtime?.targetUnit || runtime?.opponent || null;
+        }
+
+        return runtime?.sourceUnit || runtime?.unit || null;
+    }
+
+    function getUnitHpRatio(unit) {
+        if (!unit || typeof unit.hp !== 'number' || typeof unit.maxHp !== 'number' || unit.maxHp <= 0) {
+            return 0;
+        }
+
+        return unit.hp / unit.maxHp;
+    }
+
+    function isUnitStaggeredForCondition(unit) {
+        return Boolean(unit) && (unit.staggerTurnsRemaining || 0) > 0 && (unit.hp || 0) > 0;
+    }
+
+    function matchesExpectedValue(actualValue, expectedValue) {
+        if (Array.isArray(expectedValue)) {
+            return expectedValue.includes(actualValue);
+        }
+
+        return actualValue === expectedValue;
+    }
+
+    function ensureHookOwnerRuntimeState(hookOwner) {
+        if (!hookOwner || typeof hookOwner !== 'object') {
+            return null;
+        }
+
+        if (!hookOwner.runtimeState || typeof hookOwner.runtimeState !== 'object' || Array.isArray(hookOwner.runtimeState)) {
+            hookOwner.runtimeState = {};
+        }
+
+        if (!hookOwner.runtimeState.oncePer || typeof hookOwner.runtimeState.oncePer !== 'object' || Array.isArray(hookOwner.runtimeState.oncePer)) {
+            hookOwner.runtimeState.oncePer = {
+                battle: {},
+                turn: {},
+                skill: {},
+                coin: {},
+            };
+        }
+
+        return hookOwner.runtimeState.oncePer;
+    }
+
+    function buildOncePerKey(scope, hookName, block, runtime, blockIndex) {
+        const blockKey = typeof block?.id === 'string' && block.id.length
+            ? block.id
+            : `${hookName}-${blockIndex}`;
+        const turn = runtime?.battle?.turn || 0;
+        const sourceUnitId = runtime?.sourceUnit?.id || runtime?.unit?.id || 'none';
+        const targetUnitId = runtime?.targetUnit?.id || runtime?.opponent?.id || 'none';
+        const skillId = runtime?.skill?.id || 'none';
+        const coinIndex = getRuntimeCoinIndex(runtime) || 0;
+
+        switch (scope) {
+        case 'battle':
+            return `${hookName}:${blockKey}`;
+        case 'turn':
+            return `${turn}:${hookName}:${blockKey}`;
+        case 'skill':
+            return `${turn}:${hookName}:${blockKey}:${sourceUnitId}:${targetUnitId}:${skillId}`;
+        case 'coin':
+            return `${turn}:${hookName}:${blockKey}:${sourceUnitId}:${targetUnitId}:${skillId}:${coinIndex}`;
+        default:
+            return null;
+        }
+    }
+
+    function canUseHookBlock(block, hookName, runtime, hookOwner, blockIndex) {
+        if (!block?.oncePer) {
+            return true;
+        }
+
+        const oncePerState = ensureHookOwnerRuntimeState(hookOwner);
+        const oncePerKey = buildOncePerKey(block.oncePer, hookName, block, runtime, blockIndex);
+        if (!oncePerState || !oncePerKey) {
+            return true;
+        }
+
+        if (!oncePerState[block.oncePer] || typeof oncePerState[block.oncePer] !== 'object') {
+            oncePerState[block.oncePer] = {};
+        }
+
+        if (oncePerState[block.oncePer][oncePerKey]) {
+            return false;
+        }
+
+        oncePerState[block.oncePer][oncePerKey] = true;
+        return true;
+    }
+
+    function conditionMatchesRuntime(condition, runtime, getStatus) {
+        const conditionType = condition?.type;
+        const conditionUnit = getHookConditionUnit(runtime, condition?.target || 'self');
+        const conditionStatus = conditionUnit && condition?.statusId && typeof getStatus === 'function'
+            ? getStatus(conditionUnit, condition.statusId)
+            : null;
+        const conditionValue = condition?.value;
+
+        switch (conditionType) {
+        case 'always':
+            return true;
+        case 'damageAtLeast':
+            return typeof runtime?.damage === 'number' && runtime.damage >= conditionValue;
+        case 'hasStatus':
+            return Boolean(conditionStatus) && ((conditionStatus.count || 0) > 0 || (conditionStatus.potency || 0) > 0);
+        case 'statusPotencyAtLeast':
+            return (conditionStatus?.potency || 0) >= conditionValue;
+        case 'statusCountAtLeast':
+            return (conditionStatus?.count || 0) >= conditionValue;
+        case 'skillSinType':
+            return matchesExpectedValue(runtime?.skill?.sinType || null, conditionValue);
+        case 'skillDamageType':
+            return matchesExpectedValue(runtime?.skill?.damageType || null, conditionValue);
+        case 'coinIndex':
+            return getRuntimeCoinIndex(runtime) === conditionValue;
+        case 'criticalHit':
+            return Boolean(runtime?.isCritical) === (conditionValue ?? true);
+        case 'targetStaggered':
+            return isUnitStaggeredForCondition(getHookConditionUnit(runtime, condition?.target || 'opponent')) === (conditionValue ?? true);
+        case 'hpPercentAtOrBelow':
+            return getUnitHpRatio(conditionUnit) <= conditionValue;
+        case 'hpPercentAtOrAbove':
+            return getUnitHpRatio(conditionUnit) >= conditionValue;
+        case 'spAtOrBelow':
+            return typeof conditionUnit?.sp === 'number' && conditionUnit.sp <= conditionValue;
+        case 'spAtOrAbove':
+            return typeof conditionUnit?.sp === 'number' && conditionUnit.sp >= conditionValue;
+        default:
+            return false;
+        }
+    }
+
+    function hookBlockMatchesRuntime(block, runtime, getStatus) {
+        if (!Array.isArray(block?.conditions) || !block.conditions.length) {
+            return true;
+        }
+
+        return block.conditions.every((condition) => conditionMatchesRuntime(condition, runtime, getStatus));
+    }
+
     function createSkillEffectRunner(deps) {
         const { applyEffects, getEffectStatusPotency } = createEffectExecutor(deps);
 
@@ -566,15 +745,40 @@
 
     function createPassiveEffectRunner(deps) {
         const { applyEffects, getEffectStatusPotency } = createEffectExecutor(deps);
+        const { getStatus } = deps || {};
 
-        function applyPassiveEffects(targetBattle, hookName, hookEffects, runtime) {
-            const effects = Array.isArray(hookEffects)
-                ? hookEffects.filter((effect) => effectMatchesRuntime(effect, runtime, getEffectStatusPotency))
-                : [];
-            applyEffects(targetBattle, effects, {
+        function applyPassiveEffects(targetBattle, hookName, hookEffects, runtime, options = {}) {
+            const hookRuntime = {
                 ...runtime,
                 hookName,
-            });
+            };
+            const hookBlocks = normalizeHookBlocks(hookEffects);
+
+            if (hookBlocks) {
+                hookBlocks.forEach((block, index) => {
+                    if (!hookBlockMatchesRuntime(block, hookRuntime, getStatus)) {
+                        return;
+                    }
+
+                    const actions = Array.isArray(block.actions)
+                        ? block.actions.filter((effect) => effectMatchesRuntime(effect, hookRuntime, getEffectStatusPotency))
+                        : [];
+                    if (!actions.length) {
+                        return;
+                    }
+                    if (!canUseHookBlock(block, hookName, hookRuntime, options.hookOwner, index)) {
+                        return;
+                    }
+
+                    applyEffects(targetBattle, actions, hookRuntime);
+                });
+                return;
+            }
+
+            const effects = Array.isArray(hookEffects)
+                ? hookEffects.filter((effect) => effectMatchesRuntime(effect, hookRuntime, getEffectStatusPotency))
+                : [];
+            applyEffects(targetBattle, effects, hookRuntime);
         }
 
         return applyPassiveEffects;

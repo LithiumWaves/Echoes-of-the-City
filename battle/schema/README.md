@@ -131,7 +131,7 @@ Required:
 
 Optional:
 - `description: string`
-- `hooks: Record<PassiveHookName, EffectDefinition[] | Function>`
+- `hooks: Record<PassiveHookName, EffectDefinition[] | HookBlock | HookBlock[] | Function>`
 
 Supported passive hook names (current):
 - `battleStart`
@@ -150,4 +150,38 @@ Supported passive hook names (current):
 
 Notes:
 - Passive hook effect arrays use the same effect shape as skills, but the hook key replaces `trigger`.
+- Hook blocks let authors group `conditions`, `actions`, and `oncePer` controls:
+
+```js
+{
+  oncePer: 'turn',
+  conditions: [
+    { type: 'damageAtLeast', value: 1 }
+  ],
+  actions: [
+    { type: 'adjustSanity', target: 'self', value: 5 }
+  ]
+}
+```
+
+- Supported hook condition types:
+  - `always`
+  - `damageAtLeast`
+  - `hasStatus`
+  - `statusPotencyAtLeast`
+  - `statusCountAtLeast`
+  - `skillSinType`
+  - `skillDamageType`
+  - `coinIndex`
+  - `criticalHit`
+  - `targetStaggered`
+  - `hpPercentAtOrBelow`
+  - `hpPercentAtOrAbove`
+  - `spAtOrBelow`
+  - `spAtOrAbove`
+- Supported `oncePer` scopes:
+  - `battle`
+  - `turn`
+  - `skill`
+  - `coin`
 - Function hooks still work for JS-authored content, but data-driven hook effect arrays are the preferred authoring path.
