@@ -58,6 +58,7 @@
     const passiveHookLabels = {
         battleStart: 'Battle Start',
         turnStart: 'Turn Start',
+        coinRoll: 'Coin Roll',
         skillSelected: 'Skill Selected',
         hitDealt: 'Hit Dealt',
         hitTaken: 'Hit Taken',
@@ -216,13 +217,21 @@
             }
             return `Deal fixed damage to ${effect.target || 'opponent'}.`;
         case 'adjustSanity':
+            if (typeof effect.amount === 'number') {
+                return `Adjust ${effect.target || 'opponent'} SP by ${formatSignedNumber(effect.amount)}.`;
+            }
+            if (effect.amount?.statusPotency?.statusId) {
+                return `Adjust ${effect.target || 'opponent'} SP by ${getStatusLabel(effect.amount.statusPotency.statusId)} potency.`;
+            }
             return `Adjust ${effect.target || 'opponent'} SP by ${formatSignedNumber(effect.value || 0)}.`;
         case 'healHp':
             return `Heal ${effect.target || 'opponent'} for ${effect.value || 0} HP.`;
         case 'adjustStatus':
             return `Adjust ${effect.target || 'opponent'} ${formatStatusAdjustment(effect)}.`;
         case 'modifyContext':
-            return `Modify ${effect.field} via ${effect.operation}.`;
+            return effect.operation === 'set'
+                ? `Set ${effect.field} to ${String(effect.value)}.`
+                : `Modify ${effect.field} via ${effect.operation}.`;
         case 'modifyCoinMap':
             return `Modify ${effect.field} on Coin ${effect.coinIndex} by ${formatSignedNumber(effect.value || 0)}.`;
         case 'setFollowUpSkill':

@@ -688,7 +688,7 @@
 
         function processPoiseAtTurnEnd(targetBattle, unit) {
             const poise = getStatus(unit, 'poise');
-            if (!poise || poise.count <= 0) {
+            if (!poise || poise.hooks?.turnEnd || poise.count <= 0) {
                 return;
             }
 
@@ -697,7 +697,8 @@
 
         function expireTurnStatuses(targetBattle, unit) {
             ['protection', 'paralyze', 'plus_coin_boost', 'plus_coin_drop', 'minus_coin_boost', 'minus_coin_drop'].forEach((statusId) => {
-                if (!getStatus(unit, statusId)) {
+                const status = getStatus(unit, statusId);
+                if (!status || status.hooks?.turnEnd) {
                     return;
                 }
 
@@ -712,7 +713,7 @@
 
         function triggerBleedOnCoinRoll(targetBattle, unit) {
             const bleed = getStatus(unit, 'bleed');
-            if (!bleed || bleed.count <= 0 || bleed.potency <= 0 || unit.hp <= 0) {
+            if (!bleed || bleed.hooks?.coinRoll || bleed.count <= 0 || bleed.potency <= 0 || unit.hp <= 0) {
                 return;
             }
 
@@ -722,7 +723,7 @@
 
         function triggerRuptureOnHit(targetBattle, unit) {
             const rupture = getStatus(unit, 'rupture');
-            if (!rupture || rupture.count <= 0 || rupture.potency <= 0 || unit.hp <= 0) {
+            if (!rupture || rupture.hooks?.hitTaken || rupture.count <= 0 || rupture.potency <= 0 || unit.hp <= 0) {
                 return;
             }
 
@@ -732,7 +733,7 @@
 
         function triggerSinkingOnHit(targetBattle, unit) {
             const sinking = getStatus(unit, 'sinking');
-            if (!sinking || sinking.count <= 0 || sinking.potency <= 0 || unit.hp <= 0) {
+            if (!sinking || sinking.hooks?.hitTaken || sinking.count <= 0 || sinking.potency <= 0 || unit.hp <= 0) {
                 return;
             }
 
@@ -755,7 +756,7 @@
 
         function spendParalyzeForCoin(targetBattle, unit) {
             const paralyze = getStatus(unit, 'paralyze');
-            if (!paralyze || paralyze.count <= 0) {
+            if (!paralyze || paralyze.hooks?.coinRoll || paralyze.count <= 0) {
                 return false;
             }
 
@@ -805,12 +806,21 @@
         }
 
         function rollSingleCoin(targetBattle, unit, skill, attackContext, forcedIsHeads = null) {
+            attackContext.forceCoinZero = false;
+            invokeHooks(unit, 'coinRoll', {
+                battle: targetBattle,
+                unit,
+                sourceUnit: unit,
+                skill,
+                attackContext,
+                slot: attackContext.slotId ? getSlotById(targetBattle, attackContext.slotId) : null,
+            });
             triggerBleedOnCoinRoll(targetBattle, unit);
             if (unit.hp <= 0) {
                 return null;
             }
 
-            const forcedZero = spendParalyzeForCoin(targetBattle, unit);
+            const forcedZero = Boolean(attackContext.forceCoinZero) || spendParalyzeForCoin(targetBattle, unit);
             let isHeads = false;
             if (!forcedZero) {
                 if (typeof forcedIsHeads === 'boolean') {

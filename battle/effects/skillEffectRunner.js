@@ -80,7 +80,8 @@
                     return 0;
                 }
 
-                return getStatusPotency(targetUnit, statusSource.statusId);
+                const baseAmount = getStatusPotency(targetUnit, statusSource.statusId);
+                return baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
             }
 
             if (typeof effect.value === 'number') {
@@ -381,7 +382,17 @@
                         return;
                     }
                     {
-                        const sanityChange = adjustSanity(targetUnit, effect.value || 0);
+                        const sanityAmount = resolveEffectAmount(runtime, effect);
+                        if (effect.statusId && typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'status_triggered', {
+                                unitId: targetUnit.id,
+                                unitName: targetUnit.name,
+                                statusId: effect.statusId,
+                                damage: Math.abs(sanityAmount),
+                                hp: targetUnit.hp,
+                            });
+                        }
+                        const sanityChange = adjustSanity(targetUnit, sanityAmount);
                         if (typeof emitEvent === 'function') {
                             emitEvent(targetBattle, 'sanity_changed', {
                                 unitName: targetUnit.name,
@@ -398,6 +409,10 @@
                     }
                     if (effect.operation === 'add') {
                         context[effect.field] = (context[effect.field] || 0) + (effect.value || 0);
+                        return;
+                    }
+                    if (effect.operation === 'set') {
+                        context[effect.field] = effect.value;
                         return;
                     }
                     if (effect.operation === 'addStatusPotencyScaled') {

@@ -13,6 +13,7 @@
         'clashPowerBonus',
         'damageMultiplier',
         'damageReductionMultiplier',
+        'forceCoinZero',
     ]);
     const COIN_MAP_FIELDS = new Set([
         'extraCritDamageByCoin',
@@ -105,6 +106,9 @@
             if (statusPotency.target != null && !['self', 'opponent'].includes(statusPotency.target)) {
                 pushError(errors, `${path}.statusPotency.target`, 'must be "self" or "opponent" when provided.');
             }
+            if (amount.multiplier != null && !isFiniteNumber(amount.multiplier)) {
+                pushError(errors, `${path}.multiplier`, 'must be a number when provided.');
+            }
             return;
         }
 
@@ -192,6 +196,20 @@
             }
             break;
         case 'adjustSanity':
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (effect.statusId != null && typeof effect.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a string when provided.');
+            } else if (typeof effect.statusId === 'string' && typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id when provided.');
+            }
+            if (effect.reason != null && typeof effect.reason !== 'string') {
+                pushError(errors, `${path}.reason`, 'must be a string when provided.');
+            }
+            break;
         case 'healHp':
         case 'modifyDefenseLevel':
         case 'modifySpeed':
@@ -228,11 +246,14 @@
             if (!effect.operation || typeof effect.operation !== 'string') {
                 pushError(errors, `${path}.operation`, 'must be provided.');
             }
-            if (!['add', 'addStatusPotencyScaled', 'setToOneMinusStatusPotencyScaled'].includes(effect.operation)) {
+            if (!['add', 'set', 'addStatusPotencyScaled', 'setToOneMinusStatusPotencyScaled'].includes(effect.operation)) {
                 pushError(errors, `${path}.operation`, 'is not a supported context operation.');
             }
             if (effect.operation === 'add' && !isFiniteNumber(effect.value)) {
                 pushError(errors, `${path}.value`, 'must be a number for add operations.');
+            }
+            if (effect.operation === 'set' && typeof effect.value === 'undefined') {
+                pushError(errors, `${path}.value`, 'must be provided for set operations.');
             }
             if (effect.operation === 'addStatusPotencyScaled' || effect.operation === 'setToOneMinusStatusPotencyScaled') {
                 if (!effect.statusId || typeof effect.statusId !== 'string') {
