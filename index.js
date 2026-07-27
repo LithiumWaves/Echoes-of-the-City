@@ -30,6 +30,7 @@
         'battle/content/battleContentRegistry.js',
         ...BATTLE_BASE_PACK_SCRIPT_RELATIVE_PATHS,
         'battle/ui/inspect/inspectState.js',
+        'battle/core/damageFormula.js',
         'battle/core/battleEngine.js',
         'battle/core/battleRenderer.js',
         'battle/core/battleHandler.js',

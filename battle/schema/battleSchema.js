@@ -13,6 +13,7 @@
         'clashPowerBonus',
         'damageMultiplier',
         'damageReductionMultiplier',
+        'additiveDamage',
         'forceCoinZero',
     ]);
     const COIN_MAP_FIELDS = new Set([

@@ -126,6 +126,12 @@
         } = options;
         let nextEventId = 1;
         let passiveEffectRunner = null;
+        const damageFormula = typeof battleModules.createDamageFormula === 'function'
+            ? battleModules.createDamageFormula({
+                getStatusCount,
+                isUnitStaggered,
+            })
+            : null;
         const enemyAi = typeof battleModules.createEnemyAi === 'function'
             ? battleModules.createEnemyAi(battleDefinition?.rules?.enemyAiProfile || battleDefinition?.enemyAiProfile || null)
             : null;
@@ -919,42 +925,76 @@
             return levelDifference > 0 ? Math.floor(levelDifference / 3) : 0;
         }
 
-        function getPhysicalResistanceMultiplier(unit, damageType) {
-            const dynamic = unit.turnState?.physicalResistanceOverrides?.[damageType]
-                ?? unit.turnState?.resistanceOverrides?.[damageType];
-            const baseResistance = typeof dynamic === 'number'
-                ? dynamic
-                : (unit.resistances?.physical?.[damageType] || 1);
-            return isUnitStaggered(unit) ? Math.max(2, baseResistance) : baseResistance;
-        }
-
-        function getSinResistanceMultiplier(unit, sinType) {
-            if (!sinType) {
-                return 1;
-            }
-
-            return unit.turnState?.sinResistanceOverrides?.[sinType]
-                || unit.resistances?.sin?.[sinType]
-                || 1;
+        function buildDamageContext(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical) {
+            return {
+                attacker,
+                defender,
+                skill,
+                finalPower,
+                damageType: skill?.damageType || null,
+                sinType: skill?.sinType || null,
+                offenseLevel: getSkillOffenseLevel(attacker, skill),
+                defenseLevel: getDefenseLevel(defender),
+                isCritical,
+                modifiers: {
+                    attack: {
+                        damageMultiplier: attackContext?.damageMultiplier || 1,
+                        additiveDamage: attackContext?.additiveDamage || 0,
+                        extraCritDamage: attackContext?.extraCritDamageByCoin?.[attackContext?.currentCoinIndex] || 0,
+                        currentCoinIndex: attackContext?.currentCoinIndex || 0,
+                    },
+                    defense: {
+                        damageReductionMultiplier: defendContext?.damageReductionMultiplier ?? 1,
+                    },
+                },
+            };
         }
 
         function calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical) {
-            const physicalResistance = getPhysicalResistanceMultiplier(defender, skill.damageType);
-            const sinResistance = getSinResistanceMultiplier(defender, skill.sinType);
-            const levelDifference = getSkillOffenseLevel(attacker, skill) - getDefenseLevel(defender);
+            const damageContext = buildDamageContext(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
+
+            if (damageFormula?.calculateDamage) {
+                return damageFormula.calculateDamage(damageContext).damage;
+            }
+
+            const levelDifference = damageContext.offenseLevel - damageContext.defenseLevel;
             const levelModifier = 1 + (levelDifference / (Math.abs(levelDifference) + 25));
             const protection = getStatusCount(defender, 'protection');
             const protectionModifier = protection > 0 ? Math.max(0, 1 - (Math.min(protection, 10) * 0.1)) : 1;
             const critDamageMultiplier = isCritical
-                ? 1.2 * (1 + (attackContext.extraCritDamageByCoin?.[attackContext.currentCoinIndex] || 0))
+                ? 1.2 * (1 + damageContext.modifiers.attack.extraCritDamage)
                 : 1;
-            const incomingReduction = defendContext?.damageReductionMultiplier ?? 1;
-            const damageMultiplier = attackContext.damageMultiplier || 1;
-            const rawDamage = Math.max(
+            return Math.max(
                 1,
-                Math.round(finalPower * physicalResistance * sinResistance * levelModifier * protectionModifier * damageMultiplier * critDamageMultiplier * incomingReduction),
+                Math.round(
+                    (
+                        finalPower
+                        * (
+                            isUnitStaggered(defender)
+                                ? Math.max(
+                                    2,
+                                    defender.turnState?.physicalResistanceOverrides?.[skill?.damageType]
+                                    ?? defender.turnState?.resistanceOverrides?.[skill?.damageType]
+                                    ?? defender.resistances?.physical?.[skill?.damageType]
+                                    ?? 1,
+                                )
+                                : (
+                                    defender.turnState?.physicalResistanceOverrides?.[skill?.damageType]
+                                    ?? defender.turnState?.resistanceOverrides?.[skill?.damageType]
+                                    ?? defender.resistances?.physical?.[skill?.damageType]
+                                    ?? 1
+                                )
+                        )
+                    * (skill?.sinType ? (defender.turnState?.sinResistanceOverrides?.[skill.sinType] || defender.resistances?.sin?.[skill.sinType] || 1) : 1)
+                    * levelModifier
+                    * protectionModifier
+                    * damageContext.modifiers.attack.damageMultiplier
+                    * critDamageMultiplier
+                    * damageContext.modifiers.defense.damageReductionMultiplier
+                    )
+                    + damageContext.modifiers.attack.additiveDamage,
+                ),
             );
-            return rawDamage;
         }
         const applySkillEffects = typeof battleModules.createSkillEffectRunner === 'function'
             ? battleModules.createSkillEffectRunner({
@@ -992,6 +1032,7 @@
                 clashPowerBonus: 0,
                 damageMultiplier: 1,
                 damageReductionMultiplier: 1,
+                additiveDamage: 0,
                 extraCritDamageByCoin: {},
                 critFinalPowerBonusByCoin: {},
                 followUpSkillIdOnClashLose: null,
