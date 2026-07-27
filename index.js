@@ -28,6 +28,7 @@
         'battle/core/battleEngine.js',
         'battle/core/battleRenderer.js',
         'battle/core/battleHandler.js',
+        'battle/content/definitions/cityGateSkirmish.js',
         'battle/content/definitions/debugFight.js',
     ];
     const BATTLE_DEBUG_SCRIPT_RELATIVE_PATHS = [
