@@ -482,6 +482,18 @@
         };
     }
 
+    function validateUnitDefinition(definition) {
+        const normalizedDefinition = cloneDefinition(definition || {});
+        const errors = [];
+
+        validateUnit(errors, normalizedDefinition, 'unit');
+
+        return {
+            normalizedDefinition,
+            errors,
+        };
+    }
+
     function formatBattleDefinitionErrors(errors) {
         if (!Array.isArray(errors) || !errors.length) {
             return 'Battle definition is invalid.';
@@ -496,15 +508,18 @@
     battleModules.schema = battleModules.schema || {};
     battleModules.schema.normalizeBattleDefinition = normalizeBattleDefinition;
     battleModules.schema.validateBattleDefinition = validateBattleDefinition;
+    battleModules.schema.validateUnitDefinition = validateUnitDefinition;
     battleModules.schema.formatBattleDefinitionErrors = formatBattleDefinitionErrors;
 
     battleModules.normalizeBattleDefinition = normalizeBattleDefinition;
     battleModules.validateBattleDefinition = validateBattleDefinition;
+    battleModules.validateUnitDefinition = validateUnitDefinition;
     battleModules.formatBattleDefinitionErrors = formatBattleDefinitionErrors;
 
     window.EchoesOfTheCityBattle = {
         ...window.EchoesOfTheCityBattle,
         normalizeBattleDefinition,
         validateBattleDefinition,
+        validateUnitDefinition,
     };
 })();
