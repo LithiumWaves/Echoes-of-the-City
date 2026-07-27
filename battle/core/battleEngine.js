@@ -792,191 +792,18 @@
             );
             return rawDamage;
         }
-
-        function getEffectTargetUnit(runtime, target = 'opponent') {
-            if (target === 'self') {
-                return runtime.sourceUnit || null;
-            }
-
-            if (target === 'opponent') {
-                return runtime.targetUnit || null;
-            }
-
-            return null;
-        }
-
-        function getEffectStatusPotency(runtime, effect) {
-            const targetUnit = getEffectTargetUnit(runtime, effect.statusSource || 'self');
-            if (!targetUnit || !effect.statusId) {
-                return 0;
-            }
-
-            return getStatusPotency(targetUnit, effect.statusId);
-        }
-
-        function effectMatchesRuntime(effect, runtime) {
-            if (typeof effect.coinIndex === 'number' && effect.coinIndex !== runtime.coinIndex) {
-                return false;
-            }
-
-            if (effect.criticalOnly && !runtime.isCritical) {
-                return false;
-            }
-
-            if (effect.outcome && effect.outcome !== runtime.outcome) {
-                return false;
-            }
-
-            if (typeof effect.minStatusPotency === 'number' && getEffectStatusPotency(runtime, effect) < effect.minStatusPotency) {
-                return false;
-            }
-
-            return true;
-        }
-
-        function applySkillEffects(targetBattle, trigger, runtime) {
-            const skill = runtime?.skill;
-            const effects = Array.isArray(skill?.effects) ? skill.effects : [];
-            effects.forEach((effect) => {
-                if (effect?.trigger !== trigger || !effectMatchesRuntime(effect, runtime)) {
-                    return;
-                }
-
-                const sourceUnit = runtime.sourceUnit || null;
-                const targetUnit = getEffectTargetUnit(runtime, effect.target || 'opponent');
-                const context = runtime.attackContext || runtime.defendContext || null;
-
-                switch (effect.type) {
-                case 'applyStatus':
-                    if (!targetUnit || !effect.statusId) {
-                        return;
-                    }
-                    applyStatus(targetBattle, targetUnit, effect.statusId, {
-                        potency: effect.potency,
-                        count: effect.count,
-                    });
-                    if (sourceUnit) {
-                        invokeHooks(sourceUnit, 'statusInflicted', {
-                            battle: targetBattle,
-                            unit: sourceUnit,
-                            opponent: targetUnit,
-                            skill,
-                            statusId: effect.statusId,
-                        });
-                    }
-                    invokeHooks(targetUnit, 'statusReceived', {
-                        battle: targetBattle,
-                        unit: targetUnit,
-                        opponent: sourceUnit,
-                        skill,
-                        statusId: effect.statusId,
-                    });
-                    return;
-                case 'queueStatus':
-                    if (!targetUnit || !effect.statusId) {
-                        return;
-                    }
-                    queueStatusForNextTurn(targetUnit, effect.statusId, {
-                        potency: effect.potency,
-                        count: effect.count,
-                    });
-                    return;
-                case 'adjustSanity':
-                    if (!targetUnit) {
-                        return;
-                    }
-                    {
-                        const sanityChange = adjustSanity(targetUnit, effect.value || 0);
-                        emitEvent(targetBattle, 'sanity_changed', {
-                            unitName: targetUnit.name,
-                            previousSp: sanityChange.previousSp,
-                            nextSp: sanityChange.nextSp,
-                            reason: effect.reason || skill.name,
-                        });
-                    }
-                    return;
-                case 'modifyContext':
-                    if (!context || !effect.field) {
-                        return;
-                    }
-                    if (effect.operation === 'add') {
-                        context[effect.field] = (context[effect.field] || 0) + (effect.value || 0);
-                        return;
-                    }
-                    if (effect.operation === 'addStatusPotencyScaled') {
-                        const potency = getEffectStatusPotency(runtime, effect);
-                        const magnitude = typeof effect.cap === 'number'
-                            ? Math.min(effect.cap, potency * (effect.multiplier || 1))
-                            : potency * (effect.multiplier || 1);
-                        context[effect.field] = (context[effect.field] || 0) + ((effect.direction === 'subtract' ? -1 : 1) * magnitude);
-                        return;
-                    }
-                    if (effect.operation === 'setToOneMinusStatusPotencyScaled') {
-                        const potency = getEffectStatusPotency(runtime, effect);
-                        const reduction = typeof effect.cap === 'number'
-                            ? Math.min(effect.cap, potency * (effect.multiplier || 0))
-                            : potency * (effect.multiplier || 0);
-                        context[effect.field] = 1 - reduction;
-                    }
-                    return;
-                case 'modifyCoinMap':
-                    if (!context || !effect.field || typeof effect.coinIndex !== 'number') {
-                        return;
-                    }
-                    if (!context[effect.field]) {
-                        context[effect.field] = {};
-                    }
-                    context[effect.field][effect.coinIndex] = (context[effect.field][effect.coinIndex] || 0) + (effect.value || 0);
-                    return;
-                case 'setFollowUpSkill':
-                    if (context && effect.skillId) {
-                        context.followUpSkillIdOnClashLose = effect.skillId;
-                    }
-                    return;
-                case 'modifyPhysicalResistance':
-                    if (!targetUnit || !effect.damageType) {
-                        return;
-                    }
-                    {
-                        const baseResistance = targetUnit.resistances?.physical?.[effect.damageType] || 1;
-                        const currentResistance = targetUnit.turnState?.resistanceOverrides?.[effect.damageType] || baseResistance;
-                        const nextResistance = effect.operation === 'multiplyCurrent'
-                            ? currentResistance * (effect.value || 1)
-                            : baseResistance * (effect.value || 1);
-                        targetUnit.turnState.resistanceOverrides = {
-                            ...(targetUnit.turnState.resistanceOverrides || {}),
-                            [effect.damageType]: nextResistance,
-                        };
-                    }
-                    return;
-                case 'modifyDefenseLevel':
-                    if (!targetUnit) {
-                        return;
-                    }
-                    targetUnit.turnState.defenseLevelModifier = (targetUnit.turnState.defenseLevelModifier || 0) + (effect.value || 0);
-                    return;
-                case 'consumeStatus':
-                    if (!targetUnit || !effect.statusId) {
-                        return;
-                    }
-                    {
-                        const status = getStatus(targetUnit, effect.statusId);
-                        if (!status) {
-                            return;
-                        }
-                        removeStatus(targetUnit, effect.statusId);
-                        emitEvent(targetBattle, 'status_expired', {
-                            unitId: targetUnit.id,
-                            unitName: targetUnit.name,
-                            statusId: effect.statusId,
-                        });
-                    }
-                    return;
-                default:
-                    return;
-                }
-            });
-        }
+        const applySkillEffects = typeof battleModules.createSkillEffectRunner === 'function'
+            ? battleModules.createSkillEffectRunner({
+                getStatusPotency,
+                getStatus,
+                removeStatus,
+                applyStatus,
+                queueStatusForNextTurn,
+                adjustSanity,
+                emitEvent,
+                invokeHooks,
+            })
+            : (() => {});
 
         function createSkillContext(targetBattle, unit, slot, skill, targetUnit) {
             const context = {
@@ -1971,13 +1798,30 @@
             targetBattle.speedOrder = queue.map((slot) => slot.id);
         }
 
+        const enemyAi = typeof battleModules.createEnemyAi === 'function'
+            ? battleModules.createEnemyAi(battleDefinition?.rules?.enemyAiProfile || battleDefinition?.enemyAiProfile || null)
+            : null;
+
         function pickEnemySkillId(currentBattle, slot) {
             const enemyUnit = getUnitById(currentBattle, slot.unitId);
+            const aiPick = enemyAi?.pickEnemySkillId?.(currentBattle, slot, enemyUnit);
+            if (aiPick) {
+                return aiPick;
+            }
             const skillIndex = (currentBattle.turn + slot.index - 1) % enemyUnit.skills.length;
             return enemyUnit.skills[skillIndex].id;
         }
 
         function pickEnemyTargetSlotId(currentBattle, slot) {
+            const enemyUnit = getUnitById(currentBattle, slot.unitId);
+            const aiPick = enemyAi?.pickEnemyTargetSlotId?.(currentBattle, slot, enemyUnit, {
+                getFirstLivingSlotId,
+                isSlotAlive,
+                getUnitById,
+            });
+            if (aiPick) {
+                return aiPick;
+            }
             const mirroredPlayerSlot = currentBattle.playerSlots[slot.index];
             if (mirroredPlayerSlot && isSlotAlive(currentBattle, mirroredPlayerSlot)) {
                 return mirroredPlayerSlot.id;

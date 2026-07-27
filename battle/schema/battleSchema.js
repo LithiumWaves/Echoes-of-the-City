@@ -27,6 +27,8 @@
         'extraCritDamageByCoin',
         'critFinalPowerBonusByCoin',
     ]);
+    const ENEMY_AI_SKILLS = new Set(['cycle', 'random', 'first']);
+    const ENEMY_AI_TARGETS = new Set(['mirror', 'firstLiving', 'lowestHp', 'random']);
 
     function cloneDefinition(definition) {
         if (typeof window.structuredClone === 'function') {
@@ -52,6 +54,7 @@
                 maxTurns: source.rules?.maxTurns || 100,
                 victoryCondition: source.rules?.victoryCondition || 'defeat-all-enemies',
                 failureCondition: source.rules?.failureCondition || 'all-allies-defeated',
+                enemyAiProfile: source.rules?.enemyAiProfile || source.enemyAiProfile || null,
             },
         };
 
@@ -115,6 +118,22 @@
             pushError(errors, `${path}.coinIndex`, 'must be a positive integer.');
         }
 
+        if (effect.criticalOnly != null && typeof effect.criticalOnly !== 'boolean') {
+            pushError(errors, `${path}.criticalOnly`, 'must be a boolean when provided.');
+        }
+
+        if (effect.minStatusPotency != null && (!isFiniteNumber(effect.minStatusPotency) || effect.minStatusPotency < 0)) {
+            pushError(errors, `${path}.minStatusPotency`, 'must be a non-negative number when provided.');
+        }
+
+        if (effect.statusSource != null && !['self', 'opponent'].includes(effect.statusSource)) {
+            pushError(errors, `${path}.statusSource`, 'must be "self" or "opponent" when provided.');
+        }
+
+        if (effect.outcome != null && !['win', 'lose'].includes(effect.outcome)) {
+            pushError(errors, `${path}.outcome`, 'must be "win" or "lose" when provided.');
+        }
+
         switch (effect.type) {
         case 'applyStatus':
         case 'queueStatus':
@@ -127,6 +146,9 @@
         case 'modifyDefenseLevel':
             if (!isFiniteNumber(effect.value)) {
                 pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (effect.reason != null && typeof effect.reason !== 'string') {
+                pushError(errors, `${path}.reason`, 'must be a string when provided.');
             }
             break;
         case 'modifyContext':
@@ -142,6 +164,20 @@
             if (effect.operation === 'add' && !isFiniteNumber(effect.value)) {
                 pushError(errors, `${path}.value`, 'must be a number for add operations.');
             }
+            if (effect.operation === 'addStatusPotencyScaled' || effect.operation === 'setToOneMinusStatusPotencyScaled') {
+                if (!effect.statusId || typeof effect.statusId !== 'string') {
+                    pushError(errors, `${path}.statusId`, 'must be a non-empty string for status-scaled context operations.');
+                }
+                if (!isFiniteNumber(effect.multiplier)) {
+                    pushError(errors, `${path}.multiplier`, 'must be a number for status-scaled context operations.');
+                }
+                if (effect.cap != null && (!isFiniteNumber(effect.cap) || effect.cap <= 0)) {
+                    pushError(errors, `${path}.cap`, 'must be a positive number when provided.');
+                }
+            }
+            if (effect.operation === 'addStatusPotencyScaled' && effect.direction != null && !['add', 'subtract'].includes(effect.direction)) {
+                pushError(errors, `${path}.direction`, 'must be "add" or "subtract" when provided.');
+            }
             break;
         case 'modifyCoinMap':
             if (!COIN_MAP_FIELDS.has(effect.field)) {
@@ -149,6 +185,9 @@
             }
             if (!isFiniteNumber(effect.value)) {
                 pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (!Number.isInteger(effect.coinIndex) || effect.coinIndex <= 0) {
+                pushError(errors, `${path}.coinIndex`, 'must be a positive integer for coin-map modification.');
             }
             break;
         case 'setFollowUpSkill':
@@ -220,6 +259,26 @@
         }
     }
 
+    function validatePassive(errors, passive, path) {
+        if (!passive || typeof passive !== 'object' || Array.isArray(passive)) {
+            pushError(errors, path, 'must be an object.');
+            return;
+        }
+
+        if (!passive.id || typeof passive.id !== 'string') {
+            pushError(errors, `${path}.id`, 'must be a non-empty string.');
+        }
+        if (!passive.name || typeof passive.name !== 'string') {
+            pushError(errors, `${path}.name`, 'must be a non-empty string.');
+        }
+        if (passive.description != null && typeof passive.description !== 'string') {
+            pushError(errors, `${path}.description`, 'must be a string when provided.');
+        }
+        if (passive.hooks != null && (typeof passive.hooks !== 'object' || Array.isArray(passive.hooks))) {
+            pushError(errors, `${path}.hooks`, 'must be an object when provided.');
+        }
+    }
+
     function validateUnit(errors, unit, path) {
         if (!unit || typeof unit !== 'object' || Array.isArray(unit)) {
             pushError(errors, path, 'must be an object.');
@@ -257,6 +316,14 @@
                         pushError(errors, `${path}.staggerThresholds[${index}]`, 'must be a positive number.');
                     }
                 });
+            }
+        }
+
+        if (unit.passives != null) {
+            if (!Array.isArray(unit.passives)) {
+                pushError(errors, `${path}.passives`, 'must be an array when provided.');
+            } else {
+                unit.passives.forEach((passive, index) => validatePassive(errors, passive, `${path}.passives[${index}]`));
             }
         }
 
@@ -304,6 +371,28 @@
             pushError(errors, 'battle.enemyUnits', 'must contain at least one unit.');
         }
 
+        const enemyAiProfile = normalizedDefinition.rules?.enemyAiProfile;
+        if (enemyAiProfile) {
+            if (typeof enemyAiProfile === 'string') {
+                if (!ENEMY_AI_SKILLS.has(enemyAiProfile)) {
+                    pushError(errors, 'battle.rules.enemyAiProfile', 'is not a supported ai profile string.');
+                }
+            } else if (typeof enemyAiProfile === 'object') {
+                if (enemyAiProfile.skill != null && typeof enemyAiProfile.skill !== 'string') {
+                    pushError(errors, 'battle.rules.enemyAiProfile.skill', 'must be a string.');
+                } else if (enemyAiProfile.skill && !ENEMY_AI_SKILLS.has(enemyAiProfile.skill)) {
+                    pushError(errors, 'battle.rules.enemyAiProfile.skill', 'is not a supported value.');
+                }
+                if (enemyAiProfile.target != null && typeof enemyAiProfile.target !== 'string') {
+                    pushError(errors, 'battle.rules.enemyAiProfile.target', 'must be a string.');
+                } else if (enemyAiProfile.target && !ENEMY_AI_TARGETS.has(enemyAiProfile.target)) {
+                    pushError(errors, 'battle.rules.enemyAiProfile.target', 'is not a supported value.');
+                }
+            } else {
+                pushError(errors, 'battle.rules.enemyAiProfile', 'must be a string or object.');
+            }
+        }
+
         normalizedDefinition.playerUnits.forEach((unit, index) => validateUnit(errors, unit, `battle.playerUnits[${index}]`));
         normalizedDefinition.enemyUnits.forEach((unit, index) => validateUnit(errors, unit, `battle.enemyUnits[${index}]`));
 
@@ -332,6 +421,11 @@
             ...errors.map((error) => `- ${error}`),
         ].join('\n');
     }
+
+    battleModules.schema = battleModules.schema || {};
+    battleModules.schema.normalizeBattleDefinition = normalizeBattleDefinition;
+    battleModules.schema.validateBattleDefinition = validateBattleDefinition;
+    battleModules.schema.formatBattleDefinitionErrors = formatBattleDefinitionErrors;
 
     battleModules.normalizeBattleDefinition = normalizeBattleDefinition;
     battleModules.validateBattleDefinition = validateBattleDefinition;

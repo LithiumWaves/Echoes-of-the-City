@@ -1936,6 +1936,120 @@
     font-size: 0.66rem;
 }
 
+.echoes-battle-panel__inspect {
+    position: absolute;
+    left: 1rem;
+    top: 3.2rem;
+    width: min(34rem, calc(100% - 2rem));
+    max-height: calc(100% - 4.2rem);
+    overflow: auto;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(255, 190, 131, 0.14);
+    background: rgba(10, 8, 7, 0.9);
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.46);
+    padding: 0.7rem 0.8rem;
+    z-index: 13;
+}
+
+.echoes-battle-panel__inspect-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.8rem;
+}
+
+.echoes-battle-panel__inspect-title strong {
+    color: #fff0de;
+    font-size: 0.84rem;
+}
+
+.echoes-battle-panel__inspect-title small {
+    display: block;
+    color: rgba(255, 220, 183, 0.68);
+    font-size: 0.62rem;
+    margin-top: 0.12rem;
+}
+
+.echoes-battle-panel__inspect-close {
+    border: 1px solid rgba(255, 190, 131, 0.16);
+    border-radius: 0.55rem;
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 240, 222, 0.92);
+    font: inherit;
+    padding: 0.35rem 0.6rem;
+    cursor: pointer;
+}
+
+.echoes-battle-panel__inspect-units {
+    margin-top: 0.6rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.echoes-battle-panel__inspect-unit {
+    border: 1px solid rgba(255, 190, 131, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 220, 183, 0.78);
+    font: 0.66rem/1.2 inherit;
+    padding: 0.22rem 0.55rem;
+    cursor: pointer;
+    max-width: 100%;
+}
+
+.echoes-battle-panel__inspect-unit.is-active {
+    border-color: rgba(255, 210, 155, 0.28);
+    background: rgba(115, 58, 26, 0.16);
+    color: rgba(255, 240, 222, 0.94);
+}
+
+.echoes-battle-panel__inspect-body {
+    margin-top: 0.7rem;
+    display: grid;
+    gap: 0.55rem;
+}
+
+.echoes-battle-panel__inspect-block {
+    border: 1px solid rgba(255, 190, 131, 0.08);
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.55rem 0.6rem;
+    display: grid;
+    gap: 0.24rem;
+    color: rgba(255, 220, 183, 0.84);
+    font-size: 0.68rem;
+}
+
+.echoes-battle-panel__inspect-block strong {
+    color: rgba(255, 240, 222, 0.95);
+    font-size: 0.72rem;
+}
+
+.echoes-battle-panel__inspect-skills {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.echoes-battle-panel__inspect-skill {
+    display: grid;
+    gap: 0.12rem;
+    padding: 0.32rem 0.42rem;
+    border-radius: 0.62rem;
+    border: 1px solid rgba(255, 190, 131, 0.08);
+    background: rgba(0, 0, 0, 0.24);
+}
+
+.echoes-battle-panel__inspect-skill strong {
+    font-size: 0.7rem;
+    color: rgba(255, 240, 222, 0.92);
+}
+
+.echoes-battle-panel__inspect-skill span {
+    font: 0.62rem/1.4 Consolas, "Courier New", monospace;
+    color: rgba(255, 220, 183, 0.78);
+}
+
 .echoes-battle-panel__planner-skill {
     position: relative;
     flex: 0 0 4.75rem;

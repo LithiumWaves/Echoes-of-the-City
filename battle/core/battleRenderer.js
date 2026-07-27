@@ -1089,6 +1089,99 @@
             `;
         }
 
+        function renderInspectOverlay(battle, uiState) {
+            const inspectState = uiState?.inspect;
+            if (!inspectState?.isOpen) {
+                return '';
+            }
+
+            const allUnits = getAllUnits(battle);
+            const allSlots = getAllSlots(battle);
+            const selectedUnitId = inspectState.unitId || allUnits[0]?.id || null;
+            const unit = selectedUnitId
+                ? allUnits.find((candidate) => candidate.id === selectedUnitId) || allUnits[0] || null
+                : allUnits[0] || null;
+            const slot = unit ? allSlots.find((candidate) => candidate.unitId === unit.id) || null : null;
+
+            const unitTabs = allUnits.map((candidate) => {
+                const isActive = candidate.id === unit?.id;
+                return `
+                    <button
+                        class="echoes-battle-panel__inspect-unit${isActive ? ' is-active' : ''}"
+                        type="button"
+                        data-action="inspect-select-unit"
+                        data-unit-id="${candidate.id}"
+                    >
+                        ${candidate.name}
+                    </button>
+                `;
+            }).join('');
+
+            const statuses = unit
+                ? getRenderableStatuses(unit)
+                    .map((status) => countOnlyStatuses.has(status.id)
+                        ? `${getStatusLabel(status.id)} ${status.count}`
+                        : `${getStatusLabel(status.id)} ${status.potency || 0}/${status.count || 0}`)
+                    .join(', ')
+                : '';
+
+            const physicalRes = unit ? getResistanceSummary(unit, physicalDamageTypes, 'physical') : '';
+            const sinRes = unit ? getResistanceSummary(unit, sinTypes, 'sin') : '';
+            const thresholds = unit ? getStaggerThresholdSummary(unit) : '';
+            const skillMarkup = unit
+                ? unit.skills.map((skill) => `
+                    <div class="echoes-battle-panel__inspect-skill">
+                        <strong>${skill.name}</strong>
+                        <span>${getSkillDamageProfileLabel(skill)} | ${getSkillPowerLabel(skill)}</span>
+                    </div>
+                `).join('')
+                : '';
+
+            return `
+                <aside class="echoes-battle-panel__inspect" data-inspect="panel">
+                    <div class="echoes-battle-panel__inspect-title">
+                        <div>
+                            <strong>${unit?.name || 'Inspect'}</strong>
+                            <small>${slot ? `${slot.side === 'player' ? 'Ally' : 'Enemy'} Slot ${slot.index + 1}` : ''}</small>
+                        </div>
+                        <button
+                            class="echoes-battle-panel__inspect-close"
+                            type="button"
+                            data-action="close-inspect"
+                        >
+                            Close
+                        </button>
+                    </div>
+                    <div class="echoes-battle-panel__inspect-units">
+                        ${unitTabs}
+                    </div>
+                    <div class="echoes-battle-panel__inspect-body">
+                        <div class="echoes-battle-panel__inspect-block">
+                            <strong>Vitals</strong>
+                            <span>HP ${unit?.hp ?? '-'} / ${unit?.maxHp ?? '-'}</span>
+                            <span>SP ${unit?.sp ?? '-'} | Speed ${slot?.speed ?? '-'}</span>
+                            <span>Stagger Thresholds: ${thresholds || 'None'}</span>
+                        </div>
+                        <div class="echoes-battle-panel__inspect-block">
+                            <strong>Resistances</strong>
+                            <span>${physicalRes}</span>
+                            <span>${sinRes}</span>
+                        </div>
+                        <div class="echoes-battle-panel__inspect-block">
+                            <strong>Statuses</strong>
+                            <span>${statuses || 'None'}</span>
+                        </div>
+                        <div class="echoes-battle-panel__inspect-block">
+                            <strong>Skills</strong>
+                            <div class="echoes-battle-panel__inspect-skills">
+                                ${skillMarkup || '<span>None</span>'}
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+            `;
+        }
+
         function renderBattlefield(battle, activePlayerSlot, uiState) {
             const debugToolsEnabled = uiState?.debugToolsEnabled !== false;
             const playerMarkup = battle.playerSlots
@@ -1124,6 +1217,13 @@
                                 `
                                 : ''}
                             <button
+                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost${uiState?.inspect?.isOpen ? ' is-active' : ''}"
+                                type="button"
+                                data-action="toggle-inspect"
+                            >
+                                Inspect
+                            </button>
+                            <button
                                 class="echoes-battle-panel__combat-button"
                                 type="button"
                                 data-action="resolve-turn"
@@ -1155,6 +1255,7 @@
                         ${renderPlaybackOverlay(battle, uiState)}
                         ${renderResolutionBadges(getResolvedBattle(battle, uiState), uiState)}
                         ${renderTurnDebugOverlay(battle, activePlayerSlot, uiState)}
+                        ${renderInspectOverlay(battle, uiState)}
                         ${playerMarkup}
                         ${enemyMarkup}
                     </div>

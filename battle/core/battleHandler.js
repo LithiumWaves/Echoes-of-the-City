@@ -12,8 +12,7 @@
             storageKeyPrefix = 'echoes-of-the-city:battle',
             engineFactory = battleModules.createBattleEngine,
             rendererFactory = battleModules.createBattleRenderer,
-            validateBattleDefinition = battleModules.validateBattleDefinition,
-            formatBattleDefinitionErrors = battleModules.formatBattleDefinitionErrors,
+            validateAndNormalizeBattleDefinition = battleModules.validateAndNormalizeBattleDefinition,
         } = options;
         const PLAYBACK_TIMINGS = {
             approach: 420,
@@ -30,16 +29,12 @@
             throw new Error('Battle modules are incomplete.');
         }
 
-        const validationResult = typeof validateBattleDefinition === 'function'
-            ? validateBattleDefinition(battleDefinition)
-            : { normalizedDefinition: battleDefinition, errors: [] };
+        const validationResult = typeof validateAndNormalizeBattleDefinition === 'function'
+            ? validateAndNormalizeBattleDefinition(battleDefinition)
+            : { normalizedDefinition: battleDefinition, errors: [], message: null };
 
         if (Array.isArray(validationResult.errors) && validationResult.errors.length) {
-            throw new Error(
-                typeof formatBattleDefinitionErrors === 'function'
-                    ? formatBattleDefinitionErrors(validationResult.errors)
-                    : validationResult.errors.join('\n'),
-            );
+            throw new Error(validationResult.message || validationResult.errors.join('\n'));
         }
 
         const resolvedBattleDefinition = validationResult.normalizedDefinition || battleDefinition;
@@ -64,6 +59,9 @@
         let battlefieldHeight = loadPersistedBattlefieldHeight();
         let activeResizePointerId = null;
         let turnDebugEnabled = enableDebugTools ? loadPersistedTurnDebugEnabled() : false;
+        let inspectState = typeof battleModules.createInspectState === 'function'
+            ? battleModules.createInspectState()
+            : { isOpen: false, unitId: null };
 
         function createIdlePlaybackState() {
             return {
@@ -358,6 +356,7 @@
                 turnDebugEnabled,
                 debugToolsEnabled: enableDebugTools,
                 debugRollState: debugRollManager?.getUiState?.() || null,
+                inspect: inspectState,
             });
         }
 
@@ -372,15 +371,49 @@
                 skillId,
                 slotId,
                 targetSlotId,
+                unitId,
             } = actionTarget.dataset;
 
-            if (playbackState.isRunning && !['reset-fight', 'toggle-turn-debug'].includes(action)) {
+            if (playbackState.isRunning && !['reset-fight', 'toggle-turn-debug', 'toggle-inspect', 'close-inspect', 'inspect-select-unit'].includes(action)) {
                 return;
             }
 
             if (action === 'toggle-turn-debug' && enableDebugTools) {
                 turnDebugEnabled = !turnDebugEnabled;
                 persistTurnDebugEnabled();
+                render();
+                return;
+            }
+
+            if (action === 'toggle-inspect') {
+                inspectState = {
+                    ...inspectState,
+                    isOpen: !inspectState.isOpen,
+                };
+                if (inspectState.isOpen && !inspectState.unitId) {
+                    const battle = engine.getState();
+                    const activeSlot = battle.activePlayerSlotId ? battle.playerSlots.find((slot) => slot.id === battle.activePlayerSlotId) : null;
+                    inspectState.unitId = activeSlot?.unitId || battle.playerUnits[0]?.id || battle.enemyUnits[0]?.id || null;
+                }
+                render();
+                return;
+            }
+
+            if (action === 'close-inspect') {
+                inspectState = {
+                    ...inspectState,
+                    isOpen: false,
+                };
+                render();
+                return;
+            }
+
+            if (action === 'inspect-select-unit' && unitId) {
+                inspectState = {
+                    ...inspectState,
+                    isOpen: true,
+                    unitId,
+                };
                 render();
                 return;
             }
