@@ -184,4 +184,8 @@ Notes:
   - `turn`
   - `skill`
   - `coin`
+- Example authoring patterns now used in shipped content:
+  - `skillSelected` + `statusCountAtLeast` to reward self-buffs applied during `onSelect`
+  - `skillSelected` + `spAtOrBelow` for low-SP conditionals
+  - `hitDealt` + `damageAtLeast` for damage-triggered follow-up effects
 - Function hooks still work for JS-authored content, but data-driven hook effect arrays are the preferred authoring path.

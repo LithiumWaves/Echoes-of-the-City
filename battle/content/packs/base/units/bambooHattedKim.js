@@ -31,6 +31,28 @@
                 envy: 1,
             },
         },
+        passives: [
+            {
+                id: 'edge-of-composure',
+                name: 'Edge of Composure',
+                description: 'Once per turn, when selecting a slash skill with at least 2 Poise Count, gain +20% critical bonus.',
+                hooks: {
+                    skillSelected: [
+                        {
+                            id: 'edge-of-composure-slash-poise',
+                            oncePer: 'turn',
+                            conditions: [
+                                { type: 'skillDamageType', value: 'slash' },
+                                { type: 'statusCountAtLeast', target: 'self', statusId: 'poise', value: 2 },
+                            ],
+                            actions: [
+                                { type: 'modifyContext', field: 'criticalBonus', operation: 'add', value: 0.2 },
+                            ],
+                        },
+                    ],
+                },
+            },
+        ],
         sprites: {
             idle: 'assets/debugsprites/Bamboo-hatted_Kim_Idle_Sprite.png',
             moving: 'assets/debugsprites/Bamboo-hatted_Kim_Moving_Sprite.png',

@@ -31,6 +31,29 @@
                 envy: 1,
             },
         },
+        passives: [
+            {
+                id: 'fathomless-echo',
+                name: 'Fathomless Echo',
+                description: 'Once per turn, when using a Gloom skill at 0 SP or lower while Sinking, gain +15% dynamic damage.',
+                hooks: {
+                    skillSelected: [
+                        {
+                            id: 'fathomless-echo-gloom-window',
+                            oncePer: 'turn',
+                            conditions: [
+                                { type: 'skillSinType', value: 'gloom' },
+                                { type: 'spAtOrBelow', target: 'self', value: 0 },
+                                { type: 'statusCountAtLeast', target: 'self', statusId: 'sinking', value: 1 },
+                            ],
+                            actions: [
+                                { type: 'modifyContext', field: 'dynamicDamageBonus', operation: 'add', value: 0.15 },
+                            ],
+                        },
+                    ],
+                },
+            },
+        ],
         sprites: {
             idle: 'assets/debugsprites/Lobotomy_E.G.O_Sunshower_-_Dongbaek_Idle_Sprite.png',
             moving: 'assets/debugsprites/Lobotomy_E.G.O_Sunshower_-_Dongbaek_Moving_Sprite.png',
