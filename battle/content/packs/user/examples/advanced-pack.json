@@ -1,0 +1,155 @@
+{
+  "manifest": {
+    "id": "example-advanced-pack",
+    "name": "Example Advanced Pack",
+    "version": "1.0.0",
+    "engineVersion": "dev",
+    "authors": [
+      "Example Author"
+    ],
+    "description": "An example pack that ships a custom status, unit, and battle.",
+    "dependencies": [],
+    "featureFlags": {}
+  },
+  "statuses": [
+    {
+      "id": "example_might",
+      "label": "Example Might",
+      "description": "For this turn: Attack skills gain +1 Final Power per Count. Expires at Turn End.",
+      "countOnly": true,
+      "stackModel": {
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 5,
+          "application": "add"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
+      },
+      "hooks": {
+        "skillSelected": [
+          {
+            "conditions": [
+              {
+                "type": "skillType",
+                "value": "attack"
+              }
+            ],
+            "actions": [
+              {
+                "type": "modifyContext",
+                "target": "self",
+                "field": "flatPowerBonus",
+                "operation": "addStatusCountScaled",
+                "statusId": "example_might",
+                "multiplier": 1
+              }
+            ]
+          }
+        ],
+        "turnEnd": [
+          {
+            "actions": [
+              {
+                "type": "consumeStatus",
+                "target": "self",
+                "statusId": "example_might"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "example-soldier",
+      "name": "Example Soldier",
+      "level": 10,
+      "maxHp": 120,
+      "sp": 0,
+      "speedRange": [
+        2,
+        4
+      ],
+      "defenseLevel": 10,
+      "staggerThresholds": [
+        0.5
+      ],
+      "resistances": {
+        "physical": {
+          "slash": 1,
+          "pierce": 1,
+          "blunt": 1
+        },
+        "sin": {
+          "wrath": 1,
+          "lust": 1,
+          "sloth": 1,
+          "gluttony": 1,
+          "gloom": 1,
+          "pride": 1,
+          "envy": 1
+        }
+      },
+      "passives": [],
+      "sprites": {
+        "idle": "assets/debugsprites/Vergilius_Idle_Sprite.png",
+        "moving": "assets/debugsprites/Vergilius_Moving_Sprite.png",
+        "hurt": "assets/debugsprites/Vergilius_Hurt_Sprite.png",
+        "guard": "assets/debugsprites/Vergilius_Guard_Sprite.png",
+        "evade": "assets/debugsprites/Vergilius_Evade_Sprite.png",
+        "skills": {
+          "example-strike": "assets/debugsprites/Vergilius_Skill_1.gif"
+        }
+      },
+      "skills": [
+        {
+          "id": "example-strike",
+          "name": "Example Strike",
+          "skillType": "attack",
+          "basePower": 10,
+          "coinPower": 2,
+          "coinCount": 2,
+          "damageType": "slash",
+          "sinType": "wrath",
+          "offenseLevel": 0,
+          "effects": [
+            {
+              "trigger": "onSelect",
+              "type": "applyStatus",
+              "target": "self",
+              "statusId": "example_might",
+              "count": 2
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "battles": [
+    {
+      "id": "example-advanced-battle",
+      "name": "Example Advanced Battle",
+      "description": "A battle that uses the custom Example Soldier unit.",
+      "playerUnitIds": [
+        "example-soldier"
+      ],
+      "enemyUnitIds": [
+        "dongbaek"
+      ],
+      "rules": {
+        "encounterType": "focused",
+        "maxTurns": 10,
+        "victoryCondition": "defeat-all-enemies",
+        "failureCondition": "all-allies-defeated",
+        "enemyAiProfile": {
+          "skill": "first",
+          "target": "firstLiving"
+        }
+      }
+    }
+  ]
+}

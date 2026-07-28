@@ -284,11 +284,42 @@
 
         try {
             const api = getBattleContentApi();
-            if (typeof api.importContentPack !== 'function') {
+            const importFn = typeof api.installContentPack === 'function'
+                ? api.installContentPack
+                : api.importContentPack;
+            if (typeof importFn !== 'function') {
                 throw new Error('Battle content import is not available.');
             }
 
-            const result = api.importContentPack(parsedPayload);
+            let result;
+            try {
+                result = importFn(parsedPayload);
+            } catch (error) {
+                const message = formatCombatModuleError(error);
+                if (typeof api.installContentPack === 'function' && message.startsWith('Import conflicts detected:')) {
+                    const strategy = prompt(
+                        [
+                            'Import conflicts detected.',
+                            'Choose how to resolve:',
+                            'o = overwrite existing',
+                            'r = rename imported ids',
+                            's = skip conflicting entries',
+                            'c = cancel',
+                        ].join('\n'),
+                        'o',
+                    );
+                    const normalized = String(strategy || '').trim().toLowerCase();
+                    if (normalized === 'c' || !normalized) {
+                        throw error;
+                    }
+                    const conflictStrategy = normalized === 'r'
+                        ? 'rename'
+                        : (normalized === 's' ? 'skip' : 'overwrite');
+                    result = api.installContentPack(parsedPayload, { conflictStrategy });
+                } else {
+                    throw error;
+                }
+            }
             refreshBattleSelectionState();
             if (Array.isArray(result?.ids?.battles) && result.ids.battles.length) {
                 state.selectedBattleId = result.ids.battles[0];
@@ -442,6 +473,10 @@
 
         state.battleSelectionPromise = (async () => {
             await ensureBattleModuleLoaded();
+            const api = getBattleContentApi();
+            if (typeof api.loadPersistedContentPacks === 'function') {
+                api.loadPersistedContentPacks();
+            }
             refreshBattleSelectionState();
         })().catch((error) => {
             state.battleSelectionPromise = null;

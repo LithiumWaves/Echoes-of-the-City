@@ -1,0 +1,39 @@
+{
+  "manifest": {
+    "id": "example-minimal-pack",
+    "name": "Example Minimal Pack",
+    "version": "1.0.0",
+    "engineVersion": "dev",
+    "authors": [
+      "Example Author"
+    ],
+    "description": "A minimal example pack that adds one battle using shipped units.",
+    "dependencies": [],
+    "featureFlags": {}
+  },
+  "statuses": [],
+  "units": [],
+  "battles": [
+    {
+      "id": "example-minimal-battle",
+      "name": "Example Minimal Battle",
+      "description": "A minimal battle that reuses shipped units by id.",
+      "playerUnitIds": [
+        "vergilius"
+      ],
+      "enemyUnitIds": [
+        "dongbaek"
+      ],
+      "rules": {
+        "encounterType": "focused",
+        "maxTurns": 10,
+        "victoryCondition": "defeat-all-enemies",
+        "failureCondition": "all-allies-defeated",
+        "enemyAiProfile": {
+          "skill": "first",
+          "target": "firstLiving"
+        }
+      }
+    }
+  ]
+}

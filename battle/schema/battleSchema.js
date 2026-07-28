@@ -1097,6 +1097,75 @@
         };
     }
 
+    function validateContentPackManifest(manifest) {
+        const normalizedDefinition = cloneDefinition(manifest || {});
+        const errors = [];
+        const path = 'manifest';
+
+        if (!normalizedDefinition.id || typeof normalizedDefinition.id !== 'string') {
+            pushError(errors, `${path}.id`, 'must be a non-empty string.');
+        }
+        if (!normalizedDefinition.name || typeof normalizedDefinition.name !== 'string') {
+            pushError(errors, `${path}.name`, 'must be a non-empty string.');
+        }
+        if (!normalizedDefinition.version || typeof normalizedDefinition.version !== 'string') {
+            pushError(errors, `${path}.version`, 'must be a non-empty string.');
+        }
+        if (normalizedDefinition.engineVersion != null && typeof normalizedDefinition.engineVersion !== 'string') {
+            pushError(errors, `${path}.engineVersion`, 'must be a string when provided.');
+        }
+        if (normalizedDefinition.description != null && typeof normalizedDefinition.description !== 'string') {
+            pushError(errors, `${path}.description`, 'must be a string when provided.');
+        }
+        if (normalizedDefinition.authors != null) {
+            if (
+                !(
+                    typeof normalizedDefinition.authors === 'string'
+                    || (Array.isArray(normalizedDefinition.authors) && normalizedDefinition.authors.every((entry) => typeof entry === 'string' && entry))
+                )
+            ) {
+                pushError(errors, `${path}.authors`, 'must be a string or array of strings when provided.');
+            }
+        }
+        if (normalizedDefinition.dependencies != null) {
+            if (!Array.isArray(normalizedDefinition.dependencies)) {
+                pushError(errors, `${path}.dependencies`, 'must be an array when provided.');
+            } else {
+                normalizedDefinition.dependencies.forEach((dep, index) => {
+                    if (typeof dep === 'string') {
+                        return;
+                    }
+                    if (!dep || typeof dep !== 'object' || Array.isArray(dep)) {
+                        pushError(errors, `${path}.dependencies[${index}]`, 'must be a string pack id or { id, version }.');
+                        return;
+                    }
+                    if (!dep.id || typeof dep.id !== 'string') {
+                        pushError(errors, `${path}.dependencies[${index}].id`, 'must be a non-empty string.');
+                    }
+                    if (dep.version != null && typeof dep.version !== 'string') {
+                        pushError(errors, `${path}.dependencies[${index}].version`, 'must be a string when provided.');
+                    }
+                });
+            }
+        }
+        if (normalizedDefinition.featureFlags != null) {
+            if (typeof normalizedDefinition.featureFlags !== 'object' || Array.isArray(normalizedDefinition.featureFlags)) {
+                pushError(errors, `${path}.featureFlags`, 'must be an object when provided.');
+            } else {
+                Object.entries(normalizedDefinition.featureFlags).forEach(([key, value]) => {
+                    if (typeof value !== 'boolean') {
+                        pushError(errors, `${path}.featureFlags.${key}`, 'must be a boolean.');
+                    }
+                });
+            }
+        }
+
+        return {
+            normalizedDefinition,
+            errors,
+        };
+    }
+
     function formatBattleDefinitionErrors(errors) {
         if (!Array.isArray(errors) || !errors.length) {
             return 'Battle definition is invalid.';
@@ -1113,12 +1182,14 @@
     battleModules.schema.validateBattleDefinition = validateBattleDefinition;
     battleModules.schema.validateUnitDefinition = validateUnitDefinition;
     battleModules.schema.validateStatusDefinition = validateStatusDefinition;
+    battleModules.schema.validateContentPackManifest = validateContentPackManifest;
     battleModules.schema.formatBattleDefinitionErrors = formatBattleDefinitionErrors;
 
     battleModules.normalizeBattleDefinition = normalizeBattleDefinition;
     battleModules.validateBattleDefinition = validateBattleDefinition;
     battleModules.validateUnitDefinition = validateUnitDefinition;
     battleModules.validateStatusDefinition = validateStatusDefinition;
+    battleModules.validateContentPackManifest = validateContentPackManifest;
     battleModules.formatBattleDefinitionErrors = formatBattleDefinitionErrors;
 
     window.EchoesOfTheCityBattle = {
@@ -1127,5 +1198,6 @@
         validateBattleDefinition,
         validateUnitDefinition,
         validateStatusDefinition,
+        validateContentPackManifest,
     };
 })();
