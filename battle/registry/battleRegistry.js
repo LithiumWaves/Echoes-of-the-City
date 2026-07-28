@@ -25,6 +25,7 @@
         charge: { id: 'charge', label: 'Charge', iconPath: 'assets/statuseffects/keywordstatus/Charge.png' },
         ammo: { id: 'ammo', label: 'Ammo', countOnly: true },
         aggro: { id: 'aggro', label: 'Aggro', countOnly: true },
+        charge_barrier: { id: 'charge_barrier', label: 'Charge Barrier', countOnly: true },
         haste: { id: 'haste', label: 'Haste', countOnly: true },
         bind: { id: 'bind', label: 'Bind', countOnly: true },
         fragile: { id: 'fragile', label: 'Fragile', countOnly: true },
@@ -85,6 +86,7 @@
         sinking: { id: 'sinking', label: 'Sinking', iconPath: 'assets/statuseffects/keywordstatus/Sinking.png' },
         tremor: { id: 'tremor', label: 'Tremor', iconPath: 'assets/statuseffects/keywordstatus/Tremor.png' },
         dark_flame: { id: 'dark_flame', label: 'Dark Flame', countOnly: true },
+        photoelectricity: { id: 'photoelectricity', label: 'Photoelectricity', countOnly: true },
     };
     const statusDefinitionAliases = battleModules.statusDefinitionAliases || (battleModules.statusDefinitionAliases = {});
 
@@ -159,6 +161,8 @@
         modifyDefenseLevel: { id: 'modifyDefenseLevel', label: 'Modify Defense Level' },
         modifyOffenseLevel: { id: 'modifyOffenseLevel', label: 'Modify Offense Level' },
         modifySpeed: { id: 'modifySpeed', label: 'Modify Speed' },
+        gainShield: { id: 'gainShield', label: 'Gain Shield' },
+        clearShield: { id: 'clearShield', label: 'Clear Shield' },
         retargetSlot: { id: 'retargetSlot', label: 'Retarget Slot' },
         burstTremor: { id: 'burstTremor', label: 'Burst Tremor' },
         consumeStatus: { id: 'consumeStatus', label: 'Consume Status' },
@@ -359,6 +363,10 @@
             return `Adjust ${effect.target || 'opponent'} Offense Level by ${formatSignedNumber(effect.value || 0)}.`;
         case 'modifySpeed':
             return `${effect.operation === 'set' ? 'Set' : 'Adjust'} ${effect.target || 'opponent'} Speed ${effect.operation === 'set' ? 'to' : 'by'} ${effect.value || 0}.`;
+        case 'gainShield':
+            return `${effect.operation === 'set' ? 'Set' : 'Gain'} ${effect.target || 'opponent'} ${effect.shieldId || 'shield'} for ${effect.value || 0}.`;
+        case 'clearShield':
+            return `Clear ${effect.shieldId || 'shield'} from ${effect.target || 'opponent'}.`;
         case 'retargetSlot':
             return `Retarget ${effect.target || 'opponent'} to ${retargetSelectorLabels[effect.selector] || effect.selector}.`;
         case 'burstTremor':

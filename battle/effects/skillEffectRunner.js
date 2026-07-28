@@ -12,6 +12,8 @@
             queueStatusForNextTurn,
             adjustSanity,
             adjustEncounterResource,
+            gainShield,
+            clearShield,
             emitEvent,
             invokeHooks,
             isCountOnlyStatus,
@@ -656,6 +658,29 @@
                     }
                     modifyUnitSpeed(targetBattle, targetUnit, effect, runtime);
                     return;
+                case 'gainShield':
+                    if (!targetUnit || typeof gainShield !== 'function' || !effect.shieldId) {
+                        return;
+                    }
+                    gainShield(targetBattle, targetUnit, {
+                        shieldId: effect.shieldId,
+                        amount: resolveEffectAmount(runtime, effect),
+                        operation: effect.operation || 'add',
+                        stackSize: effect.stackSize,
+                        expiresAt: effect.expiresAt,
+                        linkedStatusId: effect.linkedStatusId,
+                        linkedStatusCountDeltaOnBreak: effect.linkedStatusCountDeltaOnBreak,
+                        reason: effect.reason || skill?.name || effect.shieldId,
+                    });
+                    return;
+                case 'clearShield':
+                    if (!targetUnit || typeof clearShield !== 'function' || !effect.shieldId) {
+                        return;
+                    }
+                    clearShield(targetBattle, targetUnit, effect.shieldId, {
+                        reason: effect.reason || skill?.name || effect.shieldId,
+                    });
+                    return;
                 case 'adjustEncounterResource':
                     if (!effect.resourceId || typeof adjustEncounterResource !== 'function') {
                         return;
@@ -890,8 +915,12 @@
             return Boolean(conditionStatus) && ((conditionStatus.count || 0) > 0 || (conditionStatus.potency || 0) > 0);
         case 'statusPotencyAtLeast':
             return (conditionStatus?.potency || 0) >= conditionValue;
+        case 'statusPotencyAtOrBelow':
+            return (conditionStatus?.potency || 0) <= conditionValue;
         case 'statusCountAtLeast':
             return (conditionStatus?.count || 0) >= conditionValue;
+        case 'statusCountAtOrBelow':
+            return (conditionStatus?.count || 0) <= conditionValue;
         case 'skillSinType':
             return matchesExpectedValue(runtime?.skill?.sinType || null, conditionValue);
         case 'skillDamageType':
@@ -910,6 +939,8 @@
             return typeof conditionUnit?.sp === 'number' && conditionUnit.sp <= conditionValue;
         case 'spAtOrAbove':
             return typeof conditionUnit?.sp === 'number' && conditionUnit.sp >= conditionValue;
+        case 'eventStatusIdIs':
+            return runtime?.statusId === conditionValue;
         default:
             return false;
         }

@@ -99,6 +99,8 @@ Supported `type` values (current):
 - `modifyDefenseLevel`
 - `modifyOffenseLevel`
 - `modifySpeed`
+- `gainShield`
+- `clearShield`
 - `retargetSlot`
 - `burstTremor`
 - `consumeStatus`
@@ -132,6 +134,17 @@ Selected effect notes:
   - `value?: number`
   - `amount?: AmountDefinition`
   - `operation?: "add" | "set"`
+- `gainShield`
+  - `shieldId: string`
+  - `value?: number`
+  - `amount?: AmountDefinition`
+  - `operation?: "add" | "set"`
+  - `stackSize?: number`
+  - `expiresAt?: "turnStart" | "turnEnd"`
+  - `linkedStatusId?: string`
+  - `linkedStatusCountDeltaOnBreak?: number`
+- `clearShield`
+  - `shieldId: string`
 - `adjustEncounterResource`
   - `resourceId: string`
   - `value?: number`
@@ -139,6 +152,11 @@ Selected effect notes:
   - `operation?: "add" | "set"`
   - `min?: number`
   - `max?: number`
+
+Supported hook condition additions:
+- `statusPotencyAtOrBelow`
+- `statusCountAtOrBelow`
+- `eventStatusIdIs`
 - `burstTremor`
   - defaults to the target's current `tremor` potency when no `value`/`amount` is provided
 - `retargetSlot`

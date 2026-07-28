@@ -47,7 +47,9 @@
         'damageAtLeast',
         'hasStatus',
         'statusPotencyAtLeast',
+        'statusPotencyAtOrBelow',
         'statusCountAtLeast',
+        'statusCountAtOrBelow',
         'skillSinType',
         'skillDamageType',
         'coinIndex',
@@ -57,6 +59,7 @@
         'hpPercentAtOrAbove',
         'spAtOrBelow',
         'spAtOrAbove',
+        'eventStatusIdIs',
     ]);
 
     function cloneDefinition(definition) {
@@ -261,7 +264,9 @@
             }
             break;
         case 'statusPotencyAtLeast':
+        case 'statusPotencyAtOrBelow':
         case 'statusCountAtLeast':
+        case 'statusCountAtOrBelow':
             if (!condition.statusId || typeof condition.statusId !== 'string') {
                 pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
             } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(condition.statusId)) {
@@ -269,6 +274,13 @@
             }
             if (!isFiniteNumber(condition.value) || condition.value < 0) {
                 pushError(errors, `${path}.value`, 'must be a non-negative number.');
+            }
+            break;
+        case 'eventStatusIdIs':
+            if (!condition.value || typeof condition.value !== 'string') {
+                pushError(errors, `${path}.value`, 'must be a supported status id.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be a supported status id.');
             }
             break;
         case 'coinIndex':
@@ -442,11 +454,13 @@
         case 'modifyDefenseLevel':
         case 'modifyOffenseLevel':
         case 'modifySpeed':
+        case 'gainShield':
+        case 'clearShield':
         case 'burstTremor':
         case 'adjustEncounterResource':
-            if (effect.amount != null) {
+            if (effect.type !== 'clearShield' && effect.amount != null) {
                 validateAmountDefinition(errors, effect.amount, `${path}.amount`);
-            } else if (!isFiniteNumber(effect.value)) {
+            } else if (effect.type !== 'clearShield' && !isFiniteNumber(effect.value)) {
                 pushError(errors, `${path}.value`, 'must be a number.');
             }
             if (effect.reason != null && typeof effect.reason !== 'string') {
@@ -454,6 +468,31 @@
             }
             if (effect.type === 'modifySpeed' && effect.operation != null && !['add', 'set'].includes(effect.operation)) {
                 pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
+            }
+            if (effect.type === 'gainShield') {
+                if (!effect.shieldId || typeof effect.shieldId !== 'string') {
+                    pushError(errors, `${path}.shieldId`, 'must be a non-empty string.');
+                }
+                if (effect.operation != null && !['add', 'set'].includes(effect.operation)) {
+                    pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
+                }
+                if (effect.stackSize != null && (!isFiniteNumber(effect.stackSize) || effect.stackSize <= 0)) {
+                    pushError(errors, `${path}.stackSize`, 'must be a positive number when provided.');
+                }
+                if (effect.expiresAt != null && !['turnStart', 'turnEnd'].includes(effect.expiresAt)) {
+                    pushError(errors, `${path}.expiresAt`, 'must be "turnStart" or "turnEnd" when provided.');
+                }
+                if (effect.linkedStatusId != null && (typeof effect.linkedStatusId !== 'string' || !registry.isSupportedStatusId(effect.linkedStatusId))) {
+                    pushError(errors, `${path}.linkedStatusId`, 'must reference a supported status id when provided.');
+                }
+                if (effect.linkedStatusCountDeltaOnBreak != null && !isFiniteNumber(effect.linkedStatusCountDeltaOnBreak)) {
+                    pushError(errors, `${path}.linkedStatusCountDeltaOnBreak`, 'must be a number when provided.');
+                }
+            }
+            if (effect.type === 'clearShield') {
+                if (!effect.shieldId || typeof effect.shieldId !== 'string') {
+                    pushError(errors, `${path}.shieldId`, 'must be a non-empty string.');
+                }
             }
             if (effect.type === 'adjustEncounterResource') {
                 if (!effect.resourceId || typeof effect.resourceId !== 'string') {

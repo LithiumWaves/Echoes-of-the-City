@@ -143,6 +143,7 @@
             hp: template.maxHp,
             sp: template.sp,
             speed: 0,
+            shields: [],
             statuses: [],
             passives: clonePassiveDefinitions(template.passives),
             pendingStatuses: [],
@@ -237,6 +238,8 @@
                     ensureActivePlayerSlot,
                     burstTremor,
                     adjustEncounterResource,
+                    gainShield,
+                    clearShield,
                 });
             }
 
@@ -743,6 +746,12 @@
             if (type === 'encounter_resource_changed') {
                 return `${data.resourceId} ${data.previousValue} -> ${data.nextValue}.`;
             }
+            if (type === 'shield_changed') {
+                return `${data.unitName} ${data.shieldId} ${data.previousAmount} -> ${data.nextAmount}.`;
+            }
+            if (type === 'shield_broken') {
+                return `${data.unitName}'s ${data.shieldId} broke.`;
+            }
             if (type === 'unit_staggered') {
                 return `${data.unitName} is staggered at Threshold ${data.threshold} HP.`;
             }
@@ -911,6 +920,165 @@
             }
         }
 
+        function getUnitShieldAmount(unit, shieldId = null) {
+            const shields = Array.isArray(unit?.shields) ? unit.shields : [];
+            return shields.reduce((sum, shield) => {
+                if (!shield || typeof shield.amount !== 'number' || shield.amount <= 0) {
+                    return sum;
+                }
+                if (shieldId && shield.id !== shieldId) {
+                    return sum;
+                }
+                return sum + shield.amount;
+            }, 0);
+        }
+
+        function buildShieldLayers(effect) {
+            const totalAmount = clampStatusValue(effect.amount, 9999);
+            if (totalAmount <= 0) {
+                return [];
+            }
+
+            const stackSize = typeof effect.stackSize === 'number' && effect.stackSize > 0
+                ? effect.stackSize
+                : totalAmount;
+            const layers = [];
+            let remainingAmount = totalAmount;
+
+            while (remainingAmount > 0) {
+                const layerAmount = Math.min(stackSize, remainingAmount);
+                layers.push({
+                    id: effect.shieldId,
+                    amount: layerAmount,
+                    maxAmount: layerAmount,
+                    expiresAt: effect.expiresAt || null,
+                    linkedStatusId: effect.linkedStatusId || null,
+                    linkedStatusCountDeltaOnBreak: effect.linkedStatusCountDeltaOnBreak || 0,
+                });
+                remainingAmount -= layerAmount;
+            }
+
+            return layers;
+        }
+
+        function gainShield(targetBattle, unit, effect) {
+            if (!unit || !effect?.shieldId) {
+                return 0;
+            }
+
+            const previousAmount = getUnitShieldAmount(unit, effect.shieldId);
+            const layers = buildShieldLayers(effect);
+            if (effect.operation === 'set') {
+                unit.shields = (unit.shields || []).filter((shield) => shield.id !== effect.shieldId);
+                unit.shields.push(...layers);
+            } else {
+                unit.shields = unit.shields || [];
+                unit.shields.push(...layers);
+            }
+
+            const nextAmount = getUnitShieldAmount(unit, effect.shieldId);
+            emitEvent(targetBattle, 'shield_changed', {
+                unitId: unit.id,
+                unitName: unit.name,
+                shieldId: effect.shieldId,
+                previousAmount,
+                nextAmount,
+                reason: effect.reason || effect.shieldId,
+            });
+            return nextAmount;
+        }
+
+        function clearShield(targetBattle, unit, shieldId, options = {}) {
+            if (!unit || !shieldId) {
+                return 0;
+            }
+
+            const previousAmount = getUnitShieldAmount(unit, shieldId);
+            if (!previousAmount) {
+                return 0;
+            }
+
+            unit.shields = (unit.shields || []).filter((shield) => shield.id !== shieldId);
+            emitEvent(targetBattle, 'shield_changed', {
+                unitId: unit.id,
+                unitName: unit.name,
+                shieldId,
+                previousAmount,
+                nextAmount: 0,
+                reason: options.reason || shieldId,
+            });
+            return previousAmount;
+        }
+
+        function expireShieldsForPhase(targetBattle, unit, phase) {
+            const expiringShieldIds = [...new Set((unit.shields || [])
+                .filter((shield) => shield?.expiresAt === phase)
+                .map((shield) => shield.id)
+                .filter(Boolean))];
+
+            expiringShieldIds.forEach((shieldId) => {
+                clearShield(targetBattle, unit, shieldId, { reason: `${phase} expiry` });
+            });
+        }
+
+        function absorbDamageWithShields(targetBattle, unit, incomingDamage) {
+            let remainingDamage = clampStatusValue(incomingDamage, 9999);
+            if (!unit || remainingDamage <= 0 || !Array.isArray(unit.shields) || !unit.shields.length) {
+                return {
+                    remainingDamage,
+                    absorbedDamage: 0,
+                };
+            }
+
+            let absorbedDamage = 0;
+
+            for (let index = 0; index < unit.shields.length && remainingDamage > 0; index += 1) {
+                const shield = unit.shields[index];
+                if (!shield || shield.amount <= 0) {
+                    continue;
+                }
+
+                const absorbed = Math.min(remainingDamage, shield.amount);
+                shield.amount -= absorbed;
+                remainingDamage -= absorbed;
+                absorbedDamage += absorbed;
+
+                if (shield.amount <= 0) {
+                    emitEvent(targetBattle, 'shield_broken', {
+                        unitId: unit.id,
+                        unitName: unit.name,
+                        shieldId: shield.id,
+                    });
+
+                    if (shield.linkedStatusId && shield.linkedStatusCountDeltaOnBreak) {
+                        setStatusCount(
+                            targetBattle,
+                            unit,
+                            shield.linkedStatusId,
+                            getStatusCount(unit, shield.linkedStatusId) + shield.linkedStatusCountDeltaOnBreak,
+                        );
+                    }
+                }
+            }
+
+            unit.shields = unit.shields.filter((shield) => shield && shield.amount > 0);
+            if (absorbedDamage > 0) {
+                emitEvent(targetBattle, 'shield_changed', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    shieldId: 'total',
+                    previousAmount: absorbedDamage + getUnitShieldAmount(unit),
+                    nextAmount: getUnitShieldAmount(unit),
+                    reason: 'damage absorbed',
+                });
+            }
+
+            return {
+                remainingDamage,
+                absorbedDamage,
+            };
+        }
+
         function queueStatusForNextTurn(unit, statusId, payload) {
             unit.pendingStatuses.push({
                 statusId,
@@ -969,6 +1137,14 @@
             }
 
             const previousHp = unit.hp;
+            const previewShieldState = absorbDamageWithShields({
+                ...targetBattle,
+                events: [],
+            }, {
+                ...unit,
+                shields: (unit.shields || []).map((shield) => ({ ...shield })),
+                statuses: (unit.statuses || []).map((status) => ({ ...status })),
+            }, appliedDamage);
             invokeHooks(unit, 'beforeDamage', {
                 battle: targetBattle,
                 unit,
@@ -976,18 +1152,19 @@
                 statusId,
                 damage: appliedDamage,
                 previousHp,
-                nextHp: Math.max(0, unit.hp - appliedDamage),
+                nextHp: Math.max(0, unit.hp - previewShieldState.remainingDamage),
             });
-            unit.hp = clamp(unit.hp - appliedDamage, 0, unit.maxHp);
+            const shieldState = absorbDamageWithShields(targetBattle, unit, appliedDamage);
+            unit.hp = clamp(unit.hp - shieldState.remainingDamage, 0, unit.maxHp);
             emitEvent(targetBattle, 'status_triggered', {
                 unitId: unit.id,
                 unitName: unit.name,
                 statusId,
-                damage: appliedDamage,
+                damage: shieldState.remainingDamage,
                 hp: unit.hp,
             });
             if (statusId === 'bleed') {
-                adjustEncounterResource(targetBattle, 'bloodfeast', appliedDamage, {
+                adjustEncounterResource(targetBattle, 'bloodfeast', shieldState.remainingDamage, {
                     max: 999,
                     reason: 'bleed damage',
                     unit,
@@ -999,11 +1176,11 @@
                 unit,
                 sourceUnit: null,
                 statusId,
-                damage: appliedDamage,
+                damage: shieldState.remainingDamage,
                 previousHp,
                 nextHp: unit.hp,
             });
-            return appliedDamage;
+            return shieldState.remainingDamage;
         }
 
         function getCoinHeadChance(unit) {
@@ -1269,6 +1446,8 @@
                 applyFixedDamage,
                 queueStatusForNextTurn,
                 adjustSanity,
+                gainShield,
+                clearShield,
                 emitEvent,
                 invokeHooks,
                 isCountOnlyStatus,
@@ -1562,6 +1741,14 @@
                 const finalPower = roll.power + (isCritical ? (attackContext.critFinalPowerBonusByCoin[coinIndex + 1] || 0) : 0);
                 const previousHp = defender.hp;
                 const previewDamage = calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
+                const previewShieldState = absorbDamageWithShields({
+                    ...targetBattle,
+                    events: [],
+                }, {
+                    ...defender,
+                    shields: (defender.shields || []).map((shield) => ({ ...shield })),
+                    statuses: (defender.statuses || []).map((status) => ({ ...status })),
+                }, previewDamage);
 
                 invokeHooks(defender, 'beforeDamage', {
                     battle: targetBattle,
@@ -1575,11 +1762,12 @@
                     finalPower,
                     damage: previewDamage,
                     previousHp,
-                    nextHp: Math.max(0, defender.hp - previewDamage),
+                    nextHp: Math.max(0, defender.hp - previewShieldState.remainingDamage),
                     isCritical,
                 });
                 const damage = calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
-                defender.hp = clamp(defender.hp - damage, 0, defender.maxHp);
+                const shieldState = absorbDamageWithShields(targetBattle, defender, damage);
+                defender.hp = clamp(defender.hp - shieldState.remainingDamage, 0, defender.maxHp);
                 applyStaggerFromDamage(targetBattle, defender, attacker, previousHp, defender.hp);
                 invokeHooks(defender, 'afterDamage', {
                     battle: targetBattle,
@@ -1591,7 +1779,7 @@
                     attackContext,
                     defendContext,
                     finalPower,
-                    damage,
+                    damage: shieldState.remainingDamage,
                     previousHp,
                     nextHp: defender.hp,
                     isCritical,
@@ -1599,7 +1787,7 @@
 
                 hits.push({
                     finalPower,
-                    damage,
+                    damage: shieldState.remainingDamage,
                     isHeads: roll.isHeads,
                     isCritical,
                     targetHp: defender.hp,
@@ -1615,17 +1803,17 @@
                     skillName: skill.name,
                     coinFace: roll.isHeads ? 'Heads' : 'Tails',
                     finalPower,
-                    damage,
+                    damage: shieldState.remainingDamage,
                     damageType: skill.damageType,
                     previousHp,
                     nextHp: defender.hp,
                     isCritical,
                 });
 
-                invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, finalPower, damage, isCritical });
-                invokeHooks(defender, 'hitTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, finalPower, damage, isCritical });
-                invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, damage });
-                invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, damage });
+                invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, finalPower, damage: shieldState.remainingDamage, isCritical });
+                invokeHooks(defender, 'hitTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, finalPower, damage: shieldState.remainingDamage, isCritical });
+                invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, damage: shieldState.remainingDamage });
+                invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, damage: shieldState.remainingDamage });
 
                 applySkillEffects(targetBattle, 'onHit', {
                     sourceUnit: attacker,
@@ -1938,6 +2126,14 @@
                 const defendContext = { damageReductionMultiplier: 1 };
                 const previousHp = defender.hp;
                 const previewDamage = calculateHitDamage(attacker, attackSkill, defender, finalPower, attackContext, defendContext, isCritical);
+                const previewShieldState = absorbDamageWithShields({
+                    ...targetBattle,
+                    events: [],
+                }, {
+                    ...defender,
+                    shields: (defender.shields || []).map((shield) => ({ ...shield })),
+                    statuses: (defender.statuses || []).map((status) => ({ ...status })),
+                }, previewDamage);
                 invokeHooks(defender, 'beforeDamage', {
                     battle: targetBattle,
                     unit: defender,
@@ -1950,11 +2146,12 @@
                     finalPower,
                     damage: previewDamage,
                     previousHp,
-                    nextHp: Math.max(0, defender.hp - previewDamage),
+                    nextHp: Math.max(0, defender.hp - previewShieldState.remainingDamage),
                     isCritical,
                 });
                 const damage = calculateHitDamage(attacker, attackSkill, defender, finalPower, attackContext, defendContext, isCritical);
-                defender.hp = clamp(defender.hp - damage, 0, defender.maxHp);
+                const shieldState = absorbDamageWithShields(targetBattle, defender, damage);
+                defender.hp = clamp(defender.hp - shieldState.remainingDamage, 0, defender.maxHp);
                 applyStaggerFromDamage(targetBattle, defender, attacker, previousHp, defender.hp);
                 invokeHooks(defender, 'afterDamage', {
                     battle: targetBattle,
@@ -1966,7 +2163,7 @@
                     attackContext,
                     defendContext,
                     finalPower,
-                    damage,
+                    damage: shieldState.remainingDamage,
                     previousHp,
                     nextHp: defender.hp,
                     isCritical,
@@ -1974,7 +2171,7 @@
 
                 hits.push({
                     finalPower,
-                    damage,
+                    damage: shieldState.remainingDamage,
                     isHeads: roll.isHeads,
                     isCritical,
                     targetHp: defender.hp,
@@ -1990,17 +2187,17 @@
                     skillName: attackSkill.name,
                     coinFace: roll.isHeads ? 'Heads' : 'Tails',
                     finalPower,
-                    damage,
+                    damage: shieldState.remainingDamage,
                     damageType: attackSkill.damageType,
                     previousHp,
                     nextHp: defender.hp,
                     isCritical,
                 });
 
-                invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, finalPower, damage, isCritical });
-                invokeHooks(defender, 'hitTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill: attackSkill, finalPower, damage, isCritical });
-                invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, damage });
-                invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill: attackSkill, damage });
+                invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, finalPower, damage: shieldState.remainingDamage, isCritical });
+                invokeHooks(defender, 'hitTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill: attackSkill, finalPower, damage: shieldState.remainingDamage, isCritical });
+                invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, damage: shieldState.remainingDamage });
+                invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill: attackSkill, damage: shieldState.remainingDamage });
 
                 applySkillEffects(targetBattle, 'onHit', {
                     sourceUnit: attacker,
@@ -2575,6 +2772,7 @@
                 unit.turnState = {};
                 resetUnitHookRuntimeState(unit);
                 processQueuedStatusesAtTurnStart(targetBattle, unit);
+                expireShieldsForPhase(targetBattle, unit, 'turnStart');
                 progressStaggerTurnState(targetBattle, unit);
             });
 
@@ -2806,6 +3004,9 @@
                     opposingUnits,
                 });
             });
+            getAllUnits(battle).forEach((unit) => {
+                expireShieldsForPhase(battle, unit, 'turnEnd');
+            });
 
             finalizeBattleOnDeaths(battle);
             if (!battle.winner) {
@@ -2844,6 +3045,7 @@
             if (unitIndex === null) {
                 units.forEach((unit) => {
                     unit.statuses = [];
+                    unit.shields = [];
                 });
                 return true;
             }
@@ -2853,6 +3055,7 @@
             }
 
             units[unitIndex].statuses = [];
+            units[unitIndex].shields = [];
             return true;
         }
 

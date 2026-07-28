@@ -218,6 +218,10 @@
             return unit.staggerThresholds[unit.staggerThresholdIndex] ?? null;
         }
 
+        function getUnitShieldAmount(unit) {
+            return (Array.isArray(unit?.shields) ? unit.shields : []).reduce((sum, shield) => sum + (shield?.amount || 0), 0);
+        }
+
         function getUnitFieldSprite(unit, slot) {
             if ((unit.hp <= 0 || isUnitStaggered(unit)) && unit.sprites.hurt) {
                 return resolveAssetUrl(unit.sprites.hurt);
@@ -269,7 +273,7 @@
 
             return escapeAttribute([
                 unit.name,
-                `HP ${unit.hp}/${unit.maxHp} | SP ${unit.sp} | Speed ${slot?.speed || 0}`,
+                `HP ${unit.hp}/${unit.maxHp} | Shield ${getUnitShieldAmount(unit)} | SP ${unit.sp} | Speed ${slot?.speed || 0}`,
                 isUnitStaggered(unit)
                     ? `Staggered | Level ${unit.staggerLevel || 1} | Recovery in ${unit.staggerTurnsRemaining} turn(s)`
                     : `Next Stagger: ${nextStaggerThreshold ?? 'None'}`,
@@ -414,6 +418,7 @@
                     <span class="echoes-battle-panel__field-target">${targetLabel}</span>
                     <span class="echoes-battle-panel__field-vitals">
                         <span class="echoes-battle-panel__field-hp">HP ${unit.hp}/${unit.maxHp}</span>
+                        <span class="echoes-battle-panel__field-sp">SH ${getUnitShieldAmount(unit)}</span>
                         <span class="echoes-battle-panel__field-sp">SP ${unit.sp}</span>
                     </span>
                     ${renderStaggerThresholdTrack(unit)}
