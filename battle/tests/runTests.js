@@ -1254,6 +1254,304 @@ function runSuite() {
         }
     });
 
+    test('Golden snapshot: one-sided attack into guard shield', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const attackSkill = {
+            id: 'jab',
+            name: 'Jab',
+            skillType: 'attack',
+            basePower: 8,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const guardSkill = {
+            id: 'guard',
+            name: 'Guard',
+            skillType: 'guard',
+            basePower: 10,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'golden-snapshot-guard',
+            name: 'Golden Snapshot Guard',
+            playerUnits: [createUnit('ally', 'Ally', [attackSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [guardSkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [false],
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('jab');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const relevantTypes = new Set([
+                'battle_started',
+                'turn_started',
+                'slot_speed_rolled',
+                'enemy_intent_set',
+                'skill_selected',
+                'target_selected',
+                'resolution_queue_built',
+                'engagement_started',
+                'shield_changed',
+                'status_triggered',
+                'hit_resolved',
+            ]);
+
+            const stream = engine.getState().events
+                .filter((event) => relevantTypes.has(event.type))
+                .map((event) => {
+                    const data = event.data || {};
+                    if (event.type === 'battle_started') {
+                        return { type: event.type };
+                    }
+                    if (event.type === 'turn_started') {
+                        return { type: event.type, turn: data.turn };
+                    }
+                    if (event.type === 'slot_speed_rolled') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, speed: data.speed };
+                    }
+                    if (event.type === 'enemy_intent_set') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, skillName: data.skillName, targetLabel: data.targetLabel };
+                    }
+                    if (event.type === 'skill_selected') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, skillName: data.skillName };
+                    }
+                    if (event.type === 'target_selected') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, targetLabel: data.targetLabel };
+                    }
+                    if (event.type === 'resolution_queue_built') {
+                        return { type: event.type, queueLabel: data.queueLabel };
+                    }
+                    if (event.type === 'engagement_started') {
+                        return { type: event.type, engagementType: data.engagementType, attackerName: data.attackerName, defenderName: data.defenderName, skillName: data.skillName };
+                    }
+                    if (event.type === 'shield_changed') {
+                        return { type: event.type, unitName: data.unitName, shieldId: data.shieldId, previousAmount: data.previousAmount, nextAmount: data.nextAmount, reason: data.reason };
+                    }
+                    if (event.type === 'status_triggered') {
+                        return { type: event.type, unitName: data.unitName, statusId: data.statusId, damage: data.damage };
+                    }
+                    if (event.type === 'hit_resolved') {
+                        return { type: event.type, attackerName: data.attackerName, defenderName: data.defenderName, skillName: data.skillName, coinFace: data.coinFace, damage: data.damage };
+                    }
+                    return { type: event.type };
+                });
+
+            const expected = [
+                { type: 'battle_started' },
+                { type: 'turn_started', turn: 1 },
+                { type: 'slot_speed_rolled', unitName: 'Ally', slotLabel: 'Slot 1', speed: 2 },
+                { type: 'slot_speed_rolled', unitName: 'Enemy', slotLabel: 'Slot 1', speed: 2 },
+                { type: 'enemy_intent_set', unitName: 'Enemy', slotLabel: 'Slot 1', skillName: 'Guard', targetLabel: 'Ally Slot 1' },
+                { type: 'skill_selected', unitName: 'Ally', slotLabel: 'Slot 1', skillName: 'Jab' },
+                { type: 'target_selected', unitName: 'Ally', slotLabel: 'Slot 1', targetLabel: 'Enemy Slot 1' },
+                { type: 'resolution_queue_built', queueLabel: 'Ally Slot 1 (2), Enemy Slot 1 (2)' },
+                { type: 'engagement_started', engagementType: 'one-sided', attackerName: 'Ally', defenderName: 'Enemy', skillName: 'Jab' },
+                { type: 'shield_changed', unitName: 'Enemy', shieldId: 'guard', previousAmount: 0, nextAmount: 10, reason: 'Guard' },
+                { type: 'status_triggered', unitName: 'Enemy', statusId: 'guard', damage: 10 },
+                { type: 'shield_changed', unitName: 'Enemy', shieldId: 'total', previousAmount: 10, nextAmount: 2, reason: 'damage absorbed' },
+                { type: 'hit_resolved', attackerName: 'Ally', defenderName: 'Enemy', skillName: 'Jab', coinFace: 'Tails', damage: 0 },
+            ];
+
+            assert(stableStringify(stream) === stableStringify(expected), `Unexpected guard stream:\n${JSON.stringify(stream, null, 2)}`);
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Golden snapshot: one-sided attack against evade', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const attackSkill = {
+            id: 'jab',
+            name: 'Jab',
+            skillType: 'attack',
+            basePower: 5,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const evadeSkill = {
+            id: 'evade',
+            name: 'Evade',
+            skillType: 'evade',
+            basePower: 10,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'golden-snapshot-evade',
+            name: 'Golden Snapshot Evade',
+            playerUnits: [createUnit('ally', 'Ally', [attackSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [evadeSkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [false],
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('jab');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const relevantTypes = new Set([
+                'battle_started',
+                'turn_started',
+                'slot_speed_rolled',
+                'enemy_intent_set',
+                'skill_selected',
+                'target_selected',
+                'resolution_queue_built',
+                'engagement_started',
+                'status_triggered',
+                'hit_resolved',
+            ]);
+
+            const stream = engine.getState().events
+                .filter((event) => relevantTypes.has(event.type))
+                .map((event) => {
+                    const data = event.data || {};
+                    if (event.type === 'battle_started') {
+                        return { type: event.type };
+                    }
+                    if (event.type === 'turn_started') {
+                        return { type: event.type, turn: data.turn };
+                    }
+                    if (event.type === 'slot_speed_rolled') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, speed: data.speed };
+                    }
+                    if (event.type === 'enemy_intent_set') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, skillName: data.skillName, targetLabel: data.targetLabel };
+                    }
+                    if (event.type === 'skill_selected') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, skillName: data.skillName };
+                    }
+                    if (event.type === 'target_selected') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, targetLabel: data.targetLabel };
+                    }
+                    if (event.type === 'resolution_queue_built') {
+                        return { type: event.type, queueLabel: data.queueLabel };
+                    }
+                    if (event.type === 'engagement_started') {
+                        return { type: event.type, engagementType: data.engagementType, attackerName: data.attackerName, defenderName: data.defenderName, skillName: data.skillName };
+                    }
+                    if (event.type === 'status_triggered') {
+                        return { type: event.type, unitName: data.unitName, statusId: data.statusId, damage: data.damage };
+                    }
+                    if (event.type === 'hit_resolved') {
+                        return { type: event.type, attackerName: data.attackerName, defenderName: data.defenderName, skillName: data.skillName };
+                    }
+                    return { type: event.type };
+                });
+
+            const expected = [
+                { type: 'battle_started' },
+                { type: 'turn_started', turn: 1 },
+                { type: 'slot_speed_rolled', unitName: 'Ally', slotLabel: 'Slot 1', speed: 2 },
+                { type: 'slot_speed_rolled', unitName: 'Enemy', slotLabel: 'Slot 1', speed: 2 },
+                { type: 'enemy_intent_set', unitName: 'Enemy', slotLabel: 'Slot 1', skillName: 'Evade', targetLabel: 'Ally Slot 1' },
+                { type: 'skill_selected', unitName: 'Ally', slotLabel: 'Slot 1', skillName: 'Jab' },
+                { type: 'target_selected', unitName: 'Ally', slotLabel: 'Slot 1', targetLabel: 'Enemy Slot 1' },
+                { type: 'resolution_queue_built', queueLabel: 'Ally Slot 1 (2), Enemy Slot 1 (2)' },
+                { type: 'engagement_started', engagementType: 'one-sided', attackerName: 'Ally', defenderName: 'Enemy', skillName: 'Jab' },
+                { type: 'status_triggered', unitName: 'Enemy', statusId: 'evade', damage: 0 },
+            ];
+
+            assert(stableStringify(stream) === stableStringify(expected), `Unexpected evade stream:\n${JSON.stringify(stream, null, 2)}`);
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
     test('Export/import round-trip for a shipped battle pack', () => {
         const sourceModules = createBattleEnvironment();
         requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses'));
