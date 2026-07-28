@@ -2219,6 +2219,195 @@ function runSuite() {
         }
     });
 
+    test('Golden snapshot: ammo spend increments cumulative spent encounter resource', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'tigermarkRound.js'));
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const ammoSkill = {
+            id: 'tigermark_shot',
+            name: 'Tigermark Shot',
+            skillType: 'attack',
+            basePower: 4,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            ammo: {
+                statusId: 'tigermark_round',
+                countCost: 1,
+                cancelIfInsufficient: true,
+            },
+            effects: [],
+        };
+        const enemySkill = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 4,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'golden-snapshot-ammo-resource',
+            name: 'Golden Snapshot Ammo Resource',
+            playerUnits: [createUnit('ally', 'Ally', [ammoSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [false],
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.addStatus('player', { id: 'tigermark_round', count: 2 }, 0);
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('tigermark_shot');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const state = engine.getState();
+            const resourceEvents = state.events
+                .filter((event) => event.type === 'encounter_resource_changed')
+                .map((event) => event.data)
+                .filter((data) => data?.resourceId === 'ally:tigermark_rounds_spent');
+            assert(resourceEvents.length === 1, `Expected 1 cumulative resource event, got ${resourceEvents.length}`);
+            assert(resourceEvents[0].previousValue === 0 && resourceEvents[0].nextValue === 1, `Expected tigermark_rounds_spent 0→1, got ${resourceEvents[0].previousValue}→${resourceEvents[0].nextValue}`);
+            assert(resourceEvents[0].unitId === 'ally' && resourceEvents[0].unitName === 'Ally', 'Expected resource event to be scoped to Ally.');
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Golden snapshot: bleed fixed damage increments bloodfeast encounter resource', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'bleed.js'));
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const playerSkill = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const enemySkill = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'golden-snapshot-bleed-bloodfeast',
+            name: 'Golden Snapshot Bleed Bloodfeast',
+            playerUnits: [createUnit('ally', 'Ally', [playerSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [false],
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.addStatus('player', { id: 'bleed', potency: 2, count: 1 }, 0);
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('poke');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const events = engine.getState().events;
+            const bleedTriggerIndex = events.findIndex((event) => event.type === 'status_triggered' && event.data?.statusId === 'bleed');
+            const bloodfeastIndex = events.findIndex((event) => event.type === 'encounter_resource_changed' && event.data?.resourceId === 'ally:bloodfeast');
+            assert(bleedTriggerIndex >= 0, 'Expected bleed status_triggered event.');
+            assert(bloodfeastIndex > bleedTriggerIndex, `Expected bloodfeast to be incremented after bleed trigger. bleed=${bleedTriggerIndex} resource=${bloodfeastIndex}`);
+
+            const bloodfeastEvent = events[bloodfeastIndex]?.data || null;
+            assert(bloodfeastEvent?.previousValue === 0 && bloodfeastEvent?.nextValue === 2, `Expected bloodfeast 0→2, got ${bloodfeastEvent?.previousValue}→${bloodfeastEvent?.nextValue}`);
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
     test('Export/import round-trip for a shipped battle pack', () => {
         const sourceModules = createBattleEnvironment();
         requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses'));
