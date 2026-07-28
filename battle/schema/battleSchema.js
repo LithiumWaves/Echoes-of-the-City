@@ -50,6 +50,8 @@
         'statusPotencyAtOrBelow',
         'statusCountAtLeast',
         'statusCountAtOrBelow',
+        'encounterResourceAtLeast',
+        'encounterResourceAtOrBelow',
         'skillType',
         'skillSinType',
         'skillDamageType',
@@ -221,6 +223,15 @@
 
         switch (condition.type) {
         case 'always':
+            break;
+        case 'encounterResourceAtLeast':
+        case 'encounterResourceAtOrBelow':
+            if (!condition.resourceId || typeof condition.resourceId !== 'string') {
+                pushError(errors, `${path}.resourceId`, 'must be a non-empty string.');
+            }
+            if (!isFiniteNumber(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
             break;
         case 'criticalHit':
             if (condition.value != null && typeof condition.value !== 'boolean') {
@@ -561,7 +572,7 @@
             if (!effect.operation || typeof effect.operation !== 'string') {
                 pushError(errors, `${path}.operation`, 'must be provided.');
             }
-            if (!['add', 'set', 'addStatusPotencyScaled', 'addStatusCountScaled', 'setToOneMinusStatusPotencyScaled', 'setToOnePlusStatusCountScaled'].includes(effect.operation)) {
+            if (!['add', 'set', 'addStatusPotencyScaled', 'addStatusCountScaled', 'setToOneMinusStatusPotencyScaled', 'setToOnePlusStatusCountScaled', 'addSpeedDifferenceScaled'].includes(effect.operation)) {
                 pushError(errors, `${path}.operation`, 'is not a supported context operation.');
             }
             if (effect.operation === 'add' && effect.amount == null && !isFiniteNumber(effect.value)) {
@@ -600,6 +611,17 @@
             }
             if ((effect.operation === 'addStatusPotencyScaled' || effect.operation === 'addStatusCountScaled') && effect.direction != null && !['add', 'subtract'].includes(effect.direction)) {
                 pushError(errors, `${path}.direction`, 'must be "add" or "subtract" when provided.');
+            }
+            if (effect.operation === 'addSpeedDifferenceScaled') {
+                if (!isFiniteNumber(effect.multiplier)) {
+                    pushError(errors, `${path}.multiplier`, 'must be a number for speed-difference context operations.');
+                }
+                if (effect.cap != null && (!isFiniteNumber(effect.cap) || effect.cap <= 0)) {
+                    pushError(errors, `${path}.cap`, 'must be a positive number when provided.');
+                }
+                if (effect.minDifference != null && (!isFiniteNumber(effect.minDifference) || effect.minDifference < 0)) {
+                    pushError(errors, `${path}.minDifference`, 'must be a non-negative number when provided.');
+                }
             }
             break;
         case 'modifyCoinMap':
@@ -690,6 +712,25 @@
         }
         if (skill.showInPlanner != null && typeof skill.showInPlanner !== 'boolean') {
             pushError(errors, `${path}.showInPlanner`, 'must be a boolean when provided.');
+        }
+        if (skill.ammo != null) {
+            if (typeof skill.ammo !== 'object' || Array.isArray(skill.ammo)) {
+                pushError(errors, `${path}.ammo`, 'must be an object when provided.');
+            } else {
+                if (!skill.ammo.statusId || typeof skill.ammo.statusId !== 'string') {
+                    pushError(errors, `${path}.ammo.statusId`, 'must be a non-empty string.');
+                } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(skill.ammo.statusId)) {
+                    pushError(errors, `${path}.ammo.statusId`, 'must reference a supported status id.');
+                }
+                ['countCost', 'potencyCost', 'randomCost'].forEach((field) => {
+                    if (skill.ammo[field] != null && (!Number.isInteger(skill.ammo[field]) || skill.ammo[field] < 0)) {
+                        pushError(errors, `${path}.ammo.${field}`, 'must be a non-negative integer when provided.');
+                    }
+                });
+                if (skill.ammo.cancelIfInsufficient != null && typeof skill.ammo.cancelIfInsufficient !== 'boolean') {
+                    pushError(errors, `${path}.ammo.cancelIfInsufficient`, 'must be a boolean when provided.');
+                }
+            }
         }
 
         if (Array.isArray(skill.effects)) {

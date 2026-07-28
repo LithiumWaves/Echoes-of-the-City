@@ -69,6 +69,7 @@ Optional:
 - `borderPath: string`
 - `description: string`
 - `showInPlanner: boolean` (set `false` for follow-up-only skills)
+- `ammo: { statusId: string; countCost?: number; potencyCost?: number; randomCost?: number; cancelIfInsufficient?: boolean }`
 - `effects: EffectDefinition[]`
 
 ## EffectDefinition
@@ -118,7 +119,8 @@ Selected effect notes:
   - `potencyDelta?: number`
   - `countDelta?: number`
 - `modifyContext`
-  - `operation: "add" | "set" | "addStatusPotencyScaled" | "addStatusCountScaled" | "setToOneMinusStatusPotencyScaled" | "setToOnePlusStatusCountScaled"`
+  - `operation: "add" | "set" | "addStatusPotencyScaled" | "addStatusCountScaled" | "setToOneMinusStatusPotencyScaled" | "setToOnePlusStatusCountScaled" | "addSpeedDifferenceScaled"`
+  - `addSpeedDifferenceScaled` uses `(source speed - target speed) * multiplier`, optionally gated by `minDifference` and capped by `cap`
 - `modifyOffenseLevel`
   - `value?: number`
   - `amount?: AmountDefinition`
@@ -156,6 +158,8 @@ Selected effect notes:
 Supported hook condition additions:
 - `statusPotencyAtOrBelow`
 - `statusCountAtOrBelow`
+- `encounterResourceAtLeast`
+- `encounterResourceAtOrBelow`
 - `skillType`
 - `eventStatusIdIs`
 - `burstTremor`
@@ -222,6 +226,8 @@ Notes:
   - `hasStatus`
   - `statusPotencyAtLeast`
   - `statusCountAtLeast`
+- `encounterResourceAtLeast`
+- `encounterResourceAtOrBelow`
   - `skillSinType`
   - `skillDamageType`
   - `coinIndex`

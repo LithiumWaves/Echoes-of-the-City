@@ -33,6 +33,8 @@
         tigermark_round: { id: 'tigermark_round', label: 'Tigermark Round', countOnly: true },
         savage_tigermark_round: { id: 'savage_tigermark_round', label: 'Savage Tigermark Round', countOnly: true },
         the_living_and_the_departed: { id: 'the_living_and_the_departed', label: 'The Living & The Departed' },
+        tiantui_star: { id: 'tiantui_star', label: 'Tiantui Star [天退星]', countOnly: true },
+        shin_tiantui_star: { id: 'shin_tiantui_star', label: 'Shin (心) - Tiantui Star [天退星]', countOnly: true },
         aggro: { id: 'aggro', label: 'Aggro', countOnly: true },
         fairy_lure: { id: 'fairy_lure', label: 'Fairy Lure', countOnly: true },
         charge_barrier: { id: 'charge_barrier', label: 'Charge Barrier', countOnly: true },

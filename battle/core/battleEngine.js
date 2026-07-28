@@ -175,6 +175,7 @@
             targetSlotId: null,
             manualTargetLock: false,
             resolved: false,
+            ammoState: null,
         };
     }
 
@@ -226,6 +227,7 @@
                     invokeHooks,
                     isCountOnlyStatus,
                     clampStatusValue,
+                    getEncounterResource,
                     getAllSlots,
                     getSlotById,
                     getUnitById,
@@ -681,6 +683,14 @@
             return targetBattle.encounterResources[resourceId] || 0;
         }
 
+        function getUnitEncounterResourceId(unit, resourceId) {
+            if (!unit?.id || !resourceId) {
+                return resourceId;
+            }
+
+            return `${unit.id}:${resourceId}`;
+        }
+
         function adjustEncounterResource(targetBattle, resourceId, amount, options = {}) {
             if (!targetBattle || !resourceId || typeof amount !== 'number' || !Number.isFinite(amount)) {
                 return 0;
@@ -690,7 +700,8 @@
                 targetBattle.encounterResources = {};
             }
 
-            const previousValue = getEncounterResource(targetBattle, resourceId);
+            const scopedResourceId = options.unit ? getUnitEncounterResourceId(options.unit, resourceId) : resourceId;
+            const previousValue = getEncounterResource(targetBattle, scopedResourceId);
             const operation = options.operation || 'add';
             const nextUnclampedValue = operation === 'set'
                 ? amount
@@ -699,9 +710,9 @@
             const maxValue = typeof options.max === 'number' ? options.max : 999;
             const nextValue = clamp(Math.round(nextUnclampedValue), minValue, maxValue);
 
-            targetBattle.encounterResources[resourceId] = nextValue;
+            targetBattle.encounterResources[scopedResourceId] = nextValue;
             emitEvent(targetBattle, 'encounter_resource_changed', {
-                resourceId,
+                resourceId: scopedResourceId,
                 previousValue,
                 nextValue,
                 reason: options.reason || resourceId,
@@ -789,6 +800,12 @@
             }
             if (type === 'encounter_resource_changed') {
                 return `${data.resourceId} ${data.previousValue} -> ${data.nextValue}.`;
+            }
+            if (type === 'skill_ammo_spent') {
+                return `${data.unitName} spends ${data.summary} for ${data.skillName}.`;
+            }
+            if (type === 'skill_cancelled') {
+                return `${data.unitName}'s ${data.skillName} is canceled (${data.reason}).`;
             }
             if (type === 'shield_changed') {
                 return `${data.unitName} ${data.shieldId} ${data.previousAmount} -> ${data.nextAmount}.`;
@@ -1516,6 +1533,8 @@
                 applyFixedDamage,
                 queueStatusForNextTurn,
                 adjustSanity,
+                adjustEncounterResource,
+                getEncounterResource,
                 gainShield,
                 clearShield,
                 emitEvent,
@@ -1536,7 +1555,215 @@
             })
             : (() => {});
 
+        function consumeSkillAmmo(targetBattle, unit, skill, slot) {
+            const ammoConfig = skill?.ammo;
+            if (!ammoConfig?.statusId || !unit || !slot) {
+                return {
+                    canceled: false,
+                    spentEntries: [],
+                    summary: null,
+                };
+            }
+
+            if (slot.ammoState?.skillId === skill.id) {
+                return slot.ammoState.result;
+            }
+
+            const statusId = ammoConfig.statusId;
+            const statusDefinition = getStatusDefinition(statusId) || {};
+            const ammoProfile = statusDefinition.ammoProfile || {};
+            const existingAmmo = getStatus(unit, statusId);
+            const availableCount = existingAmmo?.count || 0;
+            const availablePotency = existingAmmo?.potency || 0;
+            const countCost = Math.max(0, ammoConfig.countCost || 0);
+            const potencyCost = Math.max(0, ammoConfig.potencyCost || 0);
+            const randomCost = Math.max(0, ammoConfig.randomCost || 0);
+            const cancelIfInsufficient = ammoConfig.cancelIfInsufficient != null
+                ? Boolean(ammoConfig.cancelIfInsufficient)
+                : Boolean(ammoProfile.canCancelAttacksWhenEmpty);
+
+            let remainingCount = availableCount;
+            let remainingPotency = availablePotency;
+            let spentCount = 0;
+            let spentPotency = 0;
+            const randomSpend = [];
+
+            if (remainingCount < countCost || remainingPotency < potencyCost) {
+                const result = {
+                    canceled: cancelIfInsufficient,
+                    spentEntries: [],
+                    summary: null,
+                    reason: `insufficient ${statusDefinition.label || statusId}`,
+                };
+                slot.ammoState = {
+                    skillId: skill.id,
+                    result,
+                };
+                if (result.canceled) {
+                    emitEvent(targetBattle, 'skill_cancelled', {
+                        unitId: unit.id,
+                        unitName: unit.name,
+                        skillId: skill.id,
+                        skillName: skill.name,
+                        reason: result.reason,
+                    });
+                }
+                return result;
+            }
+
+            remainingCount -= countCost;
+            remainingPotency -= potencyCost;
+            spentCount += countCost;
+            spentPotency += potencyCost;
+
+            for (let index = 0; index < randomCost; index += 1) {
+                const availableBuckets = [];
+                if (remainingPotency > 0) {
+                    availableBuckets.push('potency');
+                }
+                if (remainingCount > 0) {
+                    availableBuckets.push('count');
+                }
+
+                if (!availableBuckets.length) {
+                    const result = {
+                        canceled: cancelIfInsufficient,
+                        spentEntries: [],
+                        summary: null,
+                        reason: `insufficient ${statusDefinition.label || statusId}`,
+                    };
+                    slot.ammoState = {
+                        skillId: skill.id,
+                        result,
+                    };
+                    if (result.canceled) {
+                        emitEvent(targetBattle, 'skill_cancelled', {
+                            unitId: unit.id,
+                            unitName: unit.name,
+                            skillId: skill.id,
+                            skillName: skill.name,
+                            reason: result.reason,
+                        });
+                    }
+                    return result;
+                }
+
+                const chosenBucket = availableBuckets[Math.floor(Math.random() * availableBuckets.length)];
+                randomSpend.push(chosenBucket);
+                if (chosenBucket === 'potency') {
+                    remainingPotency -= 1;
+                    spentPotency += 1;
+                } else {
+                    remainingCount -= 1;
+                    spentCount += 1;
+                }
+            }
+
+            if (spentPotency !== 0 || spentCount !== 0) {
+                applyStatus(targetBattle, unit, statusId, {
+                    potency: -spentPotency,
+                    count: -spentCount,
+                });
+            }
+
+            const totalSpent = spentPotency + spentCount;
+            if (ammoProfile.cumulativeSpentResourceId && totalSpent > 0) {
+                adjustEncounterResource(targetBattle, ammoProfile.cumulativeSpentResourceId, totalSpent, {
+                    operation: 'add',
+                    min: 0,
+                    max: 999,
+                    reason: `${skill.name} ammo spent`,
+                    unit,
+                });
+            }
+
+            const spentEntries = totalSpent > 0
+                ? [{
+                    statusId,
+                    totalSpent,
+                    spentCount,
+                    spentPotency,
+                    randomSpend,
+                    onSpendOnHit: ammoProfile.onSpendOnHit || null,
+                }]
+                : [];
+            const summaryParts = [];
+            if (spentCount > 0) {
+                summaryParts.push(`${spentCount} Count ${statusDefinition.label || statusId}`);
+            }
+            if (spentPotency > 0) {
+                summaryParts.push(`${spentPotency} Potency ${statusDefinition.label || statusId}`);
+            }
+            if (!summaryParts.length && totalSpent > 0) {
+                summaryParts.push(`${totalSpent} ${statusDefinition.label || statusId}`);
+            }
+            const summary = summaryParts.join(', ');
+            const result = {
+                canceled: false,
+                spentEntries,
+                summary,
+                reason: null,
+            };
+
+            slot.ammoState = {
+                skillId: skill.id,
+                result,
+            };
+
+            if (summary) {
+                emitEvent(targetBattle, 'skill_ammo_spent', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    skillId: skill.id,
+                    skillName: skill.name,
+                    summary,
+                });
+            }
+
+            return result;
+        }
+
+        function applyPendingAmmoOnHitEffects(targetBattle, attacker, defender, skill, attackContext) {
+            const pendingEffects = Array.isArray(attackContext?.pendingAmmoOnHitEffects)
+                ? attackContext.pendingAmmoOnHitEffects
+                : [];
+            if (!pendingEffects.length) {
+                return;
+            }
+
+            pendingEffects.forEach((entry) => {
+                const effect = entry?.effect;
+                const times = Math.max(1, entry?.times || 1);
+                if (!effect || effect.type !== 'applyStatus' || !effect.statusId) {
+                    return;
+                }
+
+                applyStatus(targetBattle, defender, effect.statusId, {
+                    potency: typeof effect.potency === 'number' ? effect.potency * times : 0,
+                    count: typeof effect.count === 'number' ? effect.count * times : 0,
+                });
+
+                invokeHooks(attacker, 'statusInflicted', {
+                    battle: targetBattle,
+                    unit: attacker,
+                    opponent: defender,
+                    skill,
+                    statusId: effect.statusId,
+                });
+                invokeHooks(defender, 'statusReceived', {
+                    battle: targetBattle,
+                    unit: defender,
+                    opponent: attacker,
+                    skill,
+                    statusId: effect.statusId,
+                });
+            });
+
+            attackContext.pendingAmmoOnHitEffects = [];
+        }
+
         function createSkillContext(targetBattle, unit, slot, skill, targetUnit) {
+            const ammoResult = consumeSkillAmmo(targetBattle, unit, skill, slot);
             const context = {
                 slotId: slot.id,
                 skillId: skill.id,
@@ -1562,7 +1789,19 @@
                 critFinalPowerBonusByCoin: {},
                 followUpSkillIdOnClashLose: null,
                 currentCoinIndex: 0,
+                ammoSpentEntries: ammoResult.spentEntries || [],
+                pendingAmmoOnHitEffects: (ammoResult.spentEntries || [])
+                    .filter((entry) => entry?.onSpendOnHit)
+                    .map((entry) => ({
+                        effect: entry.onSpendOnHit,
+                        times: entry.totalSpent || 1,
+                    })),
+                cancelled: Boolean(ammoResult.canceled),
+                cancelReason: ammoResult.reason || null,
             };
+            if (context.cancelled) {
+                return context;
+            }
             applySkillEffects(targetBattle, 'onSelect', {
                 sourceUnit: unit,
                 targetUnit,
@@ -1799,6 +2038,9 @@
 
         function resolveOneSidedAttack(targetBattle, attacker, skill, defender, attackContext, defendContext, remainingCoins) {
             const hits = [];
+            if (attackContext?.cancelled) {
+                return hits;
+            }
 
             for (let coinIndex = 0; coinIndex < remainingCoins; coinIndex += 1) {
                 attackContext.currentCoinIndex = coinIndex + 1;
@@ -1894,6 +2136,7 @@
                     coinIndex: coinIndex + 1,
                     isCritical,
                 });
+                applyPendingAmmoOnHitEffects(targetBattle, attacker, defender, skill, attackContext);
 
                 if (defender.hp <= 0) {
                     break;
@@ -2124,6 +2367,9 @@
 
             const slot = getSlotsForSide(targetBattle, attacker.side).find((candidate) => candidate.unitId === attacker.id);
             const context = createSkillContext(targetBattle, attacker, slot, followUpSkill, defender);
+            if (context.cancelled) {
+                return [];
+            }
             const defenderContext = {
                 damageReductionMultiplier: 1,
             };
@@ -2152,6 +2398,14 @@
             let evadeBroken = false;
             const evadePowerBonus = getDefenseSkillFinalPowerBonus(defender, evadeSkill, attacker, attackSkill);
             const rounds = [];
+            if (attackContext?.cancelled || evadeContext?.cancelled) {
+                return {
+                    hits,
+                    evadedCoinCount,
+                    evadeBroken,
+                    rounds,
+                };
+            }
 
             for (let coinIndex = 0; coinIndex < attackSkill.coinCount; coinIndex += 1) {
                 attackContext.currentCoinIndex = coinIndex + 1;
@@ -2278,6 +2532,7 @@
                     coinIndex: coinIndex + 1,
                     isCritical,
                 });
+                applyPendingAmmoOnHitEffects(targetBattle, attacker, defender, attackSkill, attackContext);
             }
 
             return {
@@ -2301,6 +2556,10 @@
 
             if (!defenseState.context) {
                 defenseState.context = createSkillContext(targetBattle, defender, defenderSlot, counterSkill, attacker);
+            }
+            if (defenseState.context?.cancelled) {
+                defenseState.used = true;
+                return null;
             }
             defenseState.activated = true;
             defenseState.used = true;
@@ -2343,6 +2602,10 @@
 
             if (!defenseState.context) {
                 defenseState.context = createSkillContext(targetBattle, defender, defenderSlot, guardSkill, attacker);
+            }
+            if (defenseState.context?.cancelled) {
+                defenseState.used = true;
+                return null;
             }
 
             defenseState.activated = true;
@@ -2398,6 +2661,57 @@
                 leftSkillName: leftSkill.name,
                 rightSkillName: rightSkill.name,
             });
+
+            if (leftContext.cancelled && rightContext.cancelled) {
+                targetBattle.lastResolution = {
+                    engagementType: 'clash',
+                    actingUnitName: leftUnit.name,
+                    targetUnitName: rightUnit.name,
+                    actingSkillName: leftSkill.name,
+                    totalDamage: 0,
+                    remainingCoins: 0,
+                };
+                return;
+            }
+
+            if (leftContext.cancelled || rightContext.cancelled) {
+                const clashWinnerUnit = leftContext.cancelled ? rightUnit : leftUnit;
+                const clashLoserUnit = leftContext.cancelled ? leftUnit : rightUnit;
+                const winnerSkill = leftContext.cancelled ? rightSkill : leftSkill;
+                const winnerContext = leftContext.cancelled ? rightContext : leftContext;
+                const winnerSlot = leftContext.cancelled ? rightSlot : leftSlot;
+                const loserSlot = leftContext.cancelled ? leftSlot : rightSlot;
+                const hits = resolveOneSidedAttack(
+                    targetBattle,
+                    clashWinnerUnit,
+                    winnerSkill,
+                    clashLoserUnit,
+                    winnerContext,
+                    { damageReductionMultiplier: 1 },
+                    winnerSkill.coinCount,
+                );
+                const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
+                applyAttackEndEffects(targetBattle, clashWinnerUnit, winnerSkill, winnerContext);
+                targetBattle.clashPresentation = createOneSidedPresentation(
+                    winnerSlot,
+                    loserSlot,
+                    clashWinnerUnit,
+                    clashLoserUnit,
+                    winnerSkill,
+                    hits,
+                    totalDamage,
+                );
+                targetBattle.resolutionHistory.push(targetBattle.clashPresentation);
+                targetBattle.lastResolution = {
+                    engagementType: 'one-sided',
+                    actingUnitName: clashWinnerUnit.name,
+                    targetUnitName: clashLoserUnit.name,
+                    actingSkillName: winnerSkill.name,
+                    totalDamage,
+                    remainingCoins: winnerSkill.coinCount,
+                };
+                return;
+            }
 
             const clashResult = resolveClash(targetBattle, leftSlot, rightSlot, leftUnit, leftSkill, rightUnit, rightSkill, leftContext, rightContext);
             const clashWinnerUnit = clashResult.winnerSide === 'left' ? leftUnit : rightUnit;
@@ -2540,16 +2854,23 @@
             let hits = [];
             let evadeResult = null;
             let guardResult = null;
-            if (isEvadeSkill(defendingSkill) && !defenseState.broken && isUnitAlive(targetUnit)) {
+            if (attackContext.cancelled) {
+                hits = [];
+            } else if (isEvadeSkill(defendingSkill) && !defenseState.broken && isUnitAlive(targetUnit)) {
                 if (!defenseState.context) {
                     defenseState.context = createSkillContext(targetBattle, targetUnit, targetSlot, defendingSkill, actingUnit);
                 }
-                defenseState.activated = true;
-                defenseState.used = true;
-                evadeResult = resolveAttackAgainstEvade(targetBattle, actingUnit, actingSkill, targetUnit, defendingSkill, attackContext, defenseState.context);
-                hits = evadeResult.hits;
-                if (evadeResult.evadeBroken) {
-                    defenseState.broken = true;
+                if (!defenseState.context?.cancelled) {
+                    defenseState.activated = true;
+                    defenseState.used = true;
+                    evadeResult = resolveAttackAgainstEvade(targetBattle, actingUnit, actingSkill, targetUnit, defendingSkill, attackContext, defenseState.context);
+                    hits = evadeResult.hits;
+                    if (evadeResult.evadeBroken) {
+                        defenseState.broken = true;
+                    }
+                } else {
+                    defenseState.used = true;
+                    hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, actingSkill.coinCount);
                 }
             } else {
                 if (isGuardSkill(defendingSkill) && isUnitAlive(targetUnit)) {
@@ -2558,7 +2879,9 @@
                 hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, actingSkill.coinCount);
             }
 
-            applyAttackEndEffects(targetBattle, actingUnit, actingSkill, attackContext);
+            if (!attackContext.cancelled) {
+                applyAttackEndEffects(targetBattle, actingUnit, actingSkill, attackContext);
+            }
             const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
 
             if (!isUnitAlive(targetUnit)) {
@@ -2902,6 +3225,7 @@
                 slot.intentSkillId = null;
                 slot.intentTargetSlotId = null;
                 slot.manualTargetLock = false;
+                slot.ammoState = null;
                 slot.defenseState = {
                     activated: false,
                     used: false,

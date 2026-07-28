@@ -21,6 +21,8 @@
         'battle/content/packs/base/statuses/tigermarkRound.js',
         'battle/content/packs/base/statuses/savageTigermarkRound.js',
         'battle/content/packs/base/statuses/theLivingAndTheDeparted.js',
+        'battle/content/packs/base/statuses/tiantuiStar.js',
+        'battle/content/packs/base/statuses/shinTiantuiStar.js',
         'battle/content/packs/base/statuses/chargeBarrier.js',
         'battle/content/packs/base/statuses/tremor.js',
         'battle/content/packs/base/statuses/aggro.js',

@@ -12,6 +12,7 @@
             queueStatusForNextTurn,
             adjustSanity,
             adjustEncounterResource,
+            getEncounterResource,
             gainShield,
             clearShield,
             emitEvent,
@@ -632,6 +633,22 @@
                             ? Math.min(effect.cap, count * (effect.multiplier || 0))
                             : count * (effect.multiplier || 0);
                         context[effect.field] = 1 + bonus;
+                        return;
+                    }
+                    if (effect.operation === 'addSpeedDifferenceScaled') {
+                        const sourceUnit = getRuntimeSourceUnit(runtime);
+                        const targetUnit = getRuntimeTargetUnit(runtime);
+                        if (!sourceUnit || !targetUnit) {
+                            return;
+                        }
+                        const speedDifference = Math.max(0, (sourceUnit.speed || 0) - (targetUnit.speed || 0));
+                        if (speedDifference < (effect.minDifference || 0)) {
+                            return;
+                        }
+                        const bonus = typeof effect.cap === 'number'
+                            ? Math.min(effect.cap, speedDifference * (effect.multiplier || 0))
+                            : speedDifference * (effect.multiplier || 0);
+                        context[effect.field] = (context[effect.field] || 0) + bonus;
                     }
                     return;
                 case 'modifyCoinMap':
@@ -951,13 +968,28 @@
         return true;
     }
 
-    function conditionMatchesRuntime(condition, runtime, getStatus) {
+    function conditionMatchesRuntime(condition, runtime, getStatus, getEncounterResource) {
         const conditionType = condition?.type;
         const conditionUnit = getHookConditionUnit(runtime, condition?.target || 'self');
         const conditionStatus = conditionUnit && condition?.statusId && typeof getStatus === 'function'
             ? getStatus(conditionUnit, condition.statusId)
             : null;
         const conditionValue = condition?.value;
+        const getEncounterResourceValue = () => {
+            if (!runtime?.battle || !condition?.resourceId || typeof getEncounterResource !== 'function') {
+                return 0;
+            }
+
+            if (conditionUnit?.id) {
+                const scopedResourceId = `${conditionUnit.id}:${condition.resourceId}`;
+                const scopedValue = getEncounterResource(runtime.battle, scopedResourceId);
+                if (scopedValue > 0) {
+                    return scopedValue;
+                }
+            }
+
+            return getEncounterResource(runtime.battle, condition.resourceId);
+        };
 
         switch (conditionType) {
         case 'always':
@@ -974,6 +1006,10 @@
             return (conditionStatus?.count || 0) >= conditionValue;
         case 'statusCountAtOrBelow':
             return (conditionStatus?.count || 0) <= conditionValue;
+        case 'encounterResourceAtLeast':
+            return getEncounterResourceValue() >= conditionValue;
+        case 'encounterResourceAtOrBelow':
+            return getEncounterResourceValue() <= conditionValue;
         case 'skillType':
             return matchesExpectedValue(runtime?.skill?.skillType || 'attack', conditionValue);
         case 'skillSinType':
@@ -1001,16 +1037,17 @@
         }
     }
 
-    function hookBlockMatchesRuntime(block, runtime, getStatus) {
+    function hookBlockMatchesRuntime(block, runtime, getStatus, getEncounterResource) {
         if (!Array.isArray(block?.conditions) || !block.conditions.length) {
             return true;
         }
 
-        return block.conditions.every((condition) => conditionMatchesRuntime(condition, runtime, getStatus));
+        return block.conditions.every((condition) => conditionMatchesRuntime(condition, runtime, getStatus, getEncounterResource));
     }
 
     function createSkillEffectRunner(deps) {
         const { applyEffects, getEffectStatusPotency } = createEffectExecutor(deps);
+        const { getEncounterResource } = deps || {};
 
         function applySkillEffects(targetBattle, trigger, runtime) {
             const skill = runtime?.skill;
@@ -1025,7 +1062,7 @@
 
     function createPassiveEffectRunner(deps) {
         const { applyEffects, getEffectStatusPotency } = createEffectExecutor(deps);
-        const { getStatus, invokeHooks } = deps || {};
+        const { getStatus, invokeHooks, getEncounterResource } = deps || {};
 
         function applyPassiveEffects(targetBattle, hookName, hookEffects, runtime, options = {}) {
             const hookRuntime = {
@@ -1059,7 +1096,7 @@
 
             if (hookBlocks) {
                 hookBlocks.forEach((block, index) => {
-                    if (!hookBlockMatchesRuntime(block, hookRuntime, getStatus)) {
+                    if (!hookBlockMatchesRuntime(block, hookRuntime, getStatus, getEncounterResource)) {
                         return;
                     }
 
