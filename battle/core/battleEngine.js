@@ -417,6 +417,44 @@
             };
         }
 
+        function clampCombinedStatusValues(statusId, potency, count, options = {}) {
+            const combinedMax = getStatusDefinition(statusId)?.stackModel?.combinedMax;
+            if (!isFinite(combinedMax) || combinedMax < 0) {
+                return {
+                    potency,
+                    count,
+                };
+            }
+
+            let nextPotency = clampStatusValue(potency, getStatusPotencyCap(statusId));
+            let nextCount = clampStatusValue(count, getStatusCountCap(statusId));
+            const overflow = Math.max(0, (nextPotency + nextCount) - combinedMax);
+            if (overflow <= 0) {
+                return {
+                    potency: nextPotency,
+                    count: nextCount,
+                };
+            }
+
+            const preferredBucket = options.preferredBucket === 'potency' ? 'potency' : 'count';
+            if (preferredBucket === 'potency') {
+                nextPotency = Math.max(0, nextPotency - overflow);
+                if ((nextPotency + nextCount) > combinedMax) {
+                    nextCount = Math.max(0, combinedMax - nextPotency);
+                }
+            } else {
+                nextCount = Math.max(0, nextCount - overflow);
+                if ((nextPotency + nextCount) > combinedMax) {
+                    nextPotency = Math.max(0, combinedMax - nextCount);
+                }
+            }
+
+            return {
+                potency: nextPotency,
+                count: nextCount,
+            };
+        }
+
         function getStatusPotencyCap(statusId) {
             const maxPotency = getStatusDefinition(statusId)?.stackModel?.potency?.max;
             return isFinite(maxPotency) ? maxPotency : 99;
@@ -437,6 +475,10 @@
             }
 
             const expireWhen = status.stackModel?.expireWhen;
+            if (typeof expireWhen?.countLte === 'number' && typeof expireWhen?.potencyLte === 'number') {
+                return (status.count || 0) <= expireWhen.countLte
+                    && (status.potency || 0) <= expireWhen.potencyLte;
+            }
             if (typeof expireWhen?.countLte === 'number' && (status.count || 0) <= expireWhen.countLte) {
                 return true;
             }
@@ -527,7 +569,8 @@
             const burstAmount = Math.max(
                 0,
                 Math.round(
-                    typeof effect?.resolvedAmount === 'number'
+                    (
+                        typeof effect?.resolvedAmount === 'number'
                         ? effect.resolvedAmount
                         : (
                             typeof effect?.amount === 'number'
@@ -541,7 +584,8 @@
                                                 : getStatusPotency(unit, 'tremor')
                                         )
                                 )
-                        ),
+                        )
+                    ) * getConcussionMultiplier(unit),
                 ),
             );
 
@@ -832,12 +876,15 @@
                 ? 0
                 : clampStatusValue(previousPotency + potencyDelta, getStatusPotencyCap(statusId));
             const nextCount = clampStatusValue(previousCount + countDelta, maxCount);
+            const clampedValues = clampCombinedStatusValues(statusId, nextPotency, nextCount, {
+                preferredBucket: countDelta > 0 && potencyDelta <= 0 ? 'count' : 'potency',
+            });
 
             if (!existing) {
                 const status = {
                     id: statusId,
-                    potency: nextPotency,
-                    count: nextCount,
+                    potency: clampedValues.potency,
+                    count: clampedValues.count,
                     hooks: cloneHookMap(statusDefinition?.hooks),
                     stackModel: cloneStatusStackModel(statusDefinition?.stackModel),
                     runtimeState: {
@@ -865,6 +912,11 @@
 
             existing.potency = nextPotency;
             existing.count = nextCount;
+            const existingClampedValues = clampCombinedStatusValues(statusId, existing.potency, existing.count, {
+                preferredBucket: countDelta > 0 && potencyDelta <= 0 ? 'count' : 'potency',
+            });
+            existing.potency = existingClampedValues.potency;
+            existing.count = existingClampedValues.count;
             if (!existing.hooks && statusDefinition?.hooks) {
                 existing.hooks = cloneHookMap(statusDefinition.hooks);
             }
@@ -878,15 +930,15 @@
                 statusId,
                 previousPotency,
                 previousCount,
-                nextPotency,
-                nextCount,
+                nextPotency: existing.potency,
+                nextCount: existing.count,
             });
             triggerStatusLifecycleHook(targetBattle, unit, 'statusChanged', statusId, {
                 status: existing,
                 previousPotency,
                 previousCount,
-                nextPotency,
-                nextCount,
+                nextPotency: existing.potency,
+                nextCount: existing.count,
             });
             return existing;
         }
@@ -897,20 +949,26 @@
                 return;
             }
 
+            const previousPotency = existing.potency || 0;
             const previousCount = existing.count || 0;
             existing.count = clampStatusValue(nextCount, getStatusCountCap(statusId));
+            const clampedValues = clampCombinedStatusValues(statusId, existing.potency || 0, existing.count, {
+                preferredBucket: 'count',
+            });
+            existing.potency = clampedValues.potency;
+            existing.count = clampedValues.count;
             emitEvent(targetBattle, 'status_changed', {
                 unitId: unit.id,
                 unitName: unit.name,
                 statusId,
-                previousPotency: existing.potency || 0,
+                previousPotency,
                 previousCount,
                 nextPotency: existing.potency || 0,
                 nextCount: existing.count,
             });
             triggerStatusLifecycleHook(targetBattle, unit, 'statusChanged', statusId, {
                 status: existing,
-                previousPotency: existing.potency || 0,
+                previousPotency,
                 previousCount,
                 nextPotency: existing.potency || 0,
                 nextCount: existing.count,
@@ -1104,6 +1162,11 @@
             return { previousSp, nextSp: unit.sp };
         }
 
+        function getConcussionMultiplier(unit) {
+            const concussion = getStatusCount(unit, 'concussion');
+            return concussion > 0 ? 1.2 : 1;
+        }
+
         function peekForcedRollToken(slotId) {
             if (!slotId) {
                 return null;
@@ -1131,7 +1194,10 @@
         }
 
         function applyFixedDamage(targetBattle, unit, statusId, damage) {
-            const appliedDamage = clampStatusValue(damage, 9999);
+            const scaledDamage = statusId === 'rupture'
+                ? Math.floor((damage || 0) * getConcussionMultiplier(unit))
+                : damage;
+            const appliedDamage = clampStatusValue(scaledDamage, 9999);
             if (appliedDamage <= 0) {
                 return 0;
             }

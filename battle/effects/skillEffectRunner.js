@@ -192,6 +192,44 @@
                 : 0;
         }
 
+        function clampCombinedStatusValues(status, potency, count, options = {}) {
+            const combinedMax = status?.stackModel?.combinedMax;
+            if (typeof combinedMax !== 'number' || !Number.isFinite(combinedMax) || combinedMax < 0) {
+                return {
+                    potency,
+                    count,
+                };
+            }
+
+            let nextPotency = potency;
+            let nextCount = count;
+            const overflow = Math.max(0, (nextPotency + nextCount) - combinedMax);
+            if (overflow <= 0) {
+                return {
+                    potency: nextPotency,
+                    count: nextCount,
+                };
+            }
+
+            const preferredBucket = options.preferredBucket === 'potency' ? 'potency' : 'count';
+            if (preferredBucket === 'potency') {
+                nextPotency = Math.max(0, nextPotency - overflow);
+                if ((nextPotency + nextCount) > combinedMax) {
+                    nextCount = Math.max(0, combinedMax - nextPotency);
+                }
+            } else {
+                nextCount = Math.max(0, nextCount - overflow);
+                if ((nextPotency + nextCount) > combinedMax) {
+                    nextPotency = Math.max(0, combinedMax - nextCount);
+                }
+            }
+
+            return {
+                potency: nextPotency,
+                count: nextCount,
+            };
+        }
+
         function adjustUnitStatus(targetBattle, unit, effect, runtime) {
             if (!unit || !effect.statusId || typeof getStatus !== 'function' || typeof removeStatus !== 'function') {
                 return;
@@ -232,18 +270,21 @@
                 : (typeof clampStatusValue === 'function'
                     ? clampStatusValue(
                         Math.round(potencyOperation === 'set' ? potencyDelta : previousPotency + potencyDelta),
-                        99,
+                        existing?.stackModel?.potency?.max ?? 99,
                     )
                     : Math.max(0, previousPotency + potencyDelta));
             const nextCount = typeof clampStatusValue === 'function'
                 ? clampStatusValue(
                     Math.floor(countOperation === 'set' ? countDelta : previousCount + countDelta),
-                    effect.statusId === 'protection' ? 10 : 99,
+                    existing?.stackModel?.count?.max ?? (effect.statusId === 'protection' ? 10 : 99),
                 )
                 : Math.max(0, previousCount + countDelta);
+            const clampedValues = clampCombinedStatusValues(existing, nextPotency, nextCount, {
+                preferredBucket: countDelta > 0 && potencyDelta <= 0 ? 'count' : 'potency',
+            });
 
-            existing.potency = nextPotency;
-            existing.count = nextCount;
+            existing.potency = clampedValues.potency;
+            existing.count = clampedValues.count;
             if (typeof emitEvent === 'function') {
                 emitEvent(targetBattle, 'status_changed', {
                     unitId: unit.id,
@@ -251,16 +292,16 @@
                     statusId: effect.statusId,
                     previousPotency,
                     previousCount,
-                    nextPotency,
-                    nextCount,
+                    nextPotency: existing.potency,
+                    nextCount: existing.count,
                 });
             }
             triggerStatusLifecycleHook(targetBattle, unit, 'statusChanged', effect.statusId, {
                 status: existing,
                 previousPotency,
                 previousCount,
-                nextPotency,
-                nextCount,
+                nextPotency: existing.potency,
+                nextCount: existing.count,
             });
 
             if (shouldExpireStatus(existing, effect.statusId)) {
@@ -506,8 +547,12 @@
                         return;
                     }
                     queueStatusForNextTurn(targetUnit, effect.statusId, {
-                        potency: effect.potency,
-                        count: effect.count,
+                        potency: effect.potencyAmount != null
+                            ? Math.round(resolveStatusScalar(runtime, effect, 'potency', 'potencyAmount'))
+                            : effect.potency,
+                        count: effect.countAmount != null
+                            ? Math.floor(resolveStatusScalar(runtime, effect, 'count', 'countAmount'))
+                            : effect.count,
                     });
                     return;
                 case 'dealFixedDamage':

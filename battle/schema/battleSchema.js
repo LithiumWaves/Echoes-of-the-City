@@ -861,6 +861,9 @@
                         pushError(errors, `${path}.stackModel.${bucket}.application`, 'must be "add" or "set" when provided.');
                     }
                 });
+                if (stackModel.combinedMax != null && (!isFiniteNumber(stackModel.combinedMax) || stackModel.combinedMax < 0)) {
+                    pushError(errors, `${path}.stackModel.combinedMax`, 'must be a non-negative number when provided.');
+                }
 
                 if (stackModel.expireWhen != null) {
                     if (typeof stackModel.expireWhen !== 'object' || Array.isArray(stackModel.expireWhen)) {
