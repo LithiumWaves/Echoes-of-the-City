@@ -23,9 +23,52 @@
         burn: { id: 'burn', label: 'Burn', iconPath: 'assets/statuseffects/keywordstatus/Burn.png' },
         protection: { id: 'protection', label: 'Protection', countOnly: true },
         charge: { id: 'charge', label: 'Charge', iconPath: 'assets/statuseffects/keywordstatus/Charge.png' },
+        ammo: { id: 'ammo', label: 'Ammo', countOnly: true },
+        aggro: { id: 'aggro', label: 'Aggro', countOnly: true },
         haste: { id: 'haste', label: 'Haste', countOnly: true },
         bind: { id: 'bind', label: 'Bind', countOnly: true },
         fragile: { id: 'fragile', label: 'Fragile', countOnly: true },
+        slash_dmg_up: { id: 'slash_dmg_up', label: 'Slash DMG Up', countOnly: true },
+        pierce_dmg_up: { id: 'pierce_dmg_up', label: 'Pierce DMG Up', countOnly: true },
+        blunt_dmg_up: { id: 'blunt_dmg_up', label: 'Blunt DMG Up', countOnly: true },
+        wrath_dmg_up: { id: 'wrath_dmg_up', label: 'Wrath DMG Up', countOnly: true },
+        lust_dmg_up: { id: 'lust_dmg_up', label: 'Lust DMG Up', countOnly: true },
+        sloth_dmg_up: { id: 'sloth_dmg_up', label: 'Sloth DMG Up', countOnly: true },
+        gluttony_dmg_up: { id: 'gluttony_dmg_up', label: 'Gluttony DMG Up', countOnly: true },
+        gloom_dmg_up: { id: 'gloom_dmg_up', label: 'Gloom DMG Up', countOnly: true },
+        pride_dmg_up: { id: 'pride_dmg_up', label: 'Pride DMG Up', countOnly: true },
+        envy_dmg_up: { id: 'envy_dmg_up', label: 'Envy DMG Up', countOnly: true },
+        slash_power_up: { id: 'slash_power_up', label: 'Slash Power Up', countOnly: true },
+        pierce_power_up: { id: 'pierce_power_up', label: 'Pierce Power Up', countOnly: true },
+        blunt_power_up: { id: 'blunt_power_up', label: 'Blunt Power Up', countOnly: true },
+        wrath_power_up: { id: 'wrath_power_up', label: 'Wrath Power Up', countOnly: true },
+        lust_power_up: { id: 'lust_power_up', label: 'Lust Power Up', countOnly: true },
+        sloth_power_up: { id: 'sloth_power_up', label: 'Sloth Power Up', countOnly: true },
+        gluttony_power_up: { id: 'gluttony_power_up', label: 'Gluttony Power Up', countOnly: true },
+        gloom_power_up: { id: 'gloom_power_up', label: 'Gloom Power Up', countOnly: true },
+        pride_power_up: { id: 'pride_power_up', label: 'Pride Power Up', countOnly: true },
+        envy_power_up: { id: 'envy_power_up', label: 'Envy Power Up', countOnly: true },
+        slash_protection: { id: 'slash_protection', label: 'Slash Protection', countOnly: true },
+        pierce_protection: { id: 'pierce_protection', label: 'Pierce Protection', countOnly: true },
+        blunt_protection: { id: 'blunt_protection', label: 'Blunt Protection', countOnly: true },
+        wrath_protection: { id: 'wrath_protection', label: 'Wrath Protection', countOnly: true },
+        lust_protection: { id: 'lust_protection', label: 'Lust Protection', countOnly: true },
+        sloth_protection: { id: 'sloth_protection', label: 'Sloth Protection', countOnly: true },
+        gluttony_protection: { id: 'gluttony_protection', label: 'Gluttony Protection', countOnly: true },
+        gloom_protection: { id: 'gloom_protection', label: 'Gloom Protection', countOnly: true },
+        pride_protection: { id: 'pride_protection', label: 'Pride Protection', countOnly: true },
+        envy_protection: { id: 'envy_protection', label: 'Envy Protection', countOnly: true },
+        slash_fragility: { id: 'slash_fragility', label: 'Slash Fragility', countOnly: true },
+        pierce_fragility: { id: 'pierce_fragility', label: 'Pierce Fragility', countOnly: true },
+        blunt_fragility: { id: 'blunt_fragility', label: 'Blunt Fragility', countOnly: true },
+        wrath_fragility: { id: 'wrath_fragility', label: 'Wrath Fragility', countOnly: true },
+        lust_fragility: { id: 'lust_fragility', label: 'Lust Fragility', countOnly: true },
+        sloth_fragility: { id: 'sloth_fragility', label: 'Sloth Fragility', countOnly: true },
+        gluttony_fragility: { id: 'gluttony_fragility', label: 'Gluttony Fragility', countOnly: true },
+        gloom_fragility: { id: 'gloom_fragility', label: 'Gloom Fragility', countOnly: true },
+        pride_fragility: { id: 'pride_fragility', label: 'Pride Fragility', countOnly: true },
+        envy_fragility: { id: 'envy_fragility', label: 'Envy Fragility', countOnly: true },
+        nails: { id: 'nails', label: 'Nails', countOnly: true },
         paralyze: { id: 'paralyze', label: 'Paralyze', countOnly: true },
         poise: { id: 'poise', label: 'Poise', iconPath: 'assets/statuseffects/keywordstatus/Poise.png' },
         plus_coin_boost: { id: 'plus_coin_boost', label: 'Plus Coin Boost', countOnly: true },
@@ -41,6 +84,7 @@
         rupture: { id: 'rupture', label: 'Rupture', iconPath: 'assets/statuseffects/keywordstatus/Rupture.png' },
         sinking: { id: 'sinking', label: 'Sinking', iconPath: 'assets/statuseffects/keywordstatus/Sinking.png' },
         tremor: { id: 'tremor', label: 'Tremor', iconPath: 'assets/statuseffects/keywordstatus/Tremor.png' },
+        dark_flame: { id: 'dark_flame', label: 'Dark Flame', countOnly: true },
     };
     const statusDefinitionAliases = battleModules.statusDefinitionAliases || (battleModules.statusDefinitionAliases = {});
 
@@ -118,6 +162,7 @@
         retargetSlot: { id: 'retargetSlot', label: 'Retarget Slot' },
         burstTremor: { id: 'burstTremor', label: 'Burst Tremor' },
         consumeStatus: { id: 'consumeStatus', label: 'Consume Status' },
+        adjustEncounterResource: { id: 'adjustEncounterResource', label: 'Adjust Encounter Resource' },
     };
 
     function getStatusDefinitionValidator() {
@@ -320,6 +365,11 @@
             return `Burst Tremor on ${effect.target || 'opponent'}.`;
         case 'consumeStatus':
             return `Consume ${getStatusLabel(effect.statusId)} from ${effect.target || 'opponent'}.`;
+        case 'adjustEncounterResource':
+            if (typeof effect.value === 'number') {
+                return `Adjust ${effect.resourceId} by ${formatSignedNumber(effect.value)}.`;
+            }
+            return `Adjust ${effect.resourceId}.`;
         default:
             return getEffectDefinition(effect?.type)?.label || effect?.type || 'Unknown Effect';
         }

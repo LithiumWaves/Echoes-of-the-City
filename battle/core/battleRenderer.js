@@ -1194,6 +1194,7 @@
 
         function renderBattlefield(battle, activePlayerSlot, uiState) {
             const debugToolsEnabled = uiState?.debugToolsEnabled !== false;
+            const bloodfeast = battle?.encounterResources?.bloodfeast || 0;
             const playerMarkup = battle.playerSlots
                 .map((slot) => renderFieldUnitWithUiState(battle, getUnitById(battle, slot.unitId), slot, 'player', activePlayerSlot, uiState))
                 .join('');
@@ -1212,6 +1213,10 @@
                             <div class="echoes-battle-panel__combat-counter">
                                 <span>Turn</span>
                                 <strong>${battle.turn}</strong>
+                            </div>
+                            <div class="echoes-battle-panel__combat-counter">
+                                <span>Bloodfeast</span>
+                                <strong>${bloodfeast}</strong>
                             </div>
                         </div>
                         <div class="echoes-battle-panel__combat-controls">

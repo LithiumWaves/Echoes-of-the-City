@@ -11,6 +11,7 @@
             applyFixedDamage,
             queueStatusForNextTurn,
             adjustSanity,
+            adjustEncounterResource,
             emitEvent,
             invokeHooks,
             isCountOnlyStatus,
@@ -105,6 +106,19 @@
             }
 
             const amountDefinition = effect.amount;
+            if (typeof amountDefinition === 'number') {
+                return amountDefinition;
+            }
+            if (amountDefinition?.product) {
+                const productTerms = Array.isArray(amountDefinition.product)
+                    ? amountDefinition.product
+                    : [];
+                if (!productTerms.length) {
+                    return 0;
+                }
+
+                return productTerms.reduce((product, term) => product * resolveEffectAmount(runtime, { amount: term }), 1);
+            }
             if (amountDefinition?.statusPotency) {
                 const statusSource = amountDefinition.statusPotency;
                 const targetUnit = getEffectTargetUnit(runtime, statusSource.target || 'self');
@@ -166,23 +180,40 @@
             });
         }
 
-        function adjustUnitStatus(targetBattle, unit, effect) {
+        function resolveStatusScalar(runtime, effect, numericField, amountField) {
+            if (effect?.[amountField] != null) {
+                return resolveEffectAmount(runtime, { amount: effect[amountField] });
+            }
+
+            return typeof effect?.[numericField] === 'number'
+                ? effect[numericField]
+                : 0;
+        }
+
+        function adjustUnitStatus(targetBattle, unit, effect, runtime) {
             if (!unit || !effect.statusId || typeof getStatus !== 'function' || typeof removeStatus !== 'function') {
                 return;
             }
 
-            const potencyDelta = typeof effect.potencyDelta === 'number' ? effect.potencyDelta : 0;
-            const countDelta = typeof effect.countDelta === 'number' ? effect.countDelta : 0;
+            const potencyDelta = resolveStatusScalar(runtime, effect, 'potencyDelta', 'potencyAmount');
+            const countDelta = resolveStatusScalar(runtime, effect, 'countDelta', 'countAmount');
+            const potencyOperation = effect.potencyOperation || 'add';
+            const countOperation = effect.countOperation || 'add';
             const existing = getStatus(unit, effect.statusId);
 
             if (!existing) {
-                if (potencyDelta <= 0 && countDelta <= 0) {
+                const initialPotency = potencyOperation === 'set' ? potencyDelta : potencyDelta;
+                const initialCount = countOperation === 'set' ? countDelta : countDelta;
+
+                if (initialPotency <= 0 && initialCount <= 0) {
                     return;
                 }
 
                 const appliedStatus = applyStatus(targetBattle, unit, effect.statusId, {
-                    potency: potencyDelta,
-                    count: countDelta,
+                    potency: typeof isCountOnlyStatus === 'function' && isCountOnlyStatus(effect.statusId)
+                        ? 0
+                        : Math.max(0, Math.round(initialPotency)),
+                    count: Math.max(0, Math.floor(initialCount)),
                 });
                 if (appliedStatus) {
                     triggerStatusLifecycleHook(targetBattle, unit, 'statusApplied', effect.statusId, {
@@ -197,10 +228,16 @@
             const nextPotency = typeof isCountOnlyStatus === 'function' && isCountOnlyStatus(effect.statusId)
                 ? 0
                 : (typeof clampStatusValue === 'function'
-                    ? clampStatusValue(previousPotency + potencyDelta, 99)
+                    ? clampStatusValue(
+                        Math.round(potencyOperation === 'set' ? potencyDelta : previousPotency + potencyDelta),
+                        99,
+                    )
                     : Math.max(0, previousPotency + potencyDelta));
             const nextCount = typeof clampStatusValue === 'function'
-                ? clampStatusValue(previousCount + countDelta, effect.statusId === 'protection' ? 10 : 99)
+                ? clampStatusValue(
+                    Math.floor(countOperation === 'set' ? countDelta : previousCount + countDelta),
+                    effect.statusId === 'protection' ? 10 : 99,
+                )
                 : Math.max(0, previousCount + countDelta);
 
             existing.potency = nextPotency;
@@ -436,8 +473,12 @@
                         return;
                     }
                     applyStatus(targetBattle, targetUnit, effect.statusId, {
-                        potency: effect.potency,
-                        count: effect.count,
+                        potency: effect.potencyAmount != null
+                            ? Math.round(resolveStatusScalar(runtime, effect, 'potency', 'potencyAmount'))
+                            : effect.potency,
+                        count: effect.countAmount != null
+                            ? Math.floor(resolveStatusScalar(runtime, effect, 'count', 'countAmount'))
+                            : effect.count,
                     });
                     if (sourceUnit && typeof invokeHooks === 'function') {
                         invokeHooks(sourceUnit, 'statusInflicted', {
@@ -607,13 +648,30 @@
                     if (!targetUnit) {
                         return;
                     }
-                    adjustUnitStatus(targetBattle, targetUnit, effect);
+                    adjustUnitStatus(targetBattle, targetUnit, effect, runtime);
                     return;
                 case 'modifySpeed':
                     if (!targetUnit) {
                         return;
                     }
                     modifyUnitSpeed(targetBattle, targetUnit, effect, runtime);
+                    return;
+                case 'adjustEncounterResource':
+                    if (!effect.resourceId || typeof adjustEncounterResource !== 'function') {
+                        return;
+                    }
+                    adjustEncounterResource(
+                        targetBattle,
+                        effect.resourceId,
+                        resolveEffectAmount(runtime, effect),
+                        {
+                            operation: effect.operation || 'add',
+                            min: effect.min,
+                            max: effect.max,
+                            reason: effect.reason || skill?.name || effect.resourceId,
+                            unit: sourceUnit || runtime?.unit || null,
+                        },
+                    );
                     return;
                 case 'retargetSlot':
                     if (!effect.selector) {

@@ -236,6 +236,7 @@
                     refreshSpeedOrder,
                     ensureActivePlayerSlot,
                     burstTremor,
+                    adjustEncounterResource,
                 });
             }
 
@@ -625,6 +626,44 @@
             return true;
         }
 
+        function getEncounterResource(targetBattle, resourceId) {
+            if (!targetBattle?.encounterResources || !resourceId) {
+                return 0;
+            }
+
+            return targetBattle.encounterResources[resourceId] || 0;
+        }
+
+        function adjustEncounterResource(targetBattle, resourceId, amount, options = {}) {
+            if (!targetBattle || !resourceId || typeof amount !== 'number' || !Number.isFinite(amount)) {
+                return 0;
+            }
+
+            if (!targetBattle.encounterResources || typeof targetBattle.encounterResources !== 'object') {
+                targetBattle.encounterResources = {};
+            }
+
+            const previousValue = getEncounterResource(targetBattle, resourceId);
+            const operation = options.operation || 'add';
+            const nextUnclampedValue = operation === 'set'
+                ? amount
+                : previousValue + amount;
+            const minValue = typeof options.min === 'number' ? options.min : 0;
+            const maxValue = typeof options.max === 'number' ? options.max : 999;
+            const nextValue = clamp(Math.round(nextUnclampedValue), minValue, maxValue);
+
+            targetBattle.encounterResources[resourceId] = nextValue;
+            emitEvent(targetBattle, 'encounter_resource_changed', {
+                resourceId,
+                previousValue,
+                nextValue,
+                reason: options.reason || resourceId,
+                unitId: options.unit?.id || null,
+                unitName: options.unit?.name || null,
+            });
+            return nextValue;
+        }
+
         function eventToLogLine(event) {
             const { type, data } = event;
 
@@ -700,6 +739,9 @@
                     return `${data.unitName} evades ${data.attackerName}'s Coin ${data.index} (${data.evadePower} vs ${data.attackPower}).`;
                 }
                 return `${data.unitName} is affected by ${getStatusLabel(data.statusId)}.`;
+            }
+            if (type === 'encounter_resource_changed') {
+                return `${data.resourceId} ${data.previousValue} -> ${data.nextValue}.`;
             }
             if (type === 'unit_staggered') {
                 return `${data.unitName} is staggered at Threshold ${data.threshold} HP.`;
@@ -944,6 +986,13 @@
                 damage: appliedDamage,
                 hp: unit.hp,
             });
+            if (statusId === 'bleed') {
+                adjustEncounterResource(targetBattle, 'bloodfeast', appliedDamage, {
+                    max: 999,
+                    reason: 'bleed damage',
+                    unit,
+                });
+            }
             applyStaggerFromDamage(targetBattle, unit, null, previousHp, unit.hp);
             invokeHooks(unit, 'afterDamage', {
                 battle: targetBattle,
@@ -2340,7 +2389,45 @@
             return enemyUnit.skills[skillIndex].id;
         }
 
+        function pickAggroTargetSlotId(currentBattle) {
+            const livingPlayerSlots = currentBattle.playerSlots
+                .filter((candidate) => isSlotAlive(currentBattle, candidate))
+                .map((candidate) => {
+                    const unit = getUnitById(currentBattle, candidate.unitId);
+                    return {
+                        slot: candidate,
+                        aggro: Math.max(0, getStatusCount(unit, 'aggro')),
+                    };
+                });
+
+            const totalAggro = livingPlayerSlots.reduce((sum, candidate) => sum + candidate.aggro, 0);
+            if (!totalAggro) {
+                return null;
+            }
+
+            const weightedCandidates = livingPlayerSlots.map((candidate) => ({
+                ...candidate,
+                weight: 1 + candidate.aggro,
+            }));
+            const totalWeight = weightedCandidates.reduce((sum, candidate) => sum + candidate.weight, 0);
+            let roll = Math.random() * totalWeight;
+
+            for (const candidate of weightedCandidates) {
+                roll -= candidate.weight;
+                if (roll <= 0) {
+                    return candidate.slot.id;
+                }
+            }
+
+            return weightedCandidates[0]?.slot.id || null;
+        }
+
         function pickEnemyTargetSlotId(currentBattle, slot) {
+            const aggroPick = pickAggroTargetSlotId(currentBattle);
+            if (aggroPick) {
+                return aggroPick;
+            }
+
             const enemyUnit = getUnitById(currentBattle, slot.unitId);
             const aiPick = enemyAi?.pickEnemyTargetSlotId?.(currentBattle, slot, enemyUnit, {
                 getFirstLivingSlotId,
@@ -2442,6 +2529,7 @@
                 playerSlots,
                 enemySlots,
                 activePlayerSlotId: playerSlots[0]?.id || null,
+                encounterResources: {},
                 speedOrder: [],
                 resolutionQueue: [],
                 lastResolution: null,

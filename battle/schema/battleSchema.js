@@ -142,6 +142,18 @@
             return;
         }
 
+        if (amount.product) {
+            if (!Array.isArray(amount.product) || amount.product.length < 2) {
+                pushError(errors, `${path}.product`, 'must be an array with at least two amount definitions.');
+                return;
+            }
+
+            amount.product.forEach((entry, index) => {
+                validateAmountDefinition(errors, entry, `${path}.product[${index}]`);
+            });
+            return;
+        }
+
         pushError(errors, path, 'must contain a supported amount definition.');
     }
 
@@ -396,6 +408,12 @@
             } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
                 pushError(errors, `${path}.statusId`, 'must reference a supported status id.');
             }
+            if ((effect.type === 'applyStatus' || effect.type === 'queueStatus') && effect.potencyAmount != null) {
+                validateAmountDefinition(errors, effect.potencyAmount, `${path}.potencyAmount`);
+            }
+            if ((effect.type === 'applyStatus' || effect.type === 'queueStatus') && effect.countAmount != null) {
+                validateAmountDefinition(errors, effect.countAmount, `${path}.countAmount`);
+            }
             break;
         case 'dealFixedDamage':
             validateAmountDefinition(errors, effect.amount, `${path}.amount`);
@@ -425,6 +443,7 @@
         case 'modifyOffenseLevel':
         case 'modifySpeed':
         case 'burstTremor':
+        case 'adjustEncounterResource':
             if (effect.amount != null) {
                 validateAmountDefinition(errors, effect.amount, `${path}.amount`);
             } else if (!isFiniteNumber(effect.value)) {
@@ -435,6 +454,20 @@
             }
             if (effect.type === 'modifySpeed' && effect.operation != null && !['add', 'set'].includes(effect.operation)) {
                 pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
+            }
+            if (effect.type === 'adjustEncounterResource') {
+                if (!effect.resourceId || typeof effect.resourceId !== 'string') {
+                    pushError(errors, `${path}.resourceId`, 'must be a non-empty string.');
+                }
+                if (effect.operation != null && !['add', 'set'].includes(effect.operation)) {
+                    pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
+                }
+                if (effect.min != null && (!isFiniteNumber(effect.min) || effect.min < 0)) {
+                    pushError(errors, `${path}.min`, 'must be a non-negative number when provided.');
+                }
+                if (effect.max != null && (!isFiniteNumber(effect.max) || effect.max < 0)) {
+                    pushError(errors, `${path}.max`, 'must be a non-negative number when provided.');
+                }
             }
             break;
         case 'adjustStatus':
@@ -449,8 +482,25 @@
             if (effect.countDelta != null && !isFiniteNumber(effect.countDelta)) {
                 pushError(errors, `${path}.countDelta`, 'must be a number when provided.');
             }
-            if (effect.potencyDelta == null && effect.countDelta == null) {
-                pushError(errors, `${path}`, 'must provide potencyDelta, countDelta, or both.');
+            if (effect.potencyAmount != null) {
+                validateAmountDefinition(errors, effect.potencyAmount, `${path}.potencyAmount`);
+            }
+            if (effect.countAmount != null) {
+                validateAmountDefinition(errors, effect.countAmount, `${path}.countAmount`);
+            }
+            if (effect.potencyOperation != null && !['add', 'set'].includes(effect.potencyOperation)) {
+                pushError(errors, `${path}.potencyOperation`, 'must be omitted, "add", or "set".');
+            }
+            if (effect.countOperation != null && !['add', 'set'].includes(effect.countOperation)) {
+                pushError(errors, `${path}.countOperation`, 'must be omitted, "add", or "set".');
+            }
+            if (
+                effect.potencyDelta == null
+                && effect.countDelta == null
+                && effect.potencyAmount == null
+                && effect.countAmount == null
+            ) {
+                pushError(errors, `${path}`, 'must provide potencyDelta, countDelta, potencyAmount, countAmount, or a combination.');
             }
             break;
         case 'modifyContext':

@@ -102,11 +102,13 @@ Supported `type` values (current):
 - `retargetSlot`
 - `burstTremor`
 - `consumeStatus`
+- `adjustEncounterResource`
 
 Selected effect notes:
 - most numeric effect bodies can now use either:
   - `value: number`
   - `amount: number | { statusPotency: { statusId, target? }, multiplier? } | { statusCount: { statusId, target? }, multiplier? }`
+  - `amount` also supports `{ product: [AmountDefinition, AmountDefinition, ...] }` for status-scaling formulas
 - `healHp`
   - `value: number`
 - `adjustStatus`
@@ -130,6 +132,13 @@ Selected effect notes:
   - `value?: number`
   - `amount?: AmountDefinition`
   - `operation?: "add" | "set"`
+- `adjustEncounterResource`
+  - `resourceId: string`
+  - `value?: number`
+  - `amount?: AmountDefinition`
+  - `operation?: "add" | "set"`
+  - `min?: number`
+  - `max?: number`
 - `burstTremor`
   - defaults to the target's current `tremor` potency when no `value`/`amount` is provided
 - `retargetSlot`
