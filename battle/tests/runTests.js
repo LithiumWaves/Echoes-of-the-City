@@ -2051,6 +2051,174 @@ function runSuite() {
         }
     });
 
+    test('Golden snapshot: ammo spend emits skill_ammo_spent and applies onSpendOnHit', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'spore.js'));
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'sporeRoundBase.js'));
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const ammoSkill = {
+            id: 'spore_shot',
+            name: 'Spore Shot',
+            skillType: 'attack',
+            basePower: 4,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            ammo: {
+                statusId: 'spore_round_base',
+                countCost: 1,
+                cancelIfInsufficient: true,
+            },
+            effects: [],
+        };
+        const enemySkill = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 4,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'golden-snapshot-ammo-spend',
+            name: 'Golden Snapshot Ammo Spend',
+            playerUnits: [createUnit('ally', 'Ally', [ammoSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [false],
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.addStatus('player', { id: 'spore_round_base', count: 2 }, 0);
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('spore_shot');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const relevantTypes = new Set([
+                'battle_started',
+                'turn_started',
+                'slot_speed_rolled',
+                'enemy_intent_set',
+                'skill_selected',
+                'target_selected',
+                'skill_ammo_spent',
+                'resolution_queue_built',
+                'engagement_started',
+                'hit_resolved',
+                'status_applied',
+            ]);
+
+            const stream = engine.getState().events
+                .filter((event) => relevantTypes.has(event.type))
+                .map((event) => {
+                    const data = event.data || {};
+                    if (event.type === 'battle_started') {
+                        return { type: event.type };
+                    }
+                    if (event.type === 'turn_started') {
+                        return { type: event.type, turn: data.turn };
+                    }
+                    if (event.type === 'slot_speed_rolled') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, speed: data.speed };
+                    }
+                    if (event.type === 'enemy_intent_set') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, skillName: data.skillName, targetLabel: data.targetLabel };
+                    }
+                    if (event.type === 'skill_selected') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, skillName: data.skillName };
+                    }
+                    if (event.type === 'target_selected') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, targetLabel: data.targetLabel };
+                    }
+                    if (event.type === 'skill_ammo_spent') {
+                        return { type: event.type, unitName: data.unitName, skillName: data.skillName, summary: data.summary };
+                    }
+                    if (event.type === 'resolution_queue_built') {
+                        return { type: event.type, queueLabel: data.queueLabel };
+                    }
+                    if (event.type === 'engagement_started') {
+                        if (data.engagementType === 'clash') {
+                            return { type: event.type, engagementType: 'clash', leftUnitName: data.leftUnitName, rightUnitName: data.rightUnitName, leftSkillName: data.leftSkillName, rightSkillName: data.rightSkillName };
+                        }
+                        return { type: event.type, engagementType: data.engagementType };
+                    }
+                    if (event.type === 'hit_resolved') {
+                        return { type: event.type, attackerName: data.attackerName, defenderName: data.defenderName, skillName: data.skillName };
+                    }
+                    if (event.type === 'status_applied') {
+                        return { type: event.type, unitName: data.unitName, statusId: data.statusId, count: data.count };
+                    }
+                    return { type: event.type };
+                });
+
+            const expected = [
+                { type: 'battle_started' },
+                { type: 'turn_started', turn: 1 },
+                { type: 'slot_speed_rolled', unitName: 'Ally', slotLabel: 'Slot 1', speed: 2 },
+                { type: 'slot_speed_rolled', unitName: 'Enemy', slotLabel: 'Slot 1', speed: 2 },
+                { type: 'enemy_intent_set', unitName: 'Enemy', slotLabel: 'Slot 1', skillName: 'Poke', targetLabel: 'Ally Slot 1' },
+                { type: 'status_applied', unitName: 'Ally', statusId: 'spore_round_base', count: 2 },
+                { type: 'skill_selected', unitName: 'Ally', slotLabel: 'Slot 1', skillName: 'Spore Shot' },
+                { type: 'target_selected', unitName: 'Ally', slotLabel: 'Slot 1', targetLabel: 'Enemy Slot 1' },
+                { type: 'resolution_queue_built', queueLabel: 'Ally Slot 1 (2), Enemy Slot 1 (2)' },
+                { type: 'skill_ammo_spent', unitName: 'Ally', skillName: 'Spore Shot', summary: '1 Count Spore Round [Base]' },
+                { type: 'engagement_started', engagementType: 'clash', leftUnitName: 'Ally', rightUnitName: 'Enemy', leftSkillName: 'Spore Shot', rightSkillName: 'Poke' },
+                { type: 'hit_resolved', attackerName: 'Ally', defenderName: 'Enemy', skillName: 'Spore Shot' },
+                { type: 'status_applied', unitName: 'Enemy', statusId: 'spore', count: 2 },
+            ];
+
+            assert(stableStringify(stream) === stableStringify(expected), `Unexpected ammo spend stream:\n${JSON.stringify(stream, null, 2)}`);
+
+            const state = engine.getState();
+            const enemySpore = state.enemyUnits[0].statuses.find((status) => status.id === 'spore')?.count || 0;
+            assert(enemySpore === 2, `Expected enemy to have 2 spore from onSpendOnHit, got ${enemySpore}`);
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
     test('Export/import round-trip for a shipped battle pack', () => {
         const sourceModules = createBattleEnvironment();
         requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses'));
