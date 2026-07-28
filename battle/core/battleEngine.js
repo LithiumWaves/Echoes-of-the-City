@@ -1203,6 +1203,10 @@
             return getSkillType(skill) === 'counter';
         }
 
+        function isGuardSkill(skill) {
+            return isDefenseSkill(skill) && !isEvadeSkill(skill) && !isCounterSkill(skill);
+        }
+
         function isPlusCoinSkill(skill) {
             return (skill.coinPower || 0) >= 0;
         }
@@ -1810,10 +1814,10 @@
                     isCritical,
                 });
 
-                invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, finalPower, damage: shieldState.remainingDamage, isCritical });
-                invokeHooks(defender, 'hitTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, finalPower, damage: shieldState.remainingDamage, isCritical });
-                invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, damage: shieldState.remainingDamage });
-                invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, damage: shieldState.remainingDamage });
+                invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, attackContext, defendContext, coinIndex: coinIndex + 1, finalPower, damage: shieldState.remainingDamage, isCritical });
+                invokeHooks(defender, 'hitTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, attackContext, defendContext, coinIndex: coinIndex + 1, finalPower, damage: shieldState.remainingDamage, isCritical });
+                invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, attackContext, defendContext, coinIndex: coinIndex + 1, damage: shieldState.remainingDamage });
+                invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, attackContext, defendContext, coinIndex: coinIndex + 1, damage: shieldState.remainingDamage });
 
                 applySkillEffects(targetBattle, 'onHit', {
                     sourceUnit: attacker,
@@ -2194,10 +2198,10 @@
                     isCritical,
                 });
 
-                invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, finalPower, damage: shieldState.remainingDamage, isCritical });
-                invokeHooks(defender, 'hitTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill: attackSkill, finalPower, damage: shieldState.remainingDamage, isCritical });
-                invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, damage: shieldState.remainingDamage });
-                invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill: attackSkill, damage: shieldState.remainingDamage });
+                invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, attackContext, defendContext, coinIndex: coinIndex + 1, finalPower, damage: shieldState.remainingDamage, isCritical });
+                invokeHooks(defender, 'hitTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill: attackSkill, attackContext, defendContext, coinIndex: coinIndex + 1, finalPower, damage: shieldState.remainingDamage, isCritical });
+                invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, attackContext, defendContext, coinIndex: coinIndex + 1, damage: shieldState.remainingDamage });
+                invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill: attackSkill, attackContext, defendContext, coinIndex: coinIndex + 1, damage: shieldState.remainingDamage });
 
                 applySkillEffects(targetBattle, 'onHit', {
                     sourceUnit: attacker,
@@ -2257,6 +2261,50 @@
                 hits,
                 totalDamage,
                 skill: counterSkill,
+            };
+        }
+
+        function activateGuardDefense(targetBattle, defenderSlot, defender, attackerSlot, attacker, attackSkill) {
+            const guardSkill = getActiveDefenseSkill(targetBattle, defenderSlot, attackerSlot);
+            if (!isGuardSkill(guardSkill)) {
+                return null;
+            }
+
+            const defenseState = ensureDefenseState(defenderSlot);
+            if (defenseState.used || !isUnitAlive(defender) || !isUnitAlive(attacker)) {
+                return null;
+            }
+
+            if (!defenseState.context) {
+                defenseState.context = createSkillContext(targetBattle, defender, defenderSlot, guardSkill, attacker);
+            }
+
+            defenseState.activated = true;
+            defenseState.used = true;
+
+            const guardRoll = flipCoins(targetBattle, defender, guardSkill, guardSkill.coinCount, defenseState.context);
+            const guardPower = Math.max(0, (guardRoll?.power || guardSkill.basePower) + getDefenseSkillFinalPowerBonus(defender, guardSkill, attacker, attackSkill));
+
+            gainShield(targetBattle, defender, {
+                shieldId: 'guard',
+                amount: guardPower,
+                operation: 'set',
+                expiresAt: 'turnStart',
+                reason: guardSkill.name,
+            });
+
+            emitEvent(targetBattle, 'status_triggered', {
+                unitId: defender.id,
+                unitName: defender.name,
+                statusId: 'guard',
+                damage: guardPower,
+                hp: defender.hp,
+            });
+
+            return {
+                skill: guardSkill,
+                power: guardPower,
+                flips: guardRoll?.flips || [],
             };
         }
 
@@ -2425,6 +2473,7 @@
 
             let hits = [];
             let evadeResult = null;
+            let guardResult = null;
             if (isEvadeSkill(defendingSkill) && !defenseState.broken && isUnitAlive(targetUnit)) {
                 if (!defenseState.context) {
                     defenseState.context = createSkillContext(targetBattle, targetUnit, targetSlot, defendingSkill, actingUnit);
@@ -2437,6 +2486,9 @@
                     defenseState.broken = true;
                 }
             } else {
+                if (isGuardSkill(defendingSkill) && isUnitAlive(targetUnit)) {
+                    guardResult = activateGuardDefense(targetBattle, targetSlot, targetUnit, actingSlot, actingUnit, actingSkill);
+                }
                 hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, actingSkill.coinCount);
             }
 
@@ -2456,8 +2508,9 @@
                 hits,
                 totalDamage,
                 {
-                    defenderSkill: isEvadeSkill(defendingSkill) ? defendingSkill : null,
+                    defenderSkill: isDefenseSkill(defendingSkill) ? defendingSkill : null,
                     rounds: isEvadeSkill(defendingSkill) ? evadeResult?.rounds || [] : [],
+                    defensePower: guardResult?.power || null,
                 },
             );
             targetBattle.resolutionHistory.push(targetBattle.clashPresentation);

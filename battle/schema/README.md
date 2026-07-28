@@ -62,7 +62,7 @@ Required:
 - `coinCount: number`
 
 Optional:
-- `skillType: "attack" | "evade" | "counter"` (default: `"attack"`)
+- `skillType: "attack" | "guard" | "evade" | "counter"` (default: `"attack"`)
 - `damageType: "slash" | "pierce" | "blunt"`
 - `sinType: "wrath" | "lust" | "sloth" | "gluttony" | "gloom" | "pride" | "envy"`
 - `offenseLevel: number`
@@ -156,6 +156,7 @@ Selected effect notes:
 Supported hook condition additions:
 - `statusPotencyAtOrBelow`
 - `statusCountAtOrBelow`
+- `skillType`
 - `eventStatusIdIs`
 - `burstTremor`
   - defaults to the target's current `tremor` potency when no `value`/`amount` is provided

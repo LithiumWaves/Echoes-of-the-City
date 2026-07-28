@@ -1,0 +1,582 @@
+"use strict";(function(){try{var record=function(name,detail){aps.get(accountId).queue.push(new CustomEvent(name,{detail}))};const accountId="26c60b4f-549a-4efd-8ae0-f00e07c46204";window._aps=window._aps||new Map;const aps=window._aps;aps.has(accountId)||aps.set(accountId,{queue:[],store:new Map}),record("_config/requestViewerCountry/define",{"code":"BR"});record("analytics/sampling/set",{"rates":{"error":0.001,"status":0.0001}});record("a3pes/video/activate",{"restrictions":{"block":{"accounts":["5220","e32f1423-28bc-43ed-8ab0-5ae6b4449cf8"]}}});record("a3pes/video/activate",{"bypassCountryCheck":true,"restrictions":{"allow":{"accountTypes":["ssw"]},"block":{"accounts":["e32f1423-28bc-43ed-8ab0-5ae6b4449cf8"]}}});record("a3pes/video/activate",{"bypassCountryCheck":true,"restrictions":{"allow":{"accountTypes":["mw"],"rate":0.5},"block":{"accounts":["5220"]}}});record("idVendors/enabled/set",{"bidParameterKeys":["liveintent","merkle","intimateMerger","pair","amx","33across","fTrack","captify","publink","anonymised","quantcast","idPlus","unifiedid","ddb_key_638","fabrick","uid","criteo","yahoo","liveRamp","id5","pubcommon","audigent","lightPublisherAudiences","lotame"]});record("idVendors/integration/execute",{"accountId":"26c60b4f-549a-4efd-8ae0-f00e07c46204","sourceId":"600","countryCode":"BR","vendorId":"anonymised","allowedRegions":undefined,"blockedRegions":["BR"],"vendorLoadedSampleRate":5,"domainPrecedence":[],"defaultScript":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+(function(){if (window.apstag) {window.apstag.__anonymised__ = false;}})();
+})():(!["BR"]||["BR"]&&!["BR"].includes("BR"))&&(function anonymous(
+) {
+(function(){if (window.apstag) {window.apstag.__anonymised__ = false;}})();
+})()
+},"defaultPropertyId":"NTU="});record("idVendors/integration/execute",{"accountId":"26c60b4f-549a-4efd-8ae0-f00e07c46204","sourceId":"600","countryCode":"BR","vendorId":"audigent","allowedRegions":undefined,"blockedRegions":["BR"],"vendorLoadedSampleRate":5,"domainPrecedence":[],"defaultScript":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var audigentPropertyId = '572';
+if (audigentPropertyId && audigentPropertyId.charAt(0) !== '%') {
+  (function (H, A, D, R, O, N, i, d) {
+    H[N] = H[N] || function () { (H[N].q = H[N].q || []).push(arguments) };
+    i = A.createElement(D); A.async = true;
+    i.src = R + "?url=" + encodeURIComponent(H.location.href) + "&ref=" + encodeURIComponent(A.referrer) +
+      "&_it=amazon&partner_id=" + O; d = A.getElementsByTagName(D)[0]; d.parentNode.insertBefore(i, d);
+  })(window, document, 'script', 'https://cdn.hadronid.net/hadron.js', audigentPropertyId, 'ha');
+}
+})():(!["BR"]||["BR"]&&!["BR"].includes("BR"))&&(function anonymous(
+) {
+var audigentPropertyId = '572';
+if (audigentPropertyId && audigentPropertyId.charAt(0) !== '%') {
+  (function (H, A, D, R, O, N, i, d) {
+    H[N] = H[N] || function () { (H[N].q = H[N].q || []).push(arguments) };
+    i = A.createElement(D); A.async = true;
+    i.src = R + "?url=" + encodeURIComponent(H.location.href) + "&ref=" + encodeURIComponent(A.referrer) +
+      "&_it=amazon&partner_id=" + O; d = A.getElementsByTagName(D)[0]; d.parentNode.insertBefore(i, d);
+  })(window, document, 'script', 'https://cdn.hadronid.net/hadron.js', audigentPropertyId, 'ha');
+}
+})()
+},"defaultPropertyId":"572"});record("idVendors/integration/execute",{"accountId":"26c60b4f-549a-4efd-8ae0-f00e07c46204","sourceId":"600","countryCode":"BR","vendorId":"id5","allowedRegions":undefined,"blockedRegions":["BR"],"vendorLoadedSampleRate":5,"domainPrecedence":[],"defaultScript":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var id5PropertyId = '420';
+if (id5PropertyId && id5PropertyId.charAt(0) !== '%') {
+    var id5Script = document.createElement('script');
+    id5Script.src = '//cdn.id5-sync.com/api/1.0/id5-api.js';
+    id5Script['onload'] = function(e) { 
+        ID5.init({ partnerId: Number(id5PropertyId) , provider: 'aps' })
+    };
+    document.head.appendChild(id5Script);
+}
+})():(!["BR"]||["BR"]&&!["BR"].includes("BR"))&&(function anonymous(
+) {
+var id5PropertyId = '420';
+if (id5PropertyId && id5PropertyId.charAt(0) !== '%') {
+    var id5Script = document.createElement('script');
+    id5Script.src = '//cdn.id5-sync.com/api/1.0/id5-api.js';
+    id5Script['onload'] = function(e) { 
+        ID5.init({ partnerId: Number(id5PropertyId) , provider: 'aps' })
+    };
+    document.head.appendChild(id5Script);
+}
+})()
+},"defaultPropertyId":"420"});record("idVendors/integration/execute",{"accountId":"26c60b4f-549a-4efd-8ae0-f00e07c46204","sourceId":"600","countryCode":"BR","vendorId":"liveRamp","allowedRegions":undefined,"blockedRegions":undefined,"vendorLoadedSampleRate":5,"domainPrecedence":[],"defaultScript":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var liveRampPropertyId = 'c1da13f6-9b70-41da-84e4-815dd70ac0c0';
+if (!window.launchPad && liveRampPropertyId && liveRampPropertyId.charAt(0) !== '%') {
+  var liverampScript = document.createElement('script');
+  liverampScript.setAttribute('async', 'async');
+  liverampScript.setAttribute('defer', 'defer');
+  liverampScript.setAttribute('src','https://launchpad-wrapper.privacymanager.io/' + liveRampPropertyId + '/launchpad-liveramp.js');
+  document.head.appendChild(liverampScript);
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var liveRampPropertyId = 'c1da13f6-9b70-41da-84e4-815dd70ac0c0';
+if (!window.launchPad && liveRampPropertyId && liveRampPropertyId.charAt(0) !== '%') {
+  var liverampScript = document.createElement('script');
+  liverampScript.setAttribute('async', 'async');
+  liverampScript.setAttribute('defer', 'defer');
+  liverampScript.setAttribute('src','https://launchpad-wrapper.privacymanager.io/' + liveRampPropertyId + '/launchpad-liveramp.js');
+  document.head.appendChild(liverampScript);
+}
+})()
+},"defaultPropertyId":"c1da13f6-9b70-41da-84e4-815dd70ac0c0"});record("idVendors/integration/execute",{"accountId":"26c60b4f-549a-4efd-8ae0-f00e07c46204","sourceId":"600","countryCode":"BR","vendorId":"lotame","allowedRegions":undefined,"blockedRegions":["BR"],"vendorLoadedSampleRate":5,"domainPrecedence":[],"defaultScript":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+if (!window['lotame_sync_16576']) {
+  var lotameClientId = '16576';
+
+  initLotame(lotameClientId);
+  createLotameScript(lotameClientId);
+
+  function initLotame(propertyId) {
+    var lotameConfig = {};
+    var namespace = window['lotame_sync_' + propertyId] = {};
+    namespace.config = lotameConfig;
+    namespace.data = {};
+    namespace.cmd = namespace.cmd || [];
+
+    namespace.cmd.push(function () {
+      namespace.sync();
+    });
+  };
+
+  function createLotameScript(propertyId) {
+    var lotameSyncUrl = "https://tags.crwdcntrl.net/lt/c/" + propertyId + "/sync.min.js";
+    var lotameScriptTag = document.createElement('script');
+    lotameScriptTag.src = lotameSyncUrl;
+    document.head.appendChild(lotameScriptTag);
+  };
+}
+})():(!["BR"]||["BR"]&&!["BR"].includes("BR"))&&(function anonymous(
+) {
+if (!window['lotame_sync_16576']) {
+  var lotameClientId = '16576';
+
+  initLotame(lotameClientId);
+  createLotameScript(lotameClientId);
+
+  function initLotame(propertyId) {
+    var lotameConfig = {};
+    var namespace = window['lotame_sync_' + propertyId] = {};
+    namespace.config = lotameConfig;
+    namespace.data = {};
+    namespace.cmd = namespace.cmd || [];
+
+    namespace.cmd.push(function () {
+      namespace.sync();
+    });
+  };
+
+  function createLotameScript(propertyId) {
+    var lotameSyncUrl = "https://tags.crwdcntrl.net/lt/c/" + propertyId + "/sync.min.js";
+    var lotameScriptTag = document.createElement('script');
+    lotameScriptTag.src = lotameSyncUrl;
+    document.head.appendChild(lotameScriptTag);
+  };
+}
+})()
+},"defaultPropertyId":undefined});record("idVendors/integration/execute",{"accountId":"26c60b4f-549a-4efd-8ae0-f00e07c46204","sourceId":"600","countryCode":"BR","vendorId":"pubcommon","allowedRegions":undefined,"blockedRegions":["BR"],"vendorLoadedSampleRate":5,"domainPrecedence":[],"defaultScript":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+if (!window.PublisherCommonId) {
+    var pubcommonScript = document.createElement('script');
+    pubcommonScript.src = '//secure.cdn.fastclick.net/js/pubcid/latest/pubcid.min.js';
+    document.head.appendChild(pubcommonScript);
+}
+})():(!["BR"]||["BR"]&&!["BR"].includes("BR"))&&(function anonymous(
+) {
+if (!window.PublisherCommonId) {
+    var pubcommonScript = document.createElement('script');
+    pubcommonScript.src = '//secure.cdn.fastclick.net/js/pubcid/latest/pubcid.min.js';
+    document.head.appendChild(pubcommonScript);
+}
+})()
+},"defaultPropertyId":undefined});record("idVendors/integration/execute",{"accountId":"26c60b4f-549a-4efd-8ae0-f00e07c46204","sourceId":"600","countryCode":"BR","vendorId":"wunderkind","allowedRegions":undefined,"blockedRegions":undefined,"vendorLoadedSampleRate":5,"domainPrecedence":[{"hostnames":["discordbotlist.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6910';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6910';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6910"},{"hostnames":["futwiz.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6975';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6975';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6975"},{"hostnames":["blox.link"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6883';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6883';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6883"},{"hostnames":["psnprofiles.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6887';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6887';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6887"},{"hostnames":["serebii.net"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6881';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6881';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6881"},{"hostnames":["top.gg"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6971';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6971';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6971"},{"hostnames":["theloadout.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6879';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6879';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6879"},{"hostnames":["flightsim.to"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '8294';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '8294';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"8294"},{"hostnames":["pcgamebenchmark.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6880';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6880';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6880"},{"hostnames":["pockettactics.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6878';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6878';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6878"},{"hostnames":["trueachievements.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6884';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6884';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6884"},{"hostnames":["wargamer.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6801';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6801';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6801"},{"hostnames":["namemc.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6882';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6882';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6882"},{"hostnames":["modsfire.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '7214';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '7214';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"7214"},{"hostnames":["nexusmods.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6970';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6970';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6970"},{"hostnames":["pcgamesn.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6800';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6800';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6800"},{"hostnames":["thedigitalfix.com"],"script":function anonymous(
+) {
+undefined?undefined.includes("BR")&&(function anonymous(
+) {
+var wunderkindPropertyId = '6608';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})():(!undefined||undefined&&!undefined.includes("BR"))&&(function anonymous(
+) {
+var wunderkindPropertyId = '6608';
+if (!window.bouncex && (wunderkindPropertyId && wunderkindPropertyId.charAt(0) !== '%')) {
+  (function (d) {
+    var e = d.createElement('script');
+    e.src = d.location.protocol + '//tag.wknd.ai/' + wunderkindPropertyId + '/i.js';
+    e.async = true;
+    d.getElementsByTagName('head')[0].appendChild(e);
+  }(document));
+}
+})()
+},"propertyId":"6608"}],"defaultScript":undefined,"defaultPropertyId":undefined});record("_config/config/didLoad",undefined)}catch(e){console.error(e)}})();

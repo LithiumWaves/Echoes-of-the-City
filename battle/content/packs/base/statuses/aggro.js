@@ -10,11 +10,20 @@
     registerStatusDefinition({
         id: 'aggro',
         label: 'Aggro',
-        description: 'In focused encounters, slots with higher Aggro are more likely to be targeted by enemies.',
+        description: 'In focused encounters, slots with higher Aggro are more likely to be targeted by enemies this turn.',
         countOnly: true,
         stackModel: {
             count: { enabled: true, min: 0, max: 99, application: 'add' },
             expireWhen: { countLte: 0 },
+        },
+        hooks: {
+            turnEnd: [
+                {
+                    type: 'consumeStatus',
+                    target: 'self',
+                    statusId: 'aggro',
+                },
+            ],
         },
     });
 })();

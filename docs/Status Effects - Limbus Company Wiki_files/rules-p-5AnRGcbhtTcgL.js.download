@@ -1,0 +1,7 @@
+/*
+ Quantcast measurement tag
+ Copyright (c) 2008-2026, Quantcast Corp.
+*/
+'use strict';(function(m,h,f){var k=function(a){var b=f.createElement("a");b.href=a;return b},l=[/^http[s]?:\/\/((adservice.google.*)|([^\/]*fls\.doubleclick\.net))\/.*~oref=(?<url>[^;\n]*)/,/^http[s]?:\/\/[^\/]*tealium.*\/.*page_url=(?<url>[^&]*)/,/^(?<domain>http[s]?:\/\/[^\/]*\/)wpm@[^\/]*\/.*\/modern\/(?<url>.*)/],n=function(a,b,d){return a?"nc"===a?!b||!d||0>b.indexOf(d):"eq"===a?b===d:"sw"===a?0===b.indexOf(d):"ew"===a?(a=b.length-d.length,b=b.lastIndexOf(d,a),-1!==b&&b===a):"c"===a?0<=b.indexOf(d):
+!1:!1};__qc.apply(null,["rules",[m,null,[[function(a){return"array"==={}.toString.call(a).match(/\s([a-zA-Z]+)/)[1].toLowerCase()?{labels:a.join(",")}:{labels:""+a}},"Knowledge \x26 Education"]],[[function(a,b,d){if(h.top!==h.self){try{for(var g=0;g<l.length;g++){var e=f.location.href.match(l[g]);if(e&&e.groups.url){var c=e.groups.url;e.groups.domain&&(c=e.groups.domain+c);c=decodeURIComponent(c);break}}}catch(p){}c=c?k(c):k(f.referrer)}else c=f.location;c=c.hostname;n(b,c,d)?a(c):a(!1)},"c","dmv-permit-test.com, dict.cc, engineeringtoolbox.com"]]]])})("p-5AnRGcbhtTcgL",
+window,document);

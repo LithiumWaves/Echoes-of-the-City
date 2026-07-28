@@ -1,0 +1,43 @@
+
+var ftGUID_7905450="6379E798A794F9";
+var ftConfID_7905450="0";
+var ftParams_7905450="ft_custom=U47Z31T7oqNPgKGkU5TU0CGBzd5TjNfLW4iipSeL2N9S_aKlIA-fJZA=&ftOBA=1&ft_agentEnv=0&ft_referrer=https%3A%2F%2Flimbuscompany.wiki.gg%2Fwiki%2FStatus_Effects&gdpr=0&ftClick=https://exch.quantserve.com/r?&a=p-1RYxePXT9bCS2&labels=_qc.clk,_click.adserver.rtb,_click.rand.1070362375&rtbip=91.228.72.116&rtbdata2=EAM6HWh0dHBzOi8vbGltYnVzY29tcGFueS53aWtpLmdnWih5bjVqdjhrdWJ1UFJmREM2bW41N3ZjUjZZZW5STG1hX3hDMWpFdWFNgAGH3rH-A7oBJDZDMTVCRTU2LTEzM0UtNENBRS1BODQwLUE5QzZCREMwRDk5QcABgOIJyAG6hIGx-jPaASUxNzk5NkJCRS05QUIxLTQ2QzgtODE1Ny05MUJDRTI4OTBEQkNCsAIIyAIA0ALO4Yb7-J_3zKkB6AIu8gIOCK7eJhDP1eqF45PJ0DHyAgwILhDExpTS3eje1nr4AgCKAwYxNjAxMDeYAwCoAwCyAwS9BRYAugMSCTVMSC86gkXYEZ17-CRP5CC-wgMSCXdCBpXpYir5EaLaNzRif1m2yAOCgICBAdgDh96x_gPiAw9wLTFSWXhlUFhUOWJDUzLqAwYIrAIQ-gHyAwkxODA0Ny02MDP4AwCABLACigQCNzeaBBIJNkyLulJmNq0RBQ21lvyKhJGiBBIJNUxILzqCRdgRnXv4JE_kIL6qBBIJNUxILzqCRdgRnXv4JE_kIL64BNAF0AQJ8gQCQlKABQGKBSoyMGIwYWI0Zjk1MDAxZWU5ZGNlMWUyYjhkYWM0NGQyNzQ2ZDRkNDcxYzWQBQGaBRUgsKtPlQAe6dzh4rjaxE0nRtTUccWiBSRNUi1sMmpzVXN2NDNQTFd4SXhMVzB4YzlxOHdqQUhJcC1qST2wBQC4BQDABYfesf4DyAWZ06oE0gUGCAEQARgb6AUFmgYUChIJNkyLulJmNq0RBQ21lvyKhJGgBgCoBpyQ4yS1BjX2QDi6BmoKAkJSEgJTUBjX0gQiCHNvcm9jYWJhKgkxODA0Ny02MDM6IG5leHRlbCUyMHRlbGVjb211bmljYWNvZXMlMjBsdGRhWiVjbGFybyUyMG54dCUyMHRlbGVjb211bmljYWNvZXMlMjBsdGRhyQZI0BA62jrWE_EGAOAQOto61hOABwCKBxIJd0IGleliKvkRoto3NGJ_WbawB4L2swS4B5bl-gTYBwQ&rtb_id=CUjQEDraOtYTEQDgEDraOtYTGDz7VhDOUWp212aNAzY&redirecturl3=&site_url=wiki.gg&cachebuster=652949.9201653132";
+var ftKeyword_7905450="";
+var ftCustom_7905450="U47Z31T7oqNPgKGkU5TU0CGBzd5TjNfLW4iipSeL2N9S_aKlIA-fJZA=";
+var ftSection_7905450="";
+var ftSegment_7905450="w2c";
+var ftSegmentList_7905450=[{s:'w2c'}];
+var ftRuleMatch_7905450="0";
+var ftTimestamp_7905450="1785202548";
+var ftGeoC2_7905450="br";
+var ftGeoState_7905450="sp";
+var ftGeoCity_7905450="sorocaba";
+var ftISP_7905450="nextel telecomunicacoes ltda";
+var ftSpeed_7905450="broadband";
+var ftConnType_7905450="wifi";
+var ftDMA_7905450="76119";
+var ftLong_7905450="-47.47";
+var ftLat_7905450="-23.53";
+var ftPostal_7905450="18047-603";
+var ftTimeZone_7905450="-300";
+var ftMobileCarrier_7905450="";
+var ftImp7905450 = {};
+ftImp7905450.privacy = "x";
+ftImp7905450.guidAge = "404";
+ftImp7905450.impID = "374FF84A-8A83-3827-E58E-EEAC8801A8BA";
+ftImp7905450.duid = "FT:6379E798A794F9";
+
+ftImp7905450.ft_tpplid = "";
+ftImp7905450.ft_c = {};
+ftImp7905450.gdpr = "0";
+ftImp7905450.gdpr_consent = "";
+ftImp7905450.gdpr_pd = "";
+ftImp7905450.oob_consent = "";
+ftImp7905450.gdprStoredConsent = "";
+ftImp7905450.us_privacy = "";
+ftImp7905450.gpc = "";
+
+ftImp7905450.jsAppend = "1";
+var ftCreativeId_7905450 = "6075556";
+(function(){var tag=document.getElementById("ft_servedby_7905450")||function(s){return s[s.length-1]}(document.getElementsByTagName("script")),js=document.createElement("script");js.src="https://ajs-assets.ftstatic.com/ftUtils.js";js.id="ftscript_m7905450";js.setAttribute("name","ftscript_m7905450");tag.parentNode.insertBefore(js,tag)})();window.fTChecker=window.fTChecker||function(id){if(!id)return false;id=""+id;if(window.hasOwnProperty("ftUtils")){window["ft"+id]=Object.assign({},window.ftUtils.common);window["ft"+id].getBannerConfig(id)}else(function(id){window.setTimeout(function(){window.fTChecker(id)},50)})(id)};window.fTChecker("7905450");
+

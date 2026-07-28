@@ -830,6 +830,14 @@
         return actualValue === expectedValue;
     }
 
+    function normalizePercentConditionValue(value) {
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+            return value;
+        }
+
+        return value > 1 ? value / 100 : value;
+    }
+
     function ensureHookOwnerRuntimeState(hookOwner) {
         if (!hookOwner || typeof hookOwner !== 'object') {
             return null;
@@ -921,6 +929,8 @@
             return (conditionStatus?.count || 0) >= conditionValue;
         case 'statusCountAtOrBelow':
             return (conditionStatus?.count || 0) <= conditionValue;
+        case 'skillType':
+            return matchesExpectedValue(runtime?.skill?.skillType || 'attack', conditionValue);
         case 'skillSinType':
             return matchesExpectedValue(runtime?.skill?.sinType || null, conditionValue);
         case 'skillDamageType':
@@ -932,9 +942,9 @@
         case 'targetStaggered':
             return isUnitStaggeredForCondition(getHookConditionUnit(runtime, condition?.target || 'opponent')) === (conditionValue ?? true);
         case 'hpPercentAtOrBelow':
-            return getUnitHpRatio(conditionUnit) <= conditionValue;
+            return getUnitHpRatio(conditionUnit) <= normalizePercentConditionValue(conditionValue);
         case 'hpPercentAtOrAbove':
-            return getUnitHpRatio(conditionUnit) >= conditionValue;
+            return getUnitHpRatio(conditionUnit) >= normalizePercentConditionValue(conditionValue);
         case 'spAtOrBelow':
             return typeof conditionUnit?.sp === 'number' && conditionUnit.sp <= conditionValue;
         case 'spAtOrAbove':

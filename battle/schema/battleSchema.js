@@ -4,7 +4,7 @@
 
     const PHYSICAL_DAMAGE_TYPES = new Set(['slash', 'pierce', 'blunt']);
     const SIN_TYPES = new Set(['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy']);
-    const SKILL_TYPES = new Set(['attack', 'evade', 'counter']);
+    const SKILL_TYPES = new Set(['attack', 'guard', 'evade', 'counter']);
     const EFFECT_TRIGGERS = new Set(['onSelect', 'onHit', 'onClashWin', 'onClashLose', 'onAttackEnd']);
     const EFFECT_TYPES = new Set(Object.keys(registry.effectDefinitions || {}));
     const CONTEXT_FIELDS = new Set([
@@ -50,6 +50,7 @@
         'statusPotencyAtOrBelow',
         'statusCountAtLeast',
         'statusCountAtOrBelow',
+        'skillType',
         'skillSinType',
         'skillDamageType',
         'coinIndex',
@@ -274,6 +275,17 @@
             }
             if (!isFiniteNumber(condition.value) || condition.value < 0) {
                 pushError(errors, `${path}.value`, 'must be a non-negative number.');
+            }
+            break;
+        case 'skillType':
+            if (
+                !condition.value
+                || !(
+                    typeof condition.value === 'string'
+                    || (Array.isArray(condition.value) && condition.value.every((entry) => typeof entry === 'string' && entry))
+                )
+            ) {
+                pushError(errors, `${path}.value`, 'must be a skill type string or array of skill type strings.');
             }
             break;
         case 'eventStatusIdIs':
@@ -665,7 +677,7 @@
             pushError(errors, `${path}.coinCount`, 'must be a positive integer.');
         }
         if (skill.skillType != null && !SKILL_TYPES.has(skill.skillType)) {
-            pushError(errors, `${path}.skillType`, 'must be attack, evade, or counter.');
+            pushError(errors, `${path}.skillType`, 'must be attack, guard, evade, or counter.');
         }
         if (skill.damageType != null && !PHYSICAL_DAMAGE_TYPES.has(skill.damageType)) {
             pushError(errors, `${path}.damageType`, 'must be slash, pierce, or blunt.');
