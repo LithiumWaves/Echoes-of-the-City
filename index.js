@@ -529,7 +529,14 @@
             return;
         }
 
+        const api = getBattleContentApi();
         const selectedBattle = state.availableBattles.find((battle) => battle.id === state.selectedBattleId) || state.availableBattles[0];
+        const installedPacks = typeof api.listInstalledContentPacks === 'function'
+            ? api.listInstalledContentPacks()
+            : [];
+        const installedPackSummary = installedPacks.length
+            ? `Installed packs: ${installedPacks.length}`
+            : 'No installed packs';
         const contentImportMessage = formatContentImportMessage(state.contentImportMessage);
         const contentImportMessageStyles = state.contentImportMessage?.type === 'error'
             ? 'background: rgba(120, 24, 24, 0.58); border: 1px solid rgba(255, 110, 110, 0.4);'
@@ -576,6 +583,13 @@
                 <div style="margin-top: 1rem; display: grid; gap: 0.55rem; text-align: left;">
                     <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
                         Import a battle, unit, status, or a full content pack JSON object. Export the selected battle by itself or as a reusable dependency pack.
+                    </div>
+                    <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
+                        Data-only JSON packs are persisted locally after import. Trusted JavaScript packs live under battle/content/packs/user/ and run code.
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center;">
+                        <span class="echoes-battle-panel__combat-pill">${escapeHtml(installedPackSummary)}</span>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="clear-installed-packs" ${installedPacks.length ? '' : 'disabled'}>Clear Installed Packs</button>
                     </div>
                     <textarea
                         data-action="content-json-input"
@@ -689,6 +703,17 @@
         if (action === 'export-selected-pack') {
             exportSelectedBattlePack();
             return;
+        }
+
+        if (action === 'clear-installed-packs') {
+            const api = getBattleContentApi();
+            if (typeof api.clearInstalledContentPacks === 'function') {
+                api.clearInstalledContentPacks();
+                refreshBattleSelectionState();
+                setContentImportMessage('success', 'Cleared installed content packs.');
+                renderBattleStartScreen();
+                return;
+            }
         }
 
         state.battleHandler?.handleClick(event);

@@ -7,6 +7,9 @@
     const installedContentPacks = battleModules.installedContentPacks || (battleModules.installedContentPacks = {});
 
     const CONTENT_PACK_STORAGE_KEY = 'echoes-of-the-city:contentPacks:v1';
+    const LEGACY_CONTENT_PACK_STORAGE_KEYS = [
+        'echoes-of-the-city:contentPacks',
+    ];
 
     function cloneContentValue(value) {
         if (Array.isArray(value)) {
@@ -409,6 +412,7 @@
                 .map((entry) => ({
                     manifest: entry.manifest,
                     payload: entry.payload,
+                    ids: entry.ids || null,
                 })),
         };
         storage.setItem(CONTENT_PACK_STORAGE_KEY, JSON.stringify(payload));
@@ -421,7 +425,9 @@
             return { loaded: 0, errors: [] };
         }
 
-        const raw = storage.getItem(CONTENT_PACK_STORAGE_KEY);
+        const raw = storage.getItem(CONTENT_PACK_STORAGE_KEY)
+            || LEGACY_CONTENT_PACK_STORAGE_KEYS.map((key) => storage.getItem(key)).find(Boolean)
+            || null;
         if (!raw) {
             return { loaded: 0, errors: [] };
         }
@@ -476,6 +482,44 @@
         });
 
         return { loaded, errors };
+    }
+
+    function uninstallContentPack(packId, options = {}) {
+        if (!packId || typeof packId !== 'string') {
+            return false;
+        }
+
+        const pack = installedContentPacks[packId];
+        if (!pack) {
+            return false;
+        }
+
+        const unregisterStatusDefinition = battleModules.registry?.unregisterStatusDefinition
+            || battleModules.unregisterStatusDefinition;
+
+        const statusIds = Array.isArray(pack?.ids?.statuses) ? pack.ids.statuses : [];
+        const unitIds = Array.isArray(pack?.ids?.units) ? pack.ids.units : [];
+        const battleIds = Array.isArray(pack?.ids?.battles) ? pack.ids.battles : [];
+
+        battleIds.slice().reverse().forEach((id) => unregisterBattleDefinition(id));
+        unitIds.slice().reverse().forEach((id) => unregisterUnitDefinition(id));
+        statusIds.slice().reverse().forEach((id) => unregisterStatusDefinition?.(id));
+
+        delete installedContentPacks[packId];
+        if (options.persist !== false) {
+            persistInstalledContentPacks();
+        }
+        return true;
+    }
+
+    function clearInstalledContentPacks(options = {}) {
+        Object.keys(installedContentPacks).forEach((packId) => {
+            uninstallContentPack(packId, { persist: false });
+        });
+        if (options.persist !== false) {
+            persistInstalledContentPacks();
+        }
+        return true;
     }
 
     function computeConflicts(normalizedPack) {
@@ -648,6 +692,8 @@
             || battleModules.registerStatusDefinition;
         const unregisterStatusDefinition = battleModules.registry?.unregisterStatusDefinition
             || battleModules.unregisterStatusDefinition;
+        const isSupportedStatusId = battleModules.registry?.isSupportedStatusId
+            || battleModules.isSupportedStatusId;
         if (typeof registerStatusDefinition !== 'function') {
             throw new Error('Status registry is not available.');
         }
@@ -659,6 +705,20 @@
         };
 
         try {
+            const statusIdsToSeed = (normalizedPack.statuses || [])
+                .map((status) => status?.id)
+                .filter(Boolean);
+            statusIdsToSeed.forEach((statusId) => {
+                if (typeof isSupportedStatusId === 'function' && isSupportedStatusId(statusId)) {
+                    return;
+                }
+                registerStatusDefinition({
+                    id: statusId,
+                    label: statusId,
+                    countOnly: true,
+                });
+            });
+
             normalizedPack.statuses.forEach((statusDefinition) => {
                 const registeredDefinition = registerStatusDefinition(statusDefinition, options);
                 registeredIds.statuses.push(registeredDefinition.id);
@@ -786,6 +846,7 @@
                     units: preparedPack.units || [],
                     battles: preparedPack.battles || [],
                 },
+                ids: result?.ids || null,
                 installedAt: Date.now(),
                 source: options.source || 'import',
             };
@@ -870,6 +931,8 @@
         listInstalledContentPacks,
         persistInstalledContentPacks,
         loadPersistedContentPacks,
+        uninstallContentPack,
+        clearInstalledContentPacks,
     };
 
     window.EchoesOfTheCityBattle = {
@@ -891,5 +954,7 @@
         listInstalledContentPacks,
         persistInstalledContentPacks,
         loadPersistedContentPacks,
+        uninstallContentPack,
+        clearInstalledContentPacks,
     };
 })();

@@ -60,9 +60,12 @@ function clearRequireCache(targetRoot) {
     });
 }
 
-function createBattleEnvironment() {
+function createBattleEnvironment(options = {}) {
     clearRequireCache(battleRoot);
     global.window = {};
+    if (options.localStorage) {
+        global.window.localStorage = options.localStorage;
+    }
 
     require(path.resolve(battleRoot, 'registry', 'battleRegistry.js'));
     require(path.resolve(battleRoot, 'schema', 'battleSchema.js'));
@@ -73,6 +76,24 @@ function createBattleEnvironment() {
     require(path.resolve(battleRoot, 'core', 'battleEngine.js'));
 
     return global.window.EchoesOfTheCityBattleModules;
+}
+
+function createMemoryLocalStorage() {
+    const store = new Map();
+    return {
+        getItem(key) {
+            return store.has(key) ? store.get(key) : null;
+        },
+        setItem(key, value) {
+            store.set(key, String(value));
+        },
+        removeItem(key) {
+            store.delete(key);
+        },
+        clear() {
+            store.clear();
+        },
+    };
 }
 
 function requireAllScripts(directoryPath) {
@@ -223,6 +244,30 @@ function runSuite() {
         assert(second.ids.battles[0] !== first.ids.battles[0], 'Expected renamed battle id to differ.');
         assert(battleModules.content.getBattleDefinition(first.ids.battles[0]), 'Original battle should remain available.');
         assert(battleModules.content.getBattleDefinition(second.ids.battles[0]), 'Renamed battle should be available.');
+    });
+
+    test('Persist and reload installed packs', () => {
+        const storage = createMemoryLocalStorage();
+        const firstEnv = createBattleEnvironment({ localStorage: storage });
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses'));
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'units'));
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'battles'));
+
+        const battles = getCanonicalEntries(firstEnv.content.listBattleDefinitions());
+        const battleId = battles[0].id;
+        const pack = firstEnv.content.exportBattleContentPack(battleId);
+        pack.manifest.id = 'persisted-pack-test';
+        const installed = firstEnv.content.installContentPack(pack, { conflictStrategy: 'rename' });
+        assert(installed.manifest.id === 'persisted-pack-test', 'Expected pack manifest id to match.');
+
+        const secondEnv = createBattleEnvironment({ localStorage: storage });
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses'));
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'units'));
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'battles'));
+        const loadResult = secondEnv.content.loadPersistedContentPacks();
+        assert(loadResult.loaded >= 1, 'Expected at least one pack to load from storage.');
+        const installedPacks = secondEnv.content.listInstalledContentPacks();
+        assert(installedPacks.some((entry) => entry.id === 'persisted-pack-test'), 'Expected persisted pack to be listed.');
     });
 
     process.stdout.write(`\nResult: ${passed} passed, ${failed} failed\n`);

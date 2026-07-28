@@ -8,3 +8,7 @@ Run the automated verification harness:
 ```bash
 node battle/tests/runTests.js
 ```
+
+## Content Packs
+
+- Data-only JSON pack format: docs/content-pack-format.md
