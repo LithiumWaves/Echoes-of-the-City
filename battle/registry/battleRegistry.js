@@ -23,12 +23,21 @@
         burn: { id: 'burn', label: 'Burn', iconPath: 'assets/statuseffects/keywordstatus/Burn.png' },
         protection: { id: 'protection', label: 'Protection', countOnly: true },
         charge: { id: 'charge', label: 'Charge', iconPath: 'assets/statuseffects/keywordstatus/Charge.png' },
+        haste: { id: 'haste', label: 'Haste', countOnly: true },
+        bind: { id: 'bind', label: 'Bind', countOnly: true },
+        fragile: { id: 'fragile', label: 'Fragile', countOnly: true },
         paralyze: { id: 'paralyze', label: 'Paralyze', countOnly: true },
         poise: { id: 'poise', label: 'Poise', iconPath: 'assets/statuseffects/keywordstatus/Poise.png' },
         plus_coin_boost: { id: 'plus_coin_boost', label: 'Plus Coin Boost', countOnly: true },
         plus_coin_drop: { id: 'plus_coin_drop', label: 'Plus Coin Drop', countOnly: true },
         minus_coin_boost: { id: 'minus_coin_boost', label: 'Minus Coin Boost', countOnly: true },
         minus_coin_drop: { id: 'minus_coin_drop', label: 'Minus Coin Drop', countOnly: true },
+        attack_power_up: { id: 'attack_power_up', label: 'Attack Power Up', countOnly: true },
+        attack_power_down: { id: 'attack_power_down', label: 'Attack Power Down', countOnly: true },
+        offense_level_up: { id: 'offense_level_up', label: 'Offense Level Up', countOnly: true },
+        offense_level_down: { id: 'offense_level_down', label: 'Offense Level Down', countOnly: true },
+        defense_level_up: { id: 'defense_level_up', label: 'Defense Level Up', countOnly: true },
+        defense_level_down: { id: 'defense_level_down', label: 'Defense Level Down', countOnly: true },
         rupture: { id: 'rupture', label: 'Rupture', iconPath: 'assets/statuseffects/keywordstatus/Rupture.png' },
         sinking: { id: 'sinking', label: 'Sinking', iconPath: 'assets/statuseffects/keywordstatus/Sinking.png' },
         tremor: { id: 'tremor', label: 'Tremor', iconPath: 'assets/statuseffects/keywordstatus/Tremor.png' },
@@ -104,8 +113,10 @@
         modifyPhysicalResistance: { id: 'modifyPhysicalResistance', label: 'Modify Physical Resistance' },
         modifySinResistance: { id: 'modifySinResistance', label: 'Modify Sin Resistance' },
         modifyDefenseLevel: { id: 'modifyDefenseLevel', label: 'Modify Defense Level' },
+        modifyOffenseLevel: { id: 'modifyOffenseLevel', label: 'Modify Offense Level' },
         modifySpeed: { id: 'modifySpeed', label: 'Modify Speed' },
         retargetSlot: { id: 'retargetSlot', label: 'Retarget Slot' },
+        burstTremor: { id: 'burstTremor', label: 'Burst Tremor' },
         consumeStatus: { id: 'consumeStatus', label: 'Consume Status' },
     };
 
@@ -299,10 +310,14 @@
             return `Modify ${effect.target || 'opponent'} ${getStatusLabel(effect.sinType)} resistance by ${effect.value}x.`;
         case 'modifyDefenseLevel':
             return `Adjust ${effect.target || 'opponent'} Defense Level by ${formatSignedNumber(effect.value || 0)}.`;
+        case 'modifyOffenseLevel':
+            return `Adjust ${effect.target || 'opponent'} Offense Level by ${formatSignedNumber(effect.value || 0)}.`;
         case 'modifySpeed':
             return `${effect.operation === 'set' ? 'Set' : 'Adjust'} ${effect.target || 'opponent'} Speed ${effect.operation === 'set' ? 'to' : 'by'} ${effect.value || 0}.`;
         case 'retargetSlot':
             return `Retarget ${effect.target || 'opponent'} to ${retargetSelectorLabels[effect.selector] || effect.selector}.`;
+        case 'burstTremor':
+            return `Burst Tremor on ${effect.target || 'opponent'}.`;
         case 'consumeStatus':
             return `Consume ${getStatusLabel(effect.statusId)} from ${effect.target || 'opponent'}.`;
         default:

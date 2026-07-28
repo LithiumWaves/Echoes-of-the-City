@@ -4,6 +4,7 @@
     function createEffectExecutor(deps) {
         const {
             getStatusPotency,
+            getStatusCount,
             getStatus,
             removeStatus,
             applyStatus,
@@ -24,6 +25,7 @@
             refreshRedirectedTargets,
             refreshSpeedOrder,
             ensureActivePlayerSlot,
+            burstTremor,
         } = deps || {};
 
         function getRuntimeSourceUnit(runtime) {
@@ -32,6 +34,10 @@
 
         function getRuntimeTargetUnit(runtime) {
             return runtime?.targetUnit || runtime?.opponent || null;
+        }
+
+        function isHookRuntimeSelfTarget(runtime) {
+            return Boolean(runtime?.unit && runtime?.targetUnit && runtime.unit.id === runtime.targetUnit.id);
         }
 
         function getSlotForUnit(targetBattle, unit) {
@@ -44,27 +50,53 @@
 
         function getEffectTargetUnit(runtime, target = 'opponent') {
             if (target === 'self') {
-                return getRuntimeSourceUnit(runtime);
+                return runtime?.unit || runtime?.sourceUnit || null;
             }
 
             if (target === 'opponent') {
+                if (isHookRuntimeSelfTarget(runtime)) {
+                    return runtime?.sourceUnit || runtime?.opponent || null;
+                }
+
                 return getRuntimeTargetUnit(runtime);
             }
 
             return null;
         }
 
+        function getEffectStatusValue(runtime, amountSource, getter) {
+            if (!amountSource || typeof getter !== 'function') {
+                return 0;
+            }
+
+            const targetUnit = getEffectTargetUnit(runtime, amountSource.target || 'self');
+            if (!targetUnit || !amountSource.statusId) {
+                return 0;
+            }
+
+            return getter(targetUnit, amountSource.statusId);
+        }
+
         function getEffectStatusPotency(runtime, effect) {
-            if (typeof getStatusPotency !== 'function') {
-                return 0;
-            }
+            return getEffectStatusValue(
+                runtime,
+                {
+                    statusId: effect?.statusId,
+                    target: effect?.statusSource || 'self',
+                },
+                getStatusPotency,
+            );
+        }
 
-            const targetUnit = getEffectTargetUnit(runtime, effect.statusSource || 'self');
-            if (!targetUnit || !effect.statusId) {
-                return 0;
-            }
-
-            return getStatusPotency(targetUnit, effect.statusId);
+        function getEffectStatusCount(runtime, effect) {
+            return getEffectStatusValue(
+                runtime,
+                {
+                    statusId: effect?.statusId,
+                    target: effect?.statusSource || 'self',
+                },
+                getStatusCount,
+            );
         }
 
         function resolveEffectAmount(runtime, effect) {
@@ -81,6 +113,17 @@
                 }
 
                 const baseAmount = getStatusPotency(targetUnit, statusSource.statusId);
+                return baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+            }
+
+            if (amountDefinition?.statusCount) {
+                const statusSource = amountDefinition.statusCount;
+                const targetUnit = getEffectTargetUnit(runtime, statusSource.target || 'self');
+                if (!targetUnit || !statusSource.statusId || typeof getStatusCount !== 'function') {
+                    return 0;
+                }
+
+                const baseAmount = getStatusCount(targetUnit, statusSource.statusId);
                 return baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
             }
 
@@ -224,16 +267,17 @@
             }
         }
 
-        function modifyUnitSpeed(targetBattle, unit, effect) {
+        function modifyUnitSpeed(targetBattle, unit, effect, runtime) {
             const slot = getSlotForUnit(targetBattle, unit);
             if (!slot) {
                 return;
             }
 
             const previousSpeed = slot.speed || 0;
+            const resolvedValue = Math.round(resolveEffectAmount(runtime, effect));
             const nextSpeed = effect.operation === 'set'
-                ? Math.max(0, Math.round(effect.value || 0))
-                : Math.max(0, previousSpeed + Math.round(effect.value || 0));
+                ? Math.max(0, resolvedValue)
+                : Math.max(0, previousSpeed + resolvedValue);
 
             slot.speed = nextSpeed;
             unit.speed = nextSpeed;
@@ -255,6 +299,23 @@
             }
             if (typeof ensureActivePlayerSlot === 'function') {
                 ensureActivePlayerSlot(targetBattle);
+            }
+        }
+
+        function modifyUnitLevel(targetBattle, unit, effect, runtime, fieldName, eventName) {
+            if (!unit) {
+                return;
+            }
+
+            const resolvedValue = Math.round(resolveEffectAmount(runtime, effect));
+            unit.turnState[fieldName] = (unit.turnState[fieldName] || 0) + resolvedValue;
+
+            if (typeof emitEvent === 'function') {
+                emitEvent(targetBattle, eventName, {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    value: unit.turnState[fieldName],
+                });
             }
         }
 
@@ -361,7 +422,12 @@
             (Array.isArray(effects) ? effects : []).forEach((effect) => {
                 const sourceUnit = getRuntimeSourceUnit(runtime);
                 const targetUnit = getEffectTargetUnit(runtime, effect.target || 'opponent');
-                const context = runtime.attackContext || runtime.defendContext || null;
+                const context = runtime.defendContext
+                    && runtime?.unit
+                    && runtime?.targetUnit
+                    && runtime.unit.id === runtime.targetUnit.id
+                    ? runtime.defendContext
+                    : (runtime.attackContext || runtime.defendContext || null);
                 const skill = runtime?.skill || null;
 
                 switch (effect.type) {
@@ -437,13 +503,16 @@
                     if (!context || !effect.field) {
                         return;
                     }
-                    if (effect.operation === 'add') {
-                        context[effect.field] = (context[effect.field] || 0) + (effect.value || 0);
-                        return;
-                    }
-                    if (effect.operation === 'set') {
-                        context[effect.field] = effect.value;
-                        return;
+                    {
+                        const resolvedValue = resolveEffectAmount(runtime, effect);
+                        if (effect.operation === 'add') {
+                            context[effect.field] = (context[effect.field] || 0) + resolvedValue;
+                            return;
+                        }
+                        if (effect.operation === 'set') {
+                            context[effect.field] = effect.amount ? resolvedValue : effect.value;
+                            return;
+                        }
                     }
                     if (effect.operation === 'addStatusPotencyScaled') {
                         const potency = getEffectStatusPotency(runtime, effect);
@@ -453,12 +522,28 @@
                         context[effect.field] = (context[effect.field] || 0) + ((effect.direction === 'subtract' ? -1 : 1) * magnitude);
                         return;
                     }
+                    if (effect.operation === 'addStatusCountScaled') {
+                        const count = getEffectStatusCount(runtime, effect);
+                        const magnitude = typeof effect.cap === 'number'
+                            ? Math.min(effect.cap, count * (effect.multiplier || 1))
+                            : count * (effect.multiplier || 1);
+                        context[effect.field] = (context[effect.field] || 0) + ((effect.direction === 'subtract' ? -1 : 1) * magnitude);
+                        return;
+                    }
                     if (effect.operation === 'setToOneMinusStatusPotencyScaled') {
                         const potency = getEffectStatusPotency(runtime, effect);
                         const reduction = typeof effect.cap === 'number'
                             ? Math.min(effect.cap, potency * (effect.multiplier || 0))
                             : potency * (effect.multiplier || 0);
                         context[effect.field] = 1 - reduction;
+                        return;
+                    }
+                    if (effect.operation === 'setToOnePlusStatusCountScaled') {
+                        const count = getEffectStatusCount(runtime, effect);
+                        const bonus = typeof effect.cap === 'number'
+                            ? Math.min(effect.cap, count * (effect.multiplier || 0))
+                            : count * (effect.multiplier || 0);
+                        context[effect.field] = 1 + bonus;
                     }
                     return;
                 case 'modifyCoinMap':
@@ -491,15 +576,22 @@
                     if (!targetUnit) {
                         return;
                     }
-                    targetUnit.turnState.defenseLevelModifier = (targetUnit.turnState.defenseLevelModifier || 0) + (effect.value || 0);
+                    modifyUnitLevel(targetBattle, targetUnit, effect, runtime, 'defenseLevelModifier', 'defense_level_modified');
+                    return;
+                case 'modifyOffenseLevel':
+                    if (!targetUnit) {
+                        return;
+                    }
+                    modifyUnitLevel(targetBattle, targetUnit, effect, runtime, 'offenseLevelModifier', 'offense_level_modified');
                     return;
                 case 'healHp':
-                    if (!targetUnit || typeof effect.value !== 'number') {
+                    if (!targetUnit) {
                         return;
                     }
                     {
+                        const healAmount = Math.max(0, Math.round(resolveEffectAmount(runtime, effect)));
                         const previousHp = targetUnit.hp;
-                        targetUnit.hp = Math.min(targetUnit.maxHp, targetUnit.hp + effect.value);
+                        targetUnit.hp = Math.min(targetUnit.maxHp, targetUnit.hp + healAmount);
                         if (targetUnit.hp !== previousHp && typeof emitEvent === 'function') {
                             emitEvent(targetBattle, 'hp_healed', {
                                 unitId: targetUnit.id,
@@ -518,16 +610,27 @@
                     adjustUnitStatus(targetBattle, targetUnit, effect);
                     return;
                 case 'modifySpeed':
-                    if (!targetUnit || typeof effect.value !== 'number') {
+                    if (!targetUnit) {
                         return;
                     }
-                    modifyUnitSpeed(targetBattle, targetUnit, effect);
+                    modifyUnitSpeed(targetBattle, targetUnit, effect, runtime);
                     return;
                 case 'retargetSlot':
                     if (!effect.selector) {
                         return;
                     }
                     retargetSlot(targetBattle, runtime, effect);
+                    return;
+                case 'burstTremor':
+                    if (!targetUnit || typeof burstTremor !== 'function') {
+                        return;
+                    }
+                    burstTremor(targetBattle, sourceUnit, targetUnit, {
+                        ...effect,
+                        resolvedAmount: effect.amount != null || typeof effect.value === 'number'
+                            ? resolveEffectAmount(runtime, effect)
+                            : null,
+                    }, runtime);
                     return;
                 case 'consumeStatus':
                     if (!targetUnit || !effect.statusId || typeof getStatus !== 'function' || typeof removeStatus !== 'function') {

@@ -214,6 +214,7 @@
             if (!passiveEffectRunner && typeof battleModules.createPassiveEffectRunner === 'function') {
                 passiveEffectRunner = battleModules.createPassiveEffectRunner({
                     getStatusPotency,
+                    getStatusCount,
                     getStatus,
                     removeStatus,
                     applyStatus,
@@ -234,6 +235,7 @@
                     refreshRedirectedTargets,
                     refreshSpeedOrder,
                     ensureActivePlayerSlot,
+                    burstTremor,
                 });
             }
 
@@ -460,6 +462,14 @@
             return getStatus(unit, statusId)?.potency || 0;
         }
 
+        function getCurrentStaggerThreshold(unit) {
+            if (!Array.isArray(unit?.staggerThresholds)) {
+                return null;
+            }
+
+            return unit.staggerThresholds[unit.staggerThresholdIndex] ?? null;
+        }
+
         function removeStatus(unit, statusId) {
             unit.statuses = (Array.isArray(unit.statuses) ? unit.statuses : []).filter((status) => status?.id !== statusId);
         }
@@ -492,6 +502,109 @@
             triggerStatusLifecycleHook(targetBattle, unit, 'statusExpired', statusId, {
                 status: { ...status },
             });
+            return true;
+        }
+
+        function burstTremor(targetBattle, sourceUnit, unit, effect, runtime) {
+            if (!targetBattle || !unit) {
+                return false;
+            }
+
+            const tremor = getStatus(unit, 'tremor');
+            if (!tremor || (tremor.count || 0) <= 0) {
+                return false;
+            }
+
+            const currentThreshold = getCurrentStaggerThreshold(unit);
+            if (!isFinite(currentThreshold)) {
+                return false;
+            }
+
+            const burstAmount = Math.max(
+                0,
+                Math.round(
+                    typeof effect?.resolvedAmount === 'number'
+                        ? effect.resolvedAmount
+                        : (
+                            typeof effect?.amount === 'number'
+                                ? effect.amount
+                                : (
+                                    effect?.amount?.statusPotency
+                                        ? getStatusPotency(unit, effect.amount.statusPotency.statusId || 'tremor') * (effect.amount.multiplier || 1)
+                                        : (
+                                            typeof effect?.value === 'number'
+                                                ? effect.value
+                                                : getStatusPotency(unit, 'tremor')
+                                        )
+                                )
+                        ),
+                ),
+            );
+
+            if (burstAmount <= 0) {
+                return false;
+            }
+
+            const nextThresholdIndex = unit.staggerThresholdIndex + 1;
+            const lowerBound = isFinite(unit.staggerThresholds[nextThresholdIndex])
+                ? unit.staggerThresholds[nextThresholdIndex] + 1
+                : 1;
+            const nextThreshold = clamp(currentThreshold + burstAmount, lowerBound, unit.maxHp - 1);
+            unit.staggerThresholds[unit.staggerThresholdIndex] = nextThreshold;
+
+            emitEvent(targetBattle, 'status_triggered', {
+                unitId: unit.id,
+                unitName: unit.name,
+                statusId: 'tremor',
+                damage: burstAmount,
+                hp: unit.hp,
+            });
+            emitEvent(targetBattle, 'tremor_burst', {
+                unitId: unit.id,
+                unitName: unit.name,
+                sourceUnitId: sourceUnit?.id || null,
+                sourceUnitName: sourceUnit?.name || null,
+                previousThreshold: currentThreshold,
+                nextThreshold,
+                burstAmount,
+            });
+
+            if (unit.hp <= nextThreshold) {
+                applyStaggerFromDamage(targetBattle, unit, sourceUnit || runtime?.sourceUnit || null, nextThreshold + 1, unit.hp);
+            }
+
+            const previousCount = tremor.count || 0;
+            tremor.count = clampStatusValue(previousCount - 1, getStatusCountCap('tremor'));
+            emitEvent(targetBattle, 'status_changed', {
+                unitId: unit.id,
+                unitName: unit.name,
+                statusId: 'tremor',
+                previousPotency: tremor.potency || 0,
+                previousCount,
+                nextPotency: tremor.potency || 0,
+                nextCount: tremor.count,
+            });
+            triggerStatusLifecycleHook(targetBattle, unit, 'statusChanged', 'tremor', {
+                status: tremor,
+                previousPotency: tremor.potency || 0,
+                previousCount,
+                nextPotency: tremor.potency || 0,
+                nextCount: tremor.count,
+            });
+
+            if (shouldExpireStatus(tremor)) {
+                const expiredStatus = { ...tremor };
+                removeStatus(unit, 'tremor');
+                emitEvent(targetBattle, 'status_expired', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    statusId: 'tremor',
+                });
+                triggerStatusLifecycleHook(targetBattle, unit, 'statusExpired', 'tremor', {
+                    status: expiredStatus,
+                });
+            }
+
             return true;
         }
 
@@ -988,7 +1101,8 @@
         }
 
         function getSkillOffenseLevel(unit, skill) {
-            return Math.max(1, unit.level + (skill.offenseLevel || 0));
+            const modifier = unit.turnState?.offenseLevelModifier || 0;
+            return Math.max(1, unit.level + modifier + (skill.offenseLevel || 0));
         }
 
         function getDefenseLevel(unit) {
@@ -1099,6 +1213,7 @@
         const applySkillEffects = typeof battleModules.createSkillEffectRunner === 'function'
             ? battleModules.createSkillEffectRunner({
                 getStatusPotency,
+                getStatusCount,
                 getStatus,
                 removeStatus,
                 applyStatus,
@@ -1119,6 +1234,7 @@
                 refreshRedirectedTargets,
                 refreshSpeedOrder,
                 ensureActivePlayerSlot,
+                burstTremor,
             })
             : (() => {});
 
@@ -1395,8 +1511,8 @@
 
                 const isCritical = rollCritical(targetBattle, attacker);
                 const finalPower = roll.power + (isCritical ? (attackContext.critFinalPowerBonusByCoin[coinIndex + 1] || 0) : 0);
-                const damage = calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
                 const previousHp = defender.hp;
+                const previewDamage = calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
 
                 invokeHooks(defender, 'beforeDamage', {
                     battle: targetBattle,
@@ -1405,12 +1521,15 @@
                     opponent: attacker,
                     targetUnit: defender,
                     skill,
+                    attackContext,
+                    defendContext,
                     finalPower,
-                    damage,
+                    damage: previewDamage,
                     previousHp,
-                    nextHp: Math.max(0, defender.hp - damage),
+                    nextHp: Math.max(0, defender.hp - previewDamage),
                     isCritical,
                 });
+                const damage = calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
                 defender.hp = clamp(defender.hp - damage, 0, defender.maxHp);
                 applyStaggerFromDamage(targetBattle, defender, attacker, previousHp, defender.hp);
                 invokeHooks(defender, 'afterDamage', {
@@ -1420,6 +1539,8 @@
                     opponent: attacker,
                     targetUnit: defender,
                     skill,
+                    attackContext,
+                    defendContext,
                     finalPower,
                     damage,
                     previousHp,
@@ -1765,8 +1886,9 @@
                     evadeBroken = true;
                 }
 
-                const damage = calculateHitDamage(attacker, attackSkill, defender, finalPower, attackContext, { damageReductionMultiplier: 1 }, isCritical);
+                const defendContext = { damageReductionMultiplier: 1 };
                 const previousHp = defender.hp;
+                const previewDamage = calculateHitDamage(attacker, attackSkill, defender, finalPower, attackContext, defendContext, isCritical);
                 invokeHooks(defender, 'beforeDamage', {
                     battle: targetBattle,
                     unit: defender,
@@ -1774,12 +1896,15 @@
                     opponent: attacker,
                     targetUnit: defender,
                     skill: attackSkill,
+                    attackContext,
+                    defendContext,
                     finalPower,
-                    damage,
+                    damage: previewDamage,
                     previousHp,
-                    nextHp: Math.max(0, defender.hp - damage),
+                    nextHp: Math.max(0, defender.hp - previewDamage),
                     isCritical,
                 });
+                const damage = calculateHitDamage(attacker, attackSkill, defender, finalPower, attackContext, defendContext, isCritical);
                 defender.hp = clamp(defender.hp - damage, 0, defender.maxHp);
                 applyStaggerFromDamage(targetBattle, defender, attacker, previousHp, defender.hp);
                 invokeHooks(defender, 'afterDamage', {
@@ -1789,6 +1914,8 @@
                     opponent: attacker,
                     targetUnit: defender,
                     skill: attackSkill,
+                    attackContext,
+                    defendContext,
                     finalPower,
                     damage,
                     previousHp,

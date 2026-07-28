@@ -121,19 +121,20 @@
             return;
         }
 
-        if (amount.statusPotency) {
-            const statusPotency = amount.statusPotency;
-            if (typeof statusPotency !== 'object' || Array.isArray(statusPotency)) {
-                pushError(errors, `${path}.statusPotency`, 'must be an object.');
+        if (amount.statusPotency || amount.statusCount) {
+            const amountKey = amount.statusPotency ? 'statusPotency' : 'statusCount';
+            const amountSource = amount[amountKey];
+            if (typeof amountSource !== 'object' || Array.isArray(amountSource)) {
+                pushError(errors, `${path}.${amountKey}`, 'must be an object.');
                 return;
             }
-            if (!statusPotency.statusId || typeof statusPotency.statusId !== 'string') {
-                pushError(errors, `${path}.statusPotency.statusId`, 'must be a non-empty string.');
-            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(statusPotency.statusId)) {
-                pushError(errors, `${path}.statusPotency.statusId`, 'must reference a supported status id.');
+            if (!amountSource.statusId || typeof amountSource.statusId !== 'string') {
+                pushError(errors, `${path}.${amountKey}.statusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(amountSource.statusId)) {
+                pushError(errors, `${path}.${amountKey}.statusId`, 'must reference a supported status id.');
             }
-            if (statusPotency.target != null && !['self', 'opponent'].includes(statusPotency.target)) {
-                pushError(errors, `${path}.statusPotency.target`, 'must be "self" or "opponent" when provided.');
+            if (amountSource.target != null && !['self', 'opponent'].includes(amountSource.target)) {
+                pushError(errors, `${path}.${amountKey}.target`, 'must be "self" or "opponent" when provided.');
             }
             if (amount.multiplier != null && !isFiniteNumber(amount.multiplier)) {
                 pushError(errors, `${path}.multiplier`, 'must be a number when provided.');
@@ -421,8 +422,12 @@
             break;
         case 'healHp':
         case 'modifyDefenseLevel':
+        case 'modifyOffenseLevel':
         case 'modifySpeed':
-            if (!isFiniteNumber(effect.value)) {
+        case 'burstTremor':
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (!isFiniteNumber(effect.value)) {
                 pushError(errors, `${path}.value`, 'must be a number.');
             }
             if (effect.reason != null && typeof effect.reason !== 'string') {
@@ -455,14 +460,20 @@
             if (!effect.operation || typeof effect.operation !== 'string') {
                 pushError(errors, `${path}.operation`, 'must be provided.');
             }
-            if (!['add', 'set', 'addStatusPotencyScaled', 'setToOneMinusStatusPotencyScaled'].includes(effect.operation)) {
+            if (!['add', 'set', 'addStatusPotencyScaled', 'addStatusCountScaled', 'setToOneMinusStatusPotencyScaled', 'setToOnePlusStatusCountScaled'].includes(effect.operation)) {
                 pushError(errors, `${path}.operation`, 'is not a supported context operation.');
             }
-            if (effect.operation === 'add' && !isFiniteNumber(effect.value)) {
+            if (effect.operation === 'add' && effect.amount == null && !isFiniteNumber(effect.value)) {
                 pushError(errors, `${path}.value`, 'must be a number for add operations.');
             }
-            if (effect.operation === 'set' && typeof effect.value === 'undefined') {
+            if (effect.operation === 'add' && effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            }
+            if (effect.operation === 'set' && typeof effect.value === 'undefined' && effect.amount == null) {
                 pushError(errors, `${path}.value`, 'must be provided for set operations.');
+            }
+            if (effect.operation === 'set' && effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
             }
             if (effect.operation === 'addStatusPotencyScaled' || effect.operation === 'setToOneMinusStatusPotencyScaled') {
                 if (!effect.statusId || typeof effect.statusId !== 'string') {
@@ -475,7 +486,18 @@
                     pushError(errors, `${path}.cap`, 'must be a positive number when provided.');
                 }
             }
-            if (effect.operation === 'addStatusPotencyScaled' && effect.direction != null && !['add', 'subtract'].includes(effect.direction)) {
+            if (effect.operation === 'addStatusCountScaled' || effect.operation === 'setToOnePlusStatusCountScaled') {
+                if (!effect.statusId || typeof effect.statusId !== 'string') {
+                    pushError(errors, `${path}.statusId`, 'must be a non-empty string for status-scaled context operations.');
+                }
+                if (!isFiniteNumber(effect.multiplier)) {
+                    pushError(errors, `${path}.multiplier`, 'must be a number for status-scaled context operations.');
+                }
+                if (effect.cap != null && (!isFiniteNumber(effect.cap) || effect.cap <= 0)) {
+                    pushError(errors, `${path}.cap`, 'must be a positive number when provided.');
+                }
+            }
+            if ((effect.operation === 'addStatusPotencyScaled' || effect.operation === 'addStatusCountScaled') && effect.direction != null && !['add', 'subtract'].includes(effect.direction)) {
                 pushError(errors, `${path}.direction`, 'must be "add" or "subtract" when provided.');
             }
             break;

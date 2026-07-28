@@ -97,17 +97,27 @@ Supported `type` values (current):
 - `modifyPhysicalResistance`
 - `modifySinResistance`
 - `modifyDefenseLevel`
+- `modifyOffenseLevel`
 - `modifySpeed`
 - `retargetSlot`
+- `burstTremor`
 - `consumeStatus`
 
 Selected effect notes:
+- most numeric effect bodies can now use either:
+  - `value: number`
+  - `amount: number | { statusPotency: { statusId, target? }, multiplier? } | { statusCount: { statusId, target? }, multiplier? }`
 - `healHp`
   - `value: number`
 - `adjustStatus`
   - `statusId: string`
   - `potencyDelta?: number`
   - `countDelta?: number`
+- `modifyContext`
+  - `operation: "add" | "set" | "addStatusPotencyScaled" | "addStatusCountScaled" | "setToOneMinusStatusPotencyScaled" | "setToOnePlusStatusCountScaled"`
+- `modifyOffenseLevel`
+  - `value?: number`
+  - `amount?: AmountDefinition`
 - `modifyPhysicalResistance`
   - `damageType: "slash" | "pierce" | "blunt"`
   - `value: number`
@@ -117,8 +127,11 @@ Selected effect notes:
   - `value: number`
   - `operation?: "multiplyBase" | "multiplyCurrent"`
 - `modifySpeed`
-  - `value: number`
+  - `value?: number`
+  - `amount?: AmountDefinition`
   - `operation?: "add" | "set"`
+- `burstTremor`
+  - defaults to the target's current `tremor` potency when no `value`/`amount` is provided
 - `retargetSlot`
   - `selector: "sourceUnit" | "targetUnit" | "firstLivingOpponent" | "firstLivingAlly" | "mirrorOpponent"`
   - `lockTarget?: boolean`
