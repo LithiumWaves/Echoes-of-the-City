@@ -1696,6 +1696,208 @@ function runSuite() {
         }
     });
 
+    test('Golden snapshot: redirect clash overrides enemy intent', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills, speed) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const redirectSkill = {
+            id: 'taunt_slash',
+            name: 'Taunt Slash',
+            skillType: 'attack',
+            basePower: 6,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const evadeSkill = {
+            id: 'evade',
+            name: 'Evade',
+            skillType: 'evade',
+            basePower: 8,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const enemyStrong = {
+            id: 'strike',
+            name: 'Strike',
+            skillType: 'attack',
+            basePower: 4,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const enemyWeak = {
+            id: 'stab',
+            name: 'Stab',
+            skillType: 'attack',
+            basePower: 4,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'golden-snapshot-redirect',
+            name: 'Golden Snapshot Redirect',
+            playerUnits: [
+                createUnit('ally1', 'Ally 1', [redirectSkill], 5),
+                createUnit('ally2', 'Ally 2', [evadeSkill], 1),
+            ],
+            enemyUnits: [
+                createUnit('enemy1', 'Enemy 1', [enemyStrong], 4),
+                createUnit('enemy2', 'Enemy 2', [enemyWeak], 2),
+            ],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [false, false],
+            'player-slot-2': [false],
+            'enemy-slot-1': [false],
+            'enemy-slot-2': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('taunt_slash');
+            engine.selectTarget('enemy-slot-2');
+
+            engine.selectSlot('player-slot-2');
+            engine.selectSkill('evade');
+            engine.selectTarget('enemy-slot-1');
+
+            engine.resolveTurn();
+
+            const relevantTypes = new Set([
+                'battle_started',
+                'turn_started',
+                'slot_speed_rolled',
+                'enemy_intent_set',
+                'skill_selected',
+                'target_selected',
+                'resolution_queue_built',
+                'engagement_started',
+                'clash_round',
+                'clash_won',
+                'sanity_changed',
+                'hit_resolved',
+            ]);
+
+            const stream = engine.getState().events
+                .filter((event) => relevantTypes.has(event.type))
+                .map((event) => {
+                    const data = event.data || {};
+                    if (event.type === 'battle_started') {
+                        return { type: event.type };
+                    }
+                    if (event.type === 'turn_started') {
+                        return { type: event.type, turn: data.turn };
+                    }
+                    if (event.type === 'slot_speed_rolled') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, speed: data.speed };
+                    }
+                    if (event.type === 'enemy_intent_set') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, skillName: data.skillName, targetLabel: data.targetLabel };
+                    }
+                    if (event.type === 'skill_selected') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, skillName: data.skillName };
+                    }
+                    if (event.type === 'target_selected') {
+                        return { type: event.type, unitName: data.unitName, slotLabel: data.slotLabel, targetLabel: data.targetLabel };
+                    }
+                    if (event.type === 'resolution_queue_built') {
+                        return { type: event.type, queueLabel: data.queueLabel };
+                    }
+                    if (event.type === 'engagement_started') {
+                        if (data.engagementType === 'clash') {
+                            return { type: event.type, engagementType: 'clash', leftUnitName: data.leftUnitName, rightUnitName: data.rightUnitName, leftSkillName: data.leftSkillName, rightSkillName: data.rightSkillName };
+                        }
+                        return { type: event.type, engagementType: 'one-sided', attackerName: data.attackerName, defenderName: data.defenderName, skillName: data.skillName };
+                    }
+                    if (event.type === 'clash_round') {
+                        return { type: event.type, index: data.index, result: data.result, roundWinnerName: data.roundWinnerName, roundLoserName: data.roundLoserName };
+                    }
+                    if (event.type === 'clash_won') {
+                        return { type: event.type, winnerName: data.winnerName, loserName: data.loserName, remainingCoins: data.remainingCoins };
+                    }
+                    if (event.type === 'sanity_changed') {
+                        return { type: event.type, unitName: data.unitName, previousSp: data.previousSp, nextSp: data.nextSp, reason: data.reason };
+                    }
+                    if (event.type === 'hit_resolved') {
+                        return { type: event.type, attackerName: data.attackerName, defenderName: data.defenderName, skillName: data.skillName, coinFace: data.coinFace, damage: data.damage };
+                    }
+                    return { type: event.type };
+                });
+
+            const expected = [
+                { type: 'battle_started' },
+                { type: 'turn_started', turn: 1 },
+                { type: 'slot_speed_rolled', unitName: 'Ally 1', slotLabel: 'Slot 1', speed: 5 },
+                { type: 'slot_speed_rolled', unitName: 'Ally 2', slotLabel: 'Slot 2', speed: 1 },
+                { type: 'slot_speed_rolled', unitName: 'Enemy 1', slotLabel: 'Slot 1', speed: 4 },
+                { type: 'slot_speed_rolled', unitName: 'Enemy 2', slotLabel: 'Slot 2', speed: 2 },
+                { type: 'enemy_intent_set', unitName: 'Enemy 1', slotLabel: 'Slot 1', skillName: 'Strike', targetLabel: 'Ally 1 Slot 1' },
+                { type: 'enemy_intent_set', unitName: 'Enemy 2', slotLabel: 'Slot 2', skillName: 'Stab', targetLabel: 'Ally 2 Slot 2' },
+                { type: 'skill_selected', unitName: 'Ally 1', slotLabel: 'Slot 1', skillName: 'Taunt Slash' },
+                { type: 'target_selected', unitName: 'Ally 1', slotLabel: 'Slot 1', targetLabel: 'Enemy 2 Slot 2' },
+                { type: 'skill_selected', unitName: 'Ally 2', slotLabel: 'Slot 2', skillName: 'Evade' },
+                { type: 'target_selected', unitName: 'Ally 2', slotLabel: 'Slot 2', targetLabel: 'Enemy 1 Slot 1' },
+                { type: 'resolution_queue_built', queueLabel: 'Ally 1 Slot 1 (5), Enemy 1 Slot 1 (4), Enemy 2 Slot 2 (2), Ally 2 Slot 2 (1)' },
+                { type: 'engagement_started', engagementType: 'clash', leftUnitName: 'Ally 1', rightUnitName: 'Enemy 2', leftSkillName: 'Taunt Slash', rightSkillName: 'Stab' },
+                { type: 'clash_round', index: 1, result: 'left-win', roundWinnerName: 'Ally 1', roundLoserName: 'Enemy 2' },
+                { type: 'clash_won', winnerName: 'Ally 1', loserName: 'Enemy 2', remainingCoins: 1 },
+                { type: 'sanity_changed', unitName: 'Ally 1', previousSp: 0, nextSp: 5, reason: 'clash win' },
+                { type: 'sanity_changed', unitName: 'Enemy 2', previousSp: 0, nextSp: -5, reason: 'clash loss' },
+                { type: 'hit_resolved', attackerName: 'Ally 1', defenderName: 'Enemy 2', skillName: 'Taunt Slash', coinFace: 'Tails', damage: 6 },
+                { type: 'engagement_started', engagementType: 'one-sided', attackerName: 'Enemy 1', defenderName: 'Ally 1', skillName: 'Strike' },
+                { type: 'hit_resolved', attackerName: 'Enemy 1', defenderName: 'Ally 1', skillName: 'Strike', coinFace: 'Tails', damage: 4 },
+            ];
+
+            assert(stableStringify(stream) === stableStringify(expected), `Unexpected redirect stream:\n${JSON.stringify(stream, null, 2)}`);
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
     test('Export/import round-trip for a shipped battle pack', () => {
         const sourceModules = createBattleEnvironment();
         requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses'));
