@@ -13,12 +13,17 @@
         'clashPowerBonus',
         'damageMultiplier',
         'damageReductionMultiplier',
+        'damageReductionFlat',
+        'minHpAfterDamage',
+        'weakResistanceDamageBonus',
         'criticalBonus',
         'staticDamageBonus',
         'dynamicDamageBonus',
         'clashRoundBonus',
         'observationBonus',
         'additiveDamage',
+        'healingMultiplier',
+        'healingFlatBonus',
         'forceCoinZero',
     ]);
     const COIN_MAP_FIELDS = new Set([
@@ -42,9 +47,11 @@
         'mirrorOpponent',
     ]);
     const HOOK_BLOCK_ONCE_PER = new Set(['battle', 'turn', 'skill', 'coin']);
+    const EFFECT_TARGETS = new Set(['self', 'opponent', 'allAllies', 'allOpponents']);
     const HOOK_CONDITION_TYPES = new Set([
         'always',
         'damageAtLeast',
+        'damageSourceIs',
         'hasStatus',
         'statusPotencyAtLeast',
         'statusPotencyAtOrBelow',
@@ -58,6 +65,8 @@
         'coinIndex',
         'criticalHit',
         'targetStaggered',
+        'hpAtOrBelow',
+        'hpAtOrAbove',
         'hpPercentAtOrBelow',
         'hpPercentAtOrAbove',
         'spAtOrBelow',
@@ -306,12 +315,19 @@
                 pushError(errors, `${path}.value`, 'must be a supported status id.');
             }
             break;
+        case 'damageSourceIs':
+            if (condition.value != null && !['skill', 'status'].includes(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be "skill" or "status" when provided.');
+            }
+            break;
         case 'coinIndex':
             if (!Number.isInteger(condition.value) || condition.value <= 0) {
                 pushError(errors, `${path}.value`, 'must be a positive integer.');
             }
             break;
         case 'damageAtLeast':
+        case 'hpAtOrBelow':
+        case 'hpAtOrAbove':
         case 'hpPercentAtOrBelow':
         case 'hpPercentAtOrAbove':
         case 'spAtOrBelow':
@@ -410,8 +426,8 @@
             return;
         }
 
-        if (effect.target != null && !['self', 'opponent'].includes(effect.target)) {
-            pushError(errors, `${path}.target`, 'must be "self" or "opponent".');
+        if (effect.target != null && !EFFECT_TARGETS.has(effect.target)) {
+            pushError(errors, `${path}.target`, 'must be a supported target selector.');
         }
 
         if (effect.coinIndex != null && (!Number.isInteger(effect.coinIndex) || effect.coinIndex <= 0)) {
@@ -449,6 +465,25 @@
             if ((effect.type === 'applyStatus' || effect.type === 'queueStatus') && effect.countAmount != null) {
                 validateAmountDefinition(errors, effect.countAmount, `${path}.countAmount`);
             }
+            if (effect.excludeSelf != null && typeof effect.excludeSelf !== 'boolean') {
+                pushError(errors, `${path}.excludeSelf`, 'must be a boolean when provided.');
+            }
+            if (effect.maxTargets != null && (!Number.isInteger(effect.maxTargets) || effect.maxTargets <= 0)) {
+                pushError(errors, `${path}.maxTargets`, 'must be a positive integer when provided.');
+            }
+            if (effect.maxTargetsAmount != null) {
+                validateAmountDefinition(errors, effect.maxTargetsAmount, `${path}.maxTargetsAmount`);
+            }
+            if (effect.prioritizeStatusId != null) {
+                if (typeof effect.prioritizeStatusId !== 'string' || !effect.prioritizeStatusId) {
+                    pushError(errors, `${path}.prioritizeStatusId`, 'must be a non-empty string when provided.');
+                } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.prioritizeStatusId)) {
+                    pushError(errors, `${path}.prioritizeStatusId`, 'must reference a supported status id.');
+                }
+            }
+            if (effect.prioritizeOrder != null && !['asc', 'desc'].includes(effect.prioritizeOrder)) {
+                pushError(errors, `${path}.prioritizeOrder`, 'must be "asc" or "desc" when provided.');
+            }
             break;
         case 'dealFixedDamage':
             validateAmountDefinition(errors, effect.amount, `${path}.amount`);
@@ -474,6 +509,10 @@
             }
             break;
         case 'healHp':
+        case 'healHpPercent':
+        case 'setSanity':
+        case 'reviveUnit':
+        case 'recoverStagger':
         case 'modifyDefenseLevel':
         case 'modifyOffenseLevel':
         case 'modifySpeed':

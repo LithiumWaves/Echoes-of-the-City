@@ -1219,6 +1219,11 @@
                 return 0;
             }
 
+            const defendContext = {
+                damageReductionMultiplier: 1,
+                damageReductionFlat: 0,
+                minHpAfterDamage: 0,
+            };
             const previousHp = unit.hp;
             const previewShieldState = absorbDamageWithShields({
                 ...targetBattle,
@@ -1232,13 +1237,25 @@
                 battle: targetBattle,
                 unit,
                 sourceUnit: null,
+                damageSource: 'status',
                 statusId,
+                defendContext,
                 damage: appliedDamage,
                 previousHp,
                 nextHp: Math.max(0, unit.hp - previewShieldState.remainingDamage),
             });
-            const shieldState = absorbDamageWithShields(targetBattle, unit, appliedDamage);
-            unit.hp = clamp(unit.hp - shieldState.remainingDamage, 0, unit.maxHp);
+            const reducedFlat = typeof defendContext.damageReductionFlat === 'number' && Number.isFinite(defendContext.damageReductionFlat)
+                ? Math.round(defendContext.damageReductionFlat)
+                : 0;
+            const reducedMultiplier = typeof defendContext.damageReductionMultiplier === 'number' && Number.isFinite(defendContext.damageReductionMultiplier)
+                ? defendContext.damageReductionMultiplier
+                : 1;
+            const reducedDamage = Math.max(0, Math.round((appliedDamage * reducedMultiplier) - reducedFlat));
+            const shieldState = absorbDamageWithShields(targetBattle, unit, reducedDamage);
+            const minimumHp = typeof defendContext.minHpAfterDamage === 'number' && Number.isFinite(defendContext.minHpAfterDamage)
+                ? Math.max(0, Math.round(defendContext.minHpAfterDamage))
+                : 0;
+            unit.hp = clamp(Math.max(minimumHp, unit.hp - shieldState.remainingDamage), 0, unit.maxHp);
             emitEvent(targetBattle, 'status_triggered', {
                 unitId: unit.id,
                 unitName: unit.name,
@@ -1258,7 +1275,9 @@
                 battle: targetBattle,
                 unit,
                 sourceUnit: null,
+                damageSource: 'status',
                 statusId,
+                defendContext,
                 damage: shieldState.remainingDamage,
                 previousHp,
                 nextHp: unit.hp,
@@ -1460,6 +1479,7 @@
                 modifiers: {
                     attack: {
                         damageMultiplier: attackContext?.damageMultiplier || 1,
+                        weakResistanceDamageBonus: attackContext?.weakResistanceDamageBonus || 0,
                         staticDamageBonus: getCoinScopedBonus(attackContext, 'staticDamageBonus'),
                         dynamicDamageBonus: getCoinScopedBonus(attackContext, 'dynamicDamageBonus'),
                         clashRoundBonus: getCoinScopedBonus(attackContext, 'clashRoundBonus'),
@@ -1472,6 +1492,7 @@
                         staticDamageBonus: getCoinScopedBonus(defendContext, 'staticDamageBonus'),
                         dynamicDamageBonus: getCoinScopedBonus(defendContext, 'dynamicDamageBonus'),
                         damageReductionMultiplier: defendContext?.damageReductionMultiplier ?? 1,
+                        damageReductionFlat: defendContext?.damageReductionFlat ?? 0,
                     },
                 },
             };
@@ -1491,37 +1512,44 @@
             const critDamageMultiplier = isCritical
                 ? 1.2 * (1 + damageContext.modifiers.attack.criticalBonus)
                 : 1;
-            return Math.max(
-                1,
-                Math.round(
-                    (
-                        finalPower
-                        * (
-                            isUnitStaggered(defender)
-                                ? Math.max(
-                                    2,
-                                    defender.turnState?.physicalResistanceOverrides?.[skill?.damageType]
-                                    ?? defender.turnState?.resistanceOverrides?.[skill?.damageType]
-                                    ?? defender.resistances?.physical?.[skill?.damageType]
-                                    ?? 1,
-                                )
-                                : (
-                                    defender.turnState?.physicalResistanceOverrides?.[skill?.damageType]
-                                    ?? defender.turnState?.resistanceOverrides?.[skill?.damageType]
-                                    ?? defender.resistances?.physical?.[skill?.damageType]
-                                    ?? 1
-                                )
-                        )
-                    * (skill?.sinType ? (defender.turnState?.sinResistanceOverrides?.[skill.sinType] || defender.resistances?.sin?.[skill.sinType] || 1) : 1)
+            const physicalResistance = isUnitStaggered(defender)
+                ? Math.max(
+                    2,
+                    defender.turnState?.physicalResistanceOverrides?.[skill?.damageType]
+                    ?? defender.turnState?.resistanceOverrides?.[skill?.damageType]
+                    ?? defender.resistances?.physical?.[skill?.damageType]
+                    ?? 1,
+                )
+                : (
+                    defender.turnState?.physicalResistanceOverrides?.[skill?.damageType]
+                    ?? defender.turnState?.resistanceOverrides?.[skill?.damageType]
+                    ?? defender.resistances?.physical?.[skill?.damageType]
+                    ?? 1
+                );
+            const sinResistance = skill?.sinType
+                ? (defender.turnState?.sinResistanceOverrides?.[skill.sinType] || defender.resistances?.sin?.[skill?.sinType] || 1)
+                : 1;
+            const weakBonus = (physicalResistance > 1 || sinResistance > 1)
+                ? (1 + (damageContext.modifiers.attack.weakResistanceDamageBonus || 0))
+                : 1;
+            const rawDamage = Math.round(
+                (
+                    finalPower
+                    * physicalResistance
+                    * sinResistance
                     * levelModifier
                     * protectionModifier
                     * damageContext.modifiers.attack.damageMultiplier
+                    * weakBonus
                     * critDamageMultiplier
                     * damageContext.modifiers.defense.damageReductionMultiplier
-                    )
-                    + damageContext.modifiers.attack.additiveDamage,
-                ),
+                )
+                + damageContext.modifiers.attack.additiveDamage,
             );
+            const reducedFlat = typeof damageContext.modifiers.defense.damageReductionFlat === 'number'
+                ? Math.round(damageContext.modifiers.defense.damageReductionFlat)
+                : 0;
+            return Math.max(1, Math.max(0, rawDamage - reducedFlat));
         }
         const applySkillEffects = typeof battleModules.createSkillEffectRunner === 'function'
             ? battleModules.createSkillEffectRunner({
@@ -1773,6 +1801,9 @@
                 clashPowerBonus: 0,
                 damageMultiplier: 1,
                 damageReductionMultiplier: 1,
+                damageReductionFlat: 0,
+                minHpAfterDamage: 0,
+                weakResistanceDamageBonus: 0,
                 criticalBonus: 0,
                 staticDamageBonus: 0,
                 dynamicDamageBonus: 0,
@@ -2071,6 +2102,8 @@
                     skill,
                     attackContext,
                     defendContext,
+                    statusId: 'skill',
+                    damageSource: 'skill',
                     finalPower,
                     damage: previewDamage,
                     previousHp,
@@ -2079,7 +2112,10 @@
                 });
                 const damage = calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
                 const shieldState = absorbDamageWithShields(targetBattle, defender, damage);
-                defender.hp = clamp(defender.hp - shieldState.remainingDamage, 0, defender.maxHp);
+                const minimumHp = typeof defendContext.minHpAfterDamage === 'number' && Number.isFinite(defendContext.minHpAfterDamage)
+                    ? Math.max(0, Math.round(defendContext.minHpAfterDamage))
+                    : 0;
+                defender.hp = clamp(Math.max(minimumHp, defender.hp - shieldState.remainingDamage), 0, defender.maxHp);
                 applyStaggerFromDamage(targetBattle, defender, attacker, previousHp, defender.hp);
                 invokeHooks(defender, 'afterDamage', {
                     battle: targetBattle,
@@ -2090,6 +2126,8 @@
                     skill,
                     attackContext,
                     defendContext,
+                    statusId: 'skill',
+                    damageSource: 'skill',
                     finalPower,
                     damage: shieldState.remainingDamage,
                     previousHp,
@@ -2372,6 +2410,7 @@
             }
             const defenderContext = {
                 damageReductionMultiplier: 1,
+                damageReductionFlat: 0,
             };
             const hits = resolveOneSidedAttack(targetBattle, attacker, followUpSkill, defender, context, defenderContext, followUpSkill.coinCount);
             applyAttackEndEffects(targetBattle, attacker, followUpSkill, context);
@@ -2447,7 +2486,7 @@
                     evadeBroken = true;
                 }
 
-                const defendContext = { damageReductionMultiplier: 1 };
+                const defendContext = { damageReductionMultiplier: 1, damageReductionFlat: 0, minHpAfterDamage: 0 };
                 const previousHp = defender.hp;
                 const previewDamage = calculateHitDamage(attacker, attackSkill, defender, finalPower, attackContext, defendContext, isCritical);
                 const previewShieldState = absorbDamageWithShields({
@@ -2467,6 +2506,8 @@
                     skill: attackSkill,
                     attackContext,
                     defendContext,
+                    statusId: 'skill',
+                    damageSource: 'skill',
                     finalPower,
                     damage: previewDamage,
                     previousHp,
@@ -2475,7 +2516,10 @@
                 });
                 const damage = calculateHitDamage(attacker, attackSkill, defender, finalPower, attackContext, defendContext, isCritical);
                 const shieldState = absorbDamageWithShields(targetBattle, defender, damage);
-                defender.hp = clamp(defender.hp - shieldState.remainingDamage, 0, defender.maxHp);
+                const minimumHp = typeof defendContext.minHpAfterDamage === 'number' && Number.isFinite(defendContext.minHpAfterDamage)
+                    ? Math.max(0, Math.round(defendContext.minHpAfterDamage))
+                    : 0;
+                defender.hp = clamp(Math.max(minimumHp, defender.hp - shieldState.remainingDamage), 0, defender.maxHp);
                 applyStaggerFromDamage(targetBattle, defender, attacker, previousHp, defender.hp);
                 invokeHooks(defender, 'afterDamage', {
                     battle: targetBattle,
@@ -2486,6 +2530,8 @@
                     skill: attackSkill,
                     attackContext,
                     defendContext,
+                    statusId: 'skill',
+                    damageSource: 'skill',
                     finalPower,
                     damage: shieldState.remainingDamage,
                     previousHp,
@@ -2577,7 +2623,7 @@
                 counterSkill,
                 attacker,
                 defenseState.context,
-                { damageReductionMultiplier: 1 },
+                { damageReductionMultiplier: 1, damageReductionFlat: 0 },
                 counterSkill.coinCount,
             );
             applyAttackEndEffects(targetBattle, defender, counterSkill, defenseState.context);
@@ -2687,7 +2733,7 @@
                     winnerSkill,
                     clashLoserUnit,
                     winnerContext,
-                    { damageReductionMultiplier: 1 },
+                    { damageReductionMultiplier: 1, damageReductionFlat: 0 },
                     winnerSkill.coinCount,
                 );
                 const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
@@ -2841,7 +2887,7 @@
             const actingSkill = getSkillById(actingUnit, actingSlot.selectedSkillId);
             const attackContext = createSkillContext(targetBattle, actingUnit, actingSlot, actingSkill, targetUnit);
             const defendingSkill = getActiveDefenseSkill(targetBattle, targetSlot, actingSlot);
-            const defendContext = { damageReductionMultiplier: 1 };
+            const defendContext = { damageReductionMultiplier: 1, damageReductionFlat: 0 };
             const defenseState = ensureDefenseState(targetSlot);
 
             emitEvent(targetBattle, 'engagement_started', {
@@ -3435,8 +3481,6 @@
                     resolveOneSidedEngagement(battle, slot, targetSlot);
                     slot.resolved = true;
                 }
-
-                finalizeBattleOnDeaths(battle);
             }
 
             getAllUnits(battle).forEach((unit) => {

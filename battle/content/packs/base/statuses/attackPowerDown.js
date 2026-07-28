@@ -19,17 +19,24 @@
         hooks: {
             skillSelected: [
                 {
-                    type: 'modifyContext',
-                    target: 'self',
-                    field: 'flatPowerBonus',
-                    operation: 'add',
-                    amount: {
-                        multiplier: -1,
-                        statusPotency: {
+                    conditions: [
+                        { type: 'skillType', value: ['attack', 'counter'] },
+                    ],
+                    actions: [
+                        {
+                            type: 'modifyContext',
                             target: 'self',
-                            statusId: 'attack_power_down',
+                            field: 'flatPowerBonus',
+                            operation: 'add',
+                            amount: {
+                                multiplier: -1,
+                                statusPotency: {
+                                    target: 'self',
+                                    statusId: 'attack_power_down',
+                                },
+                            },
                         },
-                    },
+                    ],
                 },
             ],
             turnEnd: [

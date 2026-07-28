@@ -64,8 +64,10 @@
                 : 0;
             const protectionModifier = getProtectionModifier(protection);
             const damageMultiplier = attackModifiers.damageMultiplier ?? 1;
+            const weakResistanceBonus = attackModifiers.weakResistanceDamageBonus ?? 0;
             const additiveDamage = attackModifiers.additiveDamage || 0;
             const incomingReduction = defenseModifiers.damageReductionMultiplier ?? 1;
+            const flatReduction = defenseModifiers.damageReductionFlat ?? 0;
             const staticContributions = {
                 physicalResistance: resistance.physical - 1,
                 sinResistance: resistance.sin - 1,
@@ -79,6 +81,7 @@
             const dynamicContributions = {
                 protection: protectionModifier - 1,
                 damageMultiplier: damageMultiplier - 1,
+                weakResistanceBonus: ((resistance.physical > 1 || resistance.sin > 1) ? (1 + weakResistanceBonus) : 1) - 1,
                 incomingReduction: incomingReduction - 1,
                 attackBonus: attackModifiers.dynamicDamageBonus || 0,
                 defenseBonus: defenseModifiers.dynamicDamageBonus || 0,
@@ -94,9 +97,14 @@
                 1,
                 Math.floor(Math.max(preFloorDamage, minimumDamageFloor)),
             );
+            const reducedDamage = Math.max(0, rawDamage - Math.round(flatReduction));
+            const finalDamage = Math.max(
+                1,
+                reducedDamage,
+            );
 
             return {
-                damage: rawDamage,
+                damage: finalDamage,
                 breakdown: {
                     basePower,
                     resistance,
@@ -105,7 +113,9 @@
                     protection,
                     protectionModifier,
                     damageMultiplier,
+                    weakResistanceBonus,
                     incomingReduction,
+                    flatReduction,
                     staticContributions,
                     dynamicContributions,
                     staticMultiplier,
@@ -116,6 +126,8 @@
                     additiveDamage,
                     preFloorDamage,
                     minimumDamageFloor,
+                    rawDamage,
+                    reducedDamage,
                 },
             };
         }

@@ -35,6 +35,34 @@
         the_living_and_the_departed: { id: 'the_living_and_the_departed', label: 'The Living & The Departed' },
         tiantui_star: { id: 'tiantui_star', label: 'Tiantui Star [天退星]', countOnly: true },
         shin_tiantui_star: { id: 'shin_tiantui_star', label: 'Shin (心) - Tiantui Star [天退星]', countOnly: true },
+        power_up: { id: 'power_up', label: 'Power Up', countOnly: true },
+        weak_resist_dmg_boost: { id: 'weak_resist_dmg_boost', label: 'Weak-resist DMG Boost', countOnly: true },
+        hp_healing_boost: { id: 'hp_healing_boost', label: 'HP Healing Boost', countOnly: true },
+        rupture_protection: { id: 'rupture_protection', label: 'Rupture Protection', countOnly: true },
+        commanding_cry: { id: 'commanding_cry', label: 'Commanding Cry', countOnly: true },
+        unrelenting_storm: { id: 'unrelenting_storm', label: 'Unrelenting Storm', countOnly: true },
+        somatic_frisson_inspiring_melody: { id: 'somatic_frisson_inspiring_melody', label: 'Somatic Frisson-inspiring Melody', countOnly: true },
+        scarlet_moth: { id: 'scarlet_moth', label: 'Scarlet Moth', countOnly: true },
+        dark_cloud_blade: { id: 'dark_cloud_blade', label: 'Dark Cloud Blade', countOnly: true },
+        battle_ready: { id: 'battle_ready', label: 'Battle Ready', countOnly: true },
+        strider_wu: { id: 'strider_wu', label: 'Strider【Wu】', countOnly: true },
+        strider_mao: { id: 'strider_mao', label: 'Strider【Mao】', countOnly: true },
+        burgeoning_of_horns: { id: 'burgeoning_of_horns', label: 'Burgeoning of Horns [發角]', countOnly: true },
+        nebulizer_alpha: { id: 'nebulizer_alpha', label: 'Nebulizer α', countOnly: true },
+        nebulizer_beta: { id: 'nebulizer_beta', label: 'Nebulizer β', countOnly: true },
+        grace_of_the_prescript: { id: 'grace_of_the_prescript', label: 'Grace of the Prescript', countOnly: true },
+        unlock: { id: 'unlock', label: 'Unlock', countOnly: true },
+        unlock_i: { id: 'unlock_i', label: 'Unlock - I', countOnly: true },
+        unlock_ii: { id: 'unlock_ii', label: 'Unlock - II', countOnly: true },
+        unlock_iii: { id: 'unlock_iii', label: 'Unlock - III', countOnly: true },
+        mark_of_the_prescript: { id: 'mark_of_the_prescript', label: 'Mark of the Prescript', countOnly: true },
+        the_prescripts_target: { id: 'the_prescripts_target', label: "The Prescript's Target", countOnly: true },
+        desire_for_acknowledgement_sated: { id: 'desire_for_acknowledgement_sated', label: 'Desire for Acknowledgement Sated', countOnly: true },
+        gaze_of_contempt: { id: 'gaze_of_contempt', label: 'Gaze of Contempt', countOnly: true },
+        contempt_of_the_gaze: { id: 'contempt_of_the_gaze', label: 'Contempt of the Gaze', countOnly: true },
+        wild_hunt: { id: 'wild_hunt', label: 'Wild Hunt', countOnly: true },
+        wild_hunt_doom: { id: 'wild_hunt_doom', label: 'Wild Hunt (Doomed)', countOnly: true },
+        loneliness_at_high_noon: { id: 'loneliness_at_high_noon', label: 'Loneliness at High Noon', countOnly: true },
         aggro: { id: 'aggro', label: 'Aggro', countOnly: true },
         fairy_lure: { id: 'fairy_lure', label: 'Fairy Lure', countOnly: true },
         charge_barrier: { id: 'charge_barrier', label: 'Charge Barrier', countOnly: true },
@@ -51,6 +79,7 @@
         base_power_up: { id: 'base_power_up', label: 'Base Power Up', countOnly: true },
         damage_up: { id: 'damage_up', label: 'Damage Up', countOnly: true },
         damage_down: { id: 'damage_down', label: 'Damage Down', countOnly: true },
+        power_down: { id: 'power_down', label: 'Power Down', countOnly: true },
         crit_dmg_up: { id: 'crit_dmg_up', label: 'Crit DMG Up', countOnly: true },
         slash_dmg_up: { id: 'slash_dmg_up', label: 'Slash DMG Up', countOnly: true },
         pierce_dmg_up: { id: 'pierce_dmg_up', label: 'Pierce DMG Up', countOnly: true },
@@ -62,6 +91,16 @@
         gloom_dmg_up: { id: 'gloom_dmg_up', label: 'Gloom DMG Up', countOnly: true },
         pride_dmg_up: { id: 'pride_dmg_up', label: 'Pride DMG Up', countOnly: true },
         envy_dmg_up: { id: 'envy_dmg_up', label: 'Envy DMG Up', countOnly: true },
+        slash_dmg_down: { id: 'slash_dmg_down', label: 'Slash DMG Down', countOnly: true },
+        pierce_dmg_down: { id: 'pierce_dmg_down', label: 'Pierce DMG Down', countOnly: true },
+        blunt_dmg_down: { id: 'blunt_dmg_down', label: 'Blunt DMG Down', countOnly: true },
+        wrath_dmg_down: { id: 'wrath_dmg_down', label: 'Wrath DMG Down', countOnly: true },
+        lust_dmg_down: { id: 'lust_dmg_down', label: 'Lust DMG Down', countOnly: true },
+        sloth_dmg_down: { id: 'sloth_dmg_down', label: 'Sloth DMG Down', countOnly: true },
+        gluttony_dmg_down: { id: 'gluttony_dmg_down', label: 'Gluttony DMG Down', countOnly: true },
+        gloom_dmg_down: { id: 'gloom_dmg_down', label: 'Gloom DMG Down', countOnly: true },
+        pride_dmg_down: { id: 'pride_dmg_down', label: 'Pride DMG Down', countOnly: true },
+        envy_dmg_down: { id: 'envy_dmg_down', label: 'Envy DMG Down', countOnly: true },
         slash_power_up: { id: 'slash_power_up', label: 'Slash Power Up', countOnly: true },
         pierce_power_up: { id: 'pierce_power_up', label: 'Pierce Power Up', countOnly: true },
         blunt_power_up: { id: 'blunt_power_up', label: 'Blunt Power Up', countOnly: true },
@@ -72,6 +111,16 @@
         gloom_power_up: { id: 'gloom_power_up', label: 'Gloom Power Up', countOnly: true },
         pride_power_up: { id: 'pride_power_up', label: 'Pride Power Up', countOnly: true },
         envy_power_up: { id: 'envy_power_up', label: 'Envy Power Up', countOnly: true },
+        slash_power_down: { id: 'slash_power_down', label: 'Slash Power Down', countOnly: true },
+        pierce_power_down: { id: 'pierce_power_down', label: 'Pierce Power Down', countOnly: true },
+        blunt_power_down: { id: 'blunt_power_down', label: 'Blunt Power Down', countOnly: true },
+        wrath_power_down: { id: 'wrath_power_down', label: 'Wrath Power Down', countOnly: true },
+        lust_power_down: { id: 'lust_power_down', label: 'Lust Power Down', countOnly: true },
+        sloth_power_down: { id: 'sloth_power_down', label: 'Sloth Power Down', countOnly: true },
+        gluttony_power_down: { id: 'gluttony_power_down', label: 'Gluttony Power Down', countOnly: true },
+        gloom_power_down: { id: 'gloom_power_down', label: 'Gloom Power Down', countOnly: true },
+        pride_power_down: { id: 'pride_power_down', label: 'Pride Power Down', countOnly: true },
+        envy_power_down: { id: 'envy_power_down', label: 'Envy Power Down', countOnly: true },
         slash_protection: { id: 'slash_protection', label: 'Slash Protection', countOnly: true },
         pierce_protection: { id: 'pierce_protection', label: 'Pierce Protection', countOnly: true },
         blunt_protection: { id: 'blunt_protection', label: 'Blunt Protection', countOnly: true },
@@ -82,6 +131,12 @@
         gloom_protection: { id: 'gloom_protection', label: 'Gloom Protection', countOnly: true },
         pride_protection: { id: 'pride_protection', label: 'Pride Protection', countOnly: true },
         envy_protection: { id: 'envy_protection', label: 'Envy Protection', countOnly: true },
+        slash_resist_down: { id: 'slash_resist_down', label: 'Slash Resist Down', countOnly: true },
+        pierce_resist_down: { id: 'pierce_resist_down', label: 'Pierce Resist Down', countOnly: true },
+        blunt_resist_down: { id: 'blunt_resist_down', label: 'Blunt Resist Down', countOnly: true },
+        wrath_resist_down: { id: 'wrath_resist_down', label: 'Wrath Resist Down', countOnly: true },
+        gloom_resist_down: { id: 'gloom_resist_down', label: 'Gloom Resist Down', countOnly: true },
+        envy_resist_down: { id: 'envy_resist_down', label: 'Envy Resist Down', countOnly: true },
         slash_fragility: { id: 'slash_fragility', label: 'Slash Fragility', countOnly: true },
         pierce_fragility: { id: 'pierce_fragility', label: 'Pierce Fragility', countOnly: true },
         blunt_fragility: { id: 'blunt_fragility', label: 'Blunt Fragility', countOnly: true },
@@ -149,6 +204,8 @@
         afterStatusTrigger: 'After Status Trigger',
         beforeDamage: 'Before Damage',
         afterDamage: 'After Damage',
+        beforeHeal: 'Before Heal',
+        afterHeal: 'After Heal',
         hitDealt: 'Hit Dealt',
         hitTaken: 'Hit Taken',
         damageDealt: 'Damage Dealt',
@@ -174,7 +231,11 @@
         queueStatus: { id: 'queueStatus', label: 'Queue Status' },
         dealFixedDamage: { id: 'dealFixedDamage', label: 'Deal Fixed Damage' },
         adjustSanity: { id: 'adjustSanity', label: 'Adjust Sanity' },
+        setSanity: { id: 'setSanity', label: 'Set Sanity' },
         healHp: { id: 'healHp', label: 'Heal HP' },
+        healHpPercent: { id: 'healHpPercent', label: 'Heal HP Percent' },
+        reviveUnit: { id: 'reviveUnit', label: 'Revive Unit' },
+        recoverStagger: { id: 'recoverStagger', label: 'Recover Stagger' },
         adjustStatus: { id: 'adjustStatus', label: 'Adjust Status' },
         modifyContext: { id: 'modifyContext', label: 'Modify Context' },
         modifyCoinMap: { id: 'modifyCoinMap', label: 'Modify Coin Map' },
@@ -364,8 +425,20 @@
                 return `Adjust ${effect.target || 'opponent'} SP by ${getStatusLabel(effect.amount.statusPotency.statusId)} potency.`;
             }
             return `Adjust ${effect.target || 'opponent'} SP by ${formatSignedNumber(effect.value || 0)}.`;
+        case 'setSanity':
+            if (typeof effect.amount === 'number') {
+                return `Set ${effect.target || 'opponent'} SP to ${effect.amount}.`;
+            }
+            if (typeof effect.value === 'number') {
+                return `Set ${effect.target || 'opponent'} SP to ${effect.value}.`;
+            }
+            return `Set ${effect.target || 'opponent'} SP.`;
         case 'healHp':
             return `Heal ${effect.target || 'opponent'} for ${effect.value || 0} HP.`;
+        case 'reviveUnit':
+            return `Revive ${effect.target || 'opponent'}.`;
+        case 'recoverStagger':
+            return `Recover ${effect.target || 'opponent'} from Stagger.`;
         case 'adjustStatus':
             return `Adjust ${effect.target || 'opponent'} ${formatStatusAdjustment(effect)}.`;
         case 'modifyContext':

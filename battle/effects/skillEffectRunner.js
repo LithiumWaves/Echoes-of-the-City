@@ -68,6 +68,36 @@
             return null;
         }
 
+        function getEffectTargetUnits(targetBattle, runtime, target = 'opponent') {
+            const sourceUnit = getRuntimeSourceUnit(runtime);
+            const sourceSlot = sourceUnit ? getSlotForUnit(targetBattle, sourceUnit) : null;
+            const sourceSide = sourceSlot?.side || sourceUnit?.side || null;
+
+            if (target === 'allAllies') {
+                if (!sourceSide || typeof getSlotsForSide !== 'function' || typeof getUnitById !== 'function') {
+                    return [];
+                }
+                return getSlotsForSide(targetBattle, sourceSide)
+                    .filter((slot) => (typeof isSlotAlive === 'function' ? isSlotAlive(targetBattle, slot) : true))
+                    .map((slot) => getUnitById(targetBattle, slot.unitId))
+                    .filter(Boolean);
+            }
+
+            if (target === 'allOpponents') {
+                if (!sourceSide || typeof getOpposingSide !== 'function' || typeof getSlotsForSide !== 'function' || typeof getUnitById !== 'function') {
+                    return [];
+                }
+                const opposingSide = getOpposingSide(sourceSide);
+                return getSlotsForSide(targetBattle, opposingSide)
+                    .filter((slot) => (typeof isSlotAlive === 'function' ? isSlotAlive(targetBattle, slot) : true))
+                    .map((slot) => getUnitById(targetBattle, slot.unitId))
+                    .filter(Boolean);
+            }
+
+            const targetUnit = getEffectTargetUnit(runtime, target);
+            return targetUnit ? [targetUnit] : [];
+        }
+
         function getEffectStatusValue(runtime, amountSource, getter) {
             if (!amountSource || typeof getter !== 'function') {
                 return 0;
@@ -502,59 +532,114 @@
         function applyEffects(targetBattle, effects, runtime) {
             (Array.isArray(effects) ? effects : []).forEach((effect) => {
                 const sourceUnit = getRuntimeSourceUnit(runtime);
-                const targetUnit = getEffectTargetUnit(runtime, effect.target || 'opponent');
-                const context = runtime.defendContext
-                    && runtime?.unit
-                    && runtime?.targetUnit
-                    && runtime.unit.id === runtime.targetUnit.id
-                    ? runtime.defendContext
-                    : (runtime.attackContext || runtime.defendContext || null);
+                const targetUnits = getEffectTargetUnits(targetBattle, runtime, effect.target || 'opponent');
+                const targetUnit = targetUnits[0] || null;
+                const context = runtime?.healContext
+                    ? runtime.healContext
+                    : (runtime.defendContext
+                        && runtime?.unit
+                        && runtime?.targetUnit
+                        && runtime.unit.id === runtime.targetUnit.id
+                        ? runtime.defendContext
+                        : (runtime.attackContext || runtime.defendContext || null));
                 const skill = runtime?.skill || null;
 
                 switch (effect.type) {
                 case 'applyStatus':
-                    if (!targetUnit || !effect.statusId || typeof applyStatus !== 'function') {
+                    if (!targetUnits.length || !effect.statusId || typeof applyStatus !== 'function') {
                         return;
                     }
-                    applyStatus(targetBattle, targetUnit, effect.statusId, {
-                        potency: effect.potencyAmount != null
-                            ? Math.round(resolveStatusScalar(runtime, effect, 'potency', 'potencyAmount'))
-                            : effect.potency,
-                        count: effect.countAmount != null
-                            ? Math.floor(resolveStatusScalar(runtime, effect, 'count', 'countAmount'))
-                            : effect.count,
-                    });
-                    if (sourceUnit && typeof invokeHooks === 'function') {
-                        invokeHooks(sourceUnit, 'statusInflicted', {
-                            battle: targetBattle,
-                            unit: sourceUnit,
-                            opponent: targetUnit,
-                            skill,
-                            statusId: effect.statusId,
-                        });
-                    }
-                    if (typeof invokeHooks === 'function') {
-                        invokeHooks(targetUnit, 'statusReceived', {
-                            battle: targetBattle,
-                            unit: targetUnit,
-                            opponent: sourceUnit,
-                            skill,
-                            statusId: effect.statusId,
+                    {
+                        const applyingUnit = runtime?.unit || runtime?.sourceUnit || null;
+                        const resolvedTargets = (() => {
+                            const filtered = effect.excludeSelf && applyingUnit
+                                ? targetUnits.filter((entry) => entry.id !== applyingUnit.id)
+                                : [...targetUnits];
+                            if (effect.prioritizeStatusId && typeof getStatusPotency === 'function') {
+                                const statusId = effect.prioritizeStatusId;
+                                filtered.sort((left, right) => {
+                                    const leftValue = getStatusPotency(left, statusId);
+                                    const rightValue = getStatusPotency(right, statusId);
+                                    return (effect.prioritizeOrder === 'desc' ? (rightValue - leftValue) : (leftValue - rightValue));
+                                });
+                            }
+                            const maxTargets = effect.maxTargetsAmount != null
+                                ? Math.floor(resolveEffectAmount(runtime, { value: 0, amount: effect.maxTargetsAmount }))
+                                : (typeof effect.maxTargets === 'number' ? Math.floor(effect.maxTargets) : null);
+                            if (typeof maxTargets === 'number' && Number.isFinite(maxTargets)) {
+                                if (maxTargets <= 0) {
+                                    return [];
+                                }
+                                return filtered.slice(0, maxTargets);
+                            }
+                            return filtered;
+                        })();
+
+                        const payload = {
+                            potency: effect.potencyAmount != null
+                                ? Math.round(resolveStatusScalar(runtime, effect, 'potency', 'potencyAmount'))
+                                : effect.potency,
+                            count: effect.countAmount != null
+                                ? Math.floor(resolveStatusScalar(runtime, effect, 'count', 'countAmount'))
+                                : effect.count,
+                        };
+
+                        resolvedTargets.forEach((resolvedTarget) => {
+                            if (!resolvedTarget) {
+                                return;
+                            }
+                            applyStatus(targetBattle, resolvedTarget, effect.statusId, payload);
+                            if (sourceUnit && typeof invokeHooks === 'function') {
+                                invokeHooks(sourceUnit, 'statusInflicted', {
+                                    battle: targetBattle,
+                                    unit: sourceUnit,
+                                    opponent: resolvedTarget,
+                                    skill,
+                                    statusId: effect.statusId,
+                                });
+                            }
+                            if (typeof invokeHooks === 'function') {
+                                invokeHooks(resolvedTarget, 'statusReceived', {
+                                    battle: targetBattle,
+                                    unit: resolvedTarget,
+                                    opponent: sourceUnit,
+                                    skill,
+                                    statusId: effect.statusId,
+                                });
+                            }
                         });
                     }
                     return;
                 case 'queueStatus':
-                    if (!targetUnit || !effect.statusId || typeof queueStatusForNextTurn !== 'function') {
+                    if (!targetUnits.length || !effect.statusId || typeof queueStatusForNextTurn !== 'function') {
                         return;
                     }
-                    queueStatusForNextTurn(targetUnit, effect.statusId, {
-                        potency: effect.potencyAmount != null
-                            ? Math.round(resolveStatusScalar(runtime, effect, 'potency', 'potencyAmount'))
-                            : effect.potency,
-                        count: effect.countAmount != null
-                            ? Math.floor(resolveStatusScalar(runtime, effect, 'count', 'countAmount'))
-                            : effect.count,
-                    });
+                    {
+                        const applyingUnit = runtime?.unit || runtime?.sourceUnit || null;
+                        const filteredTargets = effect.excludeSelf && applyingUnit
+                            ? targetUnits.filter((entry) => entry.id !== applyingUnit.id)
+                            : [...targetUnits];
+                        const maxTargets = effect.maxTargetsAmount != null
+                            ? Math.floor(resolveEffectAmount(runtime, { value: 0, amount: effect.maxTargetsAmount }))
+                            : (typeof effect.maxTargets === 'number' ? Math.floor(effect.maxTargets) : null);
+                        const resolvedTargets = typeof maxTargets === 'number' && Number.isFinite(maxTargets)
+                            ? filteredTargets.slice(0, Math.max(0, maxTargets))
+                            : filteredTargets;
+                        const payload = {
+                            potency: effect.potencyAmount != null
+                                ? Math.round(resolveStatusScalar(runtime, effect, 'potency', 'potencyAmount'))
+                                : effect.potency,
+                            count: effect.countAmount != null
+                                ? Math.floor(resolveStatusScalar(runtime, effect, 'count', 'countAmount'))
+                                : effect.count,
+                        };
+                        resolvedTargets.forEach((resolvedTarget) => {
+                            if (!resolvedTarget) {
+                                return;
+                            }
+                            queueStatusForNextTurn(resolvedTarget, effect.statusId, payload);
+                        });
+                    }
                     return;
                 case 'dealFixedDamage':
                     if (!targetUnit || typeof applyFixedDamage !== 'function') {
@@ -583,7 +668,25 @@
                                 unitName: targetUnit.name,
                                 previousSp: sanityChange.previousSp,
                                 nextSp: sanityChange.nextSp,
-                                reason: effect.reason || skill.name,
+                                reason: effect.reason || skill?.name || effect.statusId || effect.type,
+                            });
+                        }
+                    }
+                    return;
+                case 'setSanity':
+                    if (!targetUnit) {
+                        return;
+                    }
+                    {
+                        const resolvedValue = Math.round(resolveEffectAmount(runtime, effect));
+                        const previousSp = targetUnit.sp;
+                        targetUnit.sp = Math.max(-45, Math.min(45, resolvedValue));
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'sanity_changed', {
+                                unitName: targetUnit.name,
+                                previousSp,
+                                nextSp: targetUnit.sp,
+                                reason: effect.reason || skill?.name || effect.statusId || effect.type,
                             });
                         }
                     }
@@ -689,12 +792,48 @@
                     }
                     modifyUnitLevel(targetBattle, targetUnit, effect, runtime, 'offenseLevelModifier', 'offense_level_modified');
                     return;
-                case 'healHp':
+                case 'healHpPercent':
                     if (!targetUnit) {
                         return;
                     }
                     {
-                        const healAmount = Math.max(0, Math.round(resolveEffectAmount(runtime, effect)));
+                        const percent = normalizePercentConditionValue(resolveEffectAmount(runtime, effect));
+                        const rawHealAmount = Math.max(0, Math.round((targetUnit.maxHp || 0) * Math.max(0, percent || 0)));
+                        const healContext = {
+                            healingMultiplier: 1,
+                            healingFlatBonus: 0,
+                        };
+                        if (typeof invokeHooks === 'function') {
+                            invokeHooks(targetUnit, 'beforeHeal', {
+                                battle: targetBattle,
+                                unit: targetUnit,
+                                sourceUnit,
+                                opponent: sourceUnit,
+                                targetUnit,
+                                skill,
+                                healContext,
+                                healAmount: rawHealAmount,
+                            });
+                            if (sourceUnit && sourceUnit.id !== targetUnit.id) {
+                                invokeHooks(sourceUnit, 'beforeHeal', {
+                                    battle: targetBattle,
+                                    unit: sourceUnit,
+                                    sourceUnit,
+                                    opponent: targetUnit,
+                                    targetUnit,
+                                    skill,
+                                    healContext,
+                                    healAmount: rawHealAmount,
+                                });
+                            }
+                        }
+                        const resolvedMultiplier = typeof healContext.healingMultiplier === 'number' && Number.isFinite(healContext.healingMultiplier)
+                            ? healContext.healingMultiplier
+                            : 1;
+                        const resolvedFlat = typeof healContext.healingFlatBonus === 'number' && Number.isFinite(healContext.healingFlatBonus)
+                            ? healContext.healingFlatBonus
+                            : 0;
+                        const healAmount = Math.max(0, Math.round((rawHealAmount * resolvedMultiplier) + resolvedFlat));
                         const previousHp = targetUnit.hp;
                         targetUnit.hp = Math.min(targetUnit.maxHp, targetUnit.hp + healAmount);
                         if (targetUnit.hp !== previousHp && typeof emitEvent === 'function') {
@@ -705,6 +844,116 @@
                                 nextHp: targetUnit.hp,
                                 amount: targetUnit.hp - previousHp,
                             });
+                        }
+                        if (typeof invokeHooks === 'function') {
+                            invokeHooks(targetUnit, 'afterHeal', {
+                                battle: targetBattle,
+                                unit: targetUnit,
+                                sourceUnit,
+                                opponent: sourceUnit,
+                                targetUnit,
+                                skill,
+                                healContext,
+                                healAmount,
+                                previousHp,
+                                nextHp: targetUnit.hp,
+                            });
+                            if (sourceUnit && sourceUnit.id !== targetUnit.id) {
+                                invokeHooks(sourceUnit, 'afterHeal', {
+                                    battle: targetBattle,
+                                    unit: sourceUnit,
+                                    sourceUnit,
+                                    opponent: targetUnit,
+                                    targetUnit,
+                                    skill,
+                                    healContext,
+                                    healAmount,
+                                    previousHp,
+                                    nextHp: targetUnit.hp,
+                                });
+                            }
+                        }
+                    }
+                    return;
+                case 'healHp':
+                    if (!targetUnit) {
+                        return;
+                    }
+                    {
+                        const rawHealAmount = Math.max(0, Math.round(resolveEffectAmount(runtime, effect)));
+                        const healContext = {
+                            healingMultiplier: 1,
+                            healingFlatBonus: 0,
+                        };
+                        if (typeof invokeHooks === 'function') {
+                            invokeHooks(targetUnit, 'beforeHeal', {
+                                battle: targetBattle,
+                                unit: targetUnit,
+                                sourceUnit,
+                                opponent: sourceUnit,
+                                targetUnit,
+                                skill,
+                                healContext,
+                                healAmount: rawHealAmount,
+                            });
+                            if (sourceUnit && sourceUnit.id !== targetUnit.id) {
+                                invokeHooks(sourceUnit, 'beforeHeal', {
+                                    battle: targetBattle,
+                                    unit: sourceUnit,
+                                    sourceUnit,
+                                    opponent: targetUnit,
+                                    targetUnit,
+                                    skill,
+                                    healContext,
+                                    healAmount: rawHealAmount,
+                                });
+                            }
+                        }
+                        const resolvedMultiplier = typeof healContext.healingMultiplier === 'number' && Number.isFinite(healContext.healingMultiplier)
+                            ? healContext.healingMultiplier
+                            : 1;
+                        const resolvedFlat = typeof healContext.healingFlatBonus === 'number' && Number.isFinite(healContext.healingFlatBonus)
+                            ? healContext.healingFlatBonus
+                            : 0;
+                        const healAmount = Math.max(0, Math.round((rawHealAmount * resolvedMultiplier) + resolvedFlat));
+                        const previousHp = targetUnit.hp;
+                        targetUnit.hp = Math.min(targetUnit.maxHp, targetUnit.hp + healAmount);
+                        if (targetUnit.hp !== previousHp && typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'hp_healed', {
+                                unitId: targetUnit.id,
+                                unitName: targetUnit.name,
+                                previousHp,
+                                nextHp: targetUnit.hp,
+                                amount: targetUnit.hp - previousHp,
+                            });
+                        }
+                        if (typeof invokeHooks === 'function') {
+                            invokeHooks(targetUnit, 'afterHeal', {
+                                battle: targetBattle,
+                                unit: targetUnit,
+                                sourceUnit,
+                                opponent: sourceUnit,
+                                targetUnit,
+                                skill,
+                                healContext,
+                                healAmount,
+                                previousHp,
+                                nextHp: targetUnit.hp,
+                            });
+                            if (sourceUnit && sourceUnit.id !== targetUnit.id) {
+                                invokeHooks(sourceUnit, 'afterHeal', {
+                                    battle: targetBattle,
+                                    unit: sourceUnit,
+                                    sourceUnit,
+                                    opponent: targetUnit,
+                                    targetUnit,
+                                    skill,
+                                    healContext,
+                                    healAmount,
+                                    previousHp,
+                                    nextHp: targetUnit.hp,
+                                });
+                            }
                         }
                     }
                     return;
@@ -797,6 +1046,44 @@
                         triggerStatusLifecycleHook(targetBattle, targetUnit, 'statusConsumed', effect.statusId, {
                             status: { ...status },
                         });
+                    }
+                    return;
+                case 'reviveUnit':
+                    if (!targetUnit) {
+                        return;
+                    }
+                    {
+                        const previousHp = targetUnit.hp;
+                        if ((targetUnit.hp || 0) <= 0) {
+                            targetUnit.hp = 1;
+                        }
+                        if (typeof emitEvent === 'function' && targetUnit.hp !== previousHp) {
+                            emitEvent(targetBattle, 'hp_healed', {
+                                unitId: targetUnit.id,
+                                unitName: targetUnit.name,
+                                previousHp,
+                                nextHp: targetUnit.hp,
+                                amount: targetUnit.hp - previousHp,
+                            });
+                        }
+                    }
+                    return;
+                case 'recoverStagger':
+                    if (!targetUnit) {
+                        return;
+                    }
+                    {
+                        const previousLevel = targetUnit.staggerLevel || 0;
+                        targetUnit.staggerLevel = 0;
+                        targetUnit.staggerRecoverTurn = 0;
+                        targetUnit.staggerTurnsRemaining = 0;
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'unit_stagger_recovered', {
+                                unitId: targetUnit.id,
+                                unitName: targetUnit.name,
+                                previousLevel,
+                            });
+                        }
                     }
                     return;
                 default:
@@ -996,6 +1283,8 @@
             return true;
         case 'damageAtLeast':
             return typeof runtime?.damage === 'number' && runtime.damage >= conditionValue;
+        case 'damageSourceIs':
+            return (runtime?.damageSource || 'skill') === (conditionValue ?? 'skill');
         case 'hasStatus':
             return Boolean(conditionStatus) && ((conditionStatus.count || 0) > 0 || (conditionStatus.potency || 0) > 0);
         case 'statusPotencyAtLeast':
@@ -1022,6 +1311,10 @@
             return Boolean(runtime?.isCritical) === (conditionValue ?? true);
         case 'targetStaggered':
             return isUnitStaggeredForCondition(getHookConditionUnit(runtime, condition?.target || 'opponent')) === (conditionValue ?? true);
+        case 'hpAtOrBelow':
+            return typeof conditionUnit?.hp === 'number' && conditionUnit.hp <= conditionValue;
+        case 'hpAtOrAbove':
+            return typeof conditionUnit?.hp === 'number' && conditionUnit.hp >= conditionValue;
         case 'hpPercentAtOrBelow':
             return getUnitHpRatio(conditionUnit) <= normalizePercentConditionValue(conditionValue);
         case 'hpPercentAtOrAbove':
