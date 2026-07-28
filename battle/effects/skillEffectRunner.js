@@ -160,7 +160,8 @@
                 }
 
                 const baseAmount = getStatusPotency(targetUnit, statusSource.statusId);
-                return baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
             }
 
             if (amountDefinition?.statusCount) {
@@ -171,7 +172,17 @@
                 }
 
                 const baseAmount = getStatusCount(targetUnit, statusSource.statusId);
-                return baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
+            }
+
+            if (amountDefinition?.skillCoinCount) {
+                const skillCoinCount = Math.max(0, runtime?.skill?.coinCount || 0);
+                const baseAmount = amountDefinition.inverse
+                    ? (skillCoinCount > 0 ? 1 / skillCoinCount : 0)
+                    : skillCoinCount;
+                const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
             }
 
             if (typeof effect.value === 'number') {
@@ -1086,6 +1097,34 @@
                         }
                     }
                     return;
+                case 'staggerUnit':
+                    if (!targetUnit) {
+                        return;
+                    }
+                    {
+                        const targetSlot = getSlotForUnit(targetBattle, targetUnit);
+                        targetUnit.staggerLevel = Math.max(1, targetUnit.staggerLevel || 0);
+                        targetUnit.staggerRecoverTurn = Math.max(targetUnit.staggerRecoverTurn || 0, (targetBattle?.turn || 0) + 1);
+                        targetUnit.staggerTurnsRemaining = Math.max(targetUnit.staggerTurnsRemaining || 0, 1);
+                        if (targetSlot) {
+                            targetSlot.speed = 0;
+                            targetSlot.targetSlotId = null;
+                            targetSlot.resolved = true;
+                        }
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'unit_staggered', {
+                                unitId: targetUnit.id,
+                                unitName: targetUnit.name,
+                                staggerLevel: targetUnit.staggerLevel,
+                                threshold: null,
+                                previousHp: targetUnit.hp,
+                                nextHp: targetUnit.hp,
+                                sourceUnitId: sourceUnit?.id || null,
+                                sourceUnitName: sourceUnit?.name || null,
+                            });
+                        }
+                    }
+                    return;
                 default:
                     return;
                 }
@@ -1177,6 +1216,15 @@
         }
 
         return actualValue === expectedValue;
+    }
+
+    function skillHasExpectedTag(skill, expectedValue) {
+        const skillTags = Array.isArray(skill?.tags) ? skill.tags : [];
+        if (Array.isArray(expectedValue)) {
+            return expectedValue.some((tag) => skillTags.includes(tag));
+        }
+
+        return skillTags.includes(expectedValue);
     }
 
     function normalizePercentConditionValue(value) {
@@ -1295,10 +1343,25 @@
             return (conditionStatus?.count || 0) >= conditionValue;
         case 'statusCountAtOrBelow':
             return (conditionStatus?.count || 0) <= conditionValue;
+        case 'statusCountGreaterThanStatus':
+        {
+            if (!condition?.statusId || !condition?.otherStatusId || typeof getStatus !== 'function') {
+                return false;
+            }
+            const leftUnit = getHookConditionUnit(runtime, condition?.target || 'self');
+            const rightUnit = getHookConditionUnit(runtime, condition?.otherTarget || condition?.target || 'self');
+            const leftCount = getStatus(leftUnit, condition.statusId)?.count || 0;
+            const rightCount = getStatus(rightUnit, condition.otherStatusId)?.count || 0;
+            return leftCount > (rightCount + (condition.offset || 0));
+        }
         case 'encounterResourceAtLeast':
             return getEncounterResourceValue() >= conditionValue;
         case 'encounterResourceAtOrBelow':
             return getEncounterResourceValue() <= conditionValue;
+        case 'skillIdIs':
+            return matchesExpectedValue(runtime?.skill?.id || null, conditionValue);
+        case 'skillHasTag':
+            return skillHasExpectedTag(runtime?.skill, conditionValue);
         case 'skillType':
             return matchesExpectedValue(runtime?.skill?.skillType || 'attack', conditionValue);
         case 'skillSinType':

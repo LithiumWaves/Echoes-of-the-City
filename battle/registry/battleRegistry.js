@@ -43,6 +43,7 @@
         unrelenting_storm: { id: 'unrelenting_storm', label: 'Unrelenting Storm', countOnly: true },
         somatic_frisson_inspiring_melody: { id: 'somatic_frisson_inspiring_melody', label: 'Somatic Frisson-inspiring Melody', countOnly: true },
         scarlet_moth: { id: 'scarlet_moth', label: 'Scarlet Moth', countOnly: true },
+        borrowed_time: { id: 'borrowed_time', label: 'Borrowed Time' },
         dark_cloud_blade: { id: 'dark_cloud_blade', label: 'Dark Cloud Blade', countOnly: true },
         battle_ready: { id: 'battle_ready', label: 'Battle Ready', countOnly: true },
         strider_wu: { id: 'strider_wu', label: 'Strider【Wu】', countOnly: true },
@@ -62,7 +63,18 @@
         contempt_of_the_gaze: { id: 'contempt_of_the_gaze', label: 'Contempt of the Gaze', countOnly: true },
         wild_hunt: { id: 'wild_hunt', label: 'Wild Hunt', countOnly: true },
         wild_hunt_doom: { id: 'wild_hunt_doom', label: 'Wild Hunt (Doomed)', countOnly: true },
+        high_noon: { id: 'high_noon', label: 'High Noon', countOnly: true },
         loneliness_at_high_noon: { id: 'loneliness_at_high_noon', label: 'Loneliness at High Noon', countOnly: true },
+        dawnherald: { id: 'dawnherald', label: 'Dawnherald', countOnly: true },
+        dawn_office: { id: 'dawn_office', label: 'Dawn Office', countOnly: true },
+        from_dawnbreak_to_sunset: { id: 'from_dawnbreak_to_sunset', label: 'From Dawnbreak to Sunset', countOnly: true },
+        blazing_sunset: { id: 'blazing_sunset', label: 'Blazing Sunset', countOnly: true },
+        bloodflame: { id: 'bloodflame', label: 'Bloodflame [血炎]', countOnly: true },
+        fanatic: { id: 'fanatic', label: 'Fanatic', countOnly: true },
+        blooming_thorn: { id: 'blooming_thorn', label: 'Blooming Thorn', countOnly: true },
+        blooming_thorn_ii: { id: 'blooming_thorn_ii', label: 'Blooming Thorn II', countOnly: true },
+        blooming_thorn_iii: { id: 'blooming_thorn_iii', label: 'Blooming Thorn III', countOnly: true },
+        festive_fever: { id: 'festive_fever', label: 'Festive Fever', countOnly: true },
         aggro: { id: 'aggro', label: 'Aggro', countOnly: true },
         fairy_lure: { id: 'fairy_lure', label: 'Fairy Lure', countOnly: true },
         charge_barrier: { id: 'charge_barrier', label: 'Charge Barrier', countOnly: true },
@@ -236,6 +248,7 @@
         healHpPercent: { id: 'healHpPercent', label: 'Heal HP Percent' },
         reviveUnit: { id: 'reviveUnit', label: 'Revive Unit' },
         recoverStagger: { id: 'recoverStagger', label: 'Recover Stagger' },
+        staggerUnit: { id: 'staggerUnit', label: 'Stagger Unit' },
         adjustStatus: { id: 'adjustStatus', label: 'Adjust Status' },
         modifyContext: { id: 'modifyContext', label: 'Modify Context' },
         modifyCoinMap: { id: 'modifyCoinMap', label: 'Modify Coin Map' },
@@ -439,6 +452,8 @@
             return `Revive ${effect.target || 'opponent'}.`;
         case 'recoverStagger':
             return `Recover ${effect.target || 'opponent'} from Stagger.`;
+        case 'staggerUnit':
+            return `Stagger ${effect.target || 'opponent'}.`;
         case 'adjustStatus':
             return `Adjust ${effect.target || 'opponent'} ${formatStatusAdjustment(effect)}.`;
         case 'modifyContext':

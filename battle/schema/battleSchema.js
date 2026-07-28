@@ -57,8 +57,11 @@
         'statusPotencyAtOrBelow',
         'statusCountAtLeast',
         'statusCountAtOrBelow',
+        'statusCountGreaterThanStatus',
         'encounterResourceAtLeast',
         'encounterResourceAtOrBelow',
+        'skillIdIs',
+        'skillHasTag',
         'skillType',
         'skillSinType',
         'skillDamageType',
@@ -154,6 +157,9 @@
             if (amount.multiplier != null && !isFiniteNumber(amount.multiplier)) {
                 pushError(errors, `${path}.multiplier`, 'must be a number when provided.');
             }
+            if (amount.offset != null && !isFiniteNumber(amount.offset)) {
+                pushError(errors, `${path}.offset`, 'must be a number when provided.');
+            }
             return;
         }
 
@@ -166,6 +172,22 @@
             amount.product.forEach((entry, index) => {
                 validateAmountDefinition(errors, entry, `${path}.product[${index}]`);
             });
+            return;
+        }
+
+        if (amount.skillCoinCount) {
+            if (amount.skillCoinCount !== true) {
+                pushError(errors, `${path}.skillCoinCount`, 'must be true when provided.');
+            }
+            if (amount.inverse != null && typeof amount.inverse !== 'boolean') {
+                pushError(errors, `${path}.inverse`, 'must be a boolean when provided.');
+            }
+            if (amount.multiplier != null && !isFiniteNumber(amount.multiplier)) {
+                pushError(errors, `${path}.multiplier`, 'must be a number when provided.');
+            }
+            if (amount.offset != null && !isFiniteNumber(amount.offset)) {
+                pushError(errors, `${path}.offset`, 'must be a number when provided.');
+            }
             return;
         }
 
@@ -297,7 +319,27 @@
                 pushError(errors, `${path}.value`, 'must be a non-negative number.');
             }
             break;
+        case 'statusCountGreaterThanStatus':
+            if (!condition.statusId || typeof condition.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(condition.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id.');
+            }
+            if (!condition.otherStatusId || typeof condition.otherStatusId !== 'string') {
+                pushError(errors, `${path}.otherStatusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(condition.otherStatusId)) {
+                pushError(errors, `${path}.otherStatusId`, 'must reference a supported status id.');
+            }
+            if (condition.otherTarget != null && !['self', 'opponent'].includes(condition.otherTarget)) {
+                pushError(errors, `${path}.otherTarget`, 'must be "self" or "opponent" when provided.');
+            }
+            if (condition.offset != null && !isFiniteNumber(condition.offset)) {
+                pushError(errors, `${path}.offset`, 'must be a number when provided.');
+            }
+            break;
         case 'skillType':
+        case 'skillIdIs':
+        case 'skillHasTag':
             if (
                 !condition.value
                 || !(
@@ -513,6 +555,7 @@
         case 'setSanity':
         case 'reviveUnit':
         case 'recoverStagger':
+        case 'staggerUnit':
         case 'modifyDefenseLevel':
         case 'modifyOffenseLevel':
         case 'modifySpeed':
