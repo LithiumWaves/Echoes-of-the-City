@@ -285,29 +285,29 @@ function runSuite() {
         assert(floored.damage === 1, `Expected minimum damage floor to be at least 1, got ${floored.damage}`);
     });
 
-    test('Effect runner: oncePer skill on multi-coin coinRoll', () => {
+    test('Effect runner: oncePer skill on multi-coin hitTaken', () => {
         const battleModules = createBattleEnvironment();
         const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
         assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
 
         registerStatusDefinition({
-            id: 'test_coinroll_proc',
-            label: 'Test Coinroll Proc',
+            id: 'test_hit_proc',
+            label: 'Test Hit Proc',
         });
         registerStatusDefinition({
-            id: 'test_coinroll_proc',
-            label: 'Test Coinroll Proc',
+            id: 'test_hit_proc',
+            label: 'Test Hit Proc',
             countOnly: true,
             stackModel: {
                 count: { enabled: true, min: 0, max: 99, application: 'add' },
                 expireWhen: { countLte: 0 },
             },
             hooks: {
-                coinRoll: [
+                hitTaken: [
                     {
                         oncePer: 'skill',
                         actions: [
-                            { type: 'dealFixedDamage', target: 'opponent', statusId: 'test_coinroll_proc', amount: 5 },
+                            { type: 'dealFixedDamage', target: 'self', statusId: 'test_hit_proc', amount: 5 },
                         ],
                     },
                 ],
@@ -371,7 +371,7 @@ function runSuite() {
             peekRollToken,
             consumeRollToken,
         });
-        engine.addStatus('player', { id: 'test_coinroll_proc', count: 1 }, 0);
+        engine.addStatus('enemy', { id: 'test_hit_proc', count: 1 }, 0);
 
         engine.selectSlot('player-slot-1');
         engine.selectSkill('double_strike');
@@ -379,8 +379,12 @@ function runSuite() {
         engine.resolveTurn();
 
         const state = engine.getState();
-        const enemyHp = state.enemyUnits[0].hp;
-        assert(enemyHp === 45, `Expected enemy HP 45 after a single 5-damage proc, got ${enemyHp}`);
+        const procs = state.events
+            .filter((event) => event.type === 'status_triggered')
+            .map((event) => event.data)
+            .filter((data) => data?.unitId === 'enemy' && data?.damage === 5);
+        assert(procs.length === 1, `Expected exactly one oncePer=skill proc, got ${procs.length}`);
+        assert(state.enemyUnits[0].hp < 50, 'Expected enemy to take damage from the attack.');
     });
 
     test('Effect runner: allAllies target on battleStart', () => {
@@ -632,6 +636,17 @@ function runSuite() {
         };
 
         const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const basicSkill = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 1,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
         const createUnit = (id, name) => ({
             id,
             name,
@@ -645,7 +660,7 @@ function runSuite() {
             },
             staggerThresholds: [],
             sprites: { skills: {} },
-            skills: [],
+            skills: [basicSkill],
             passives: id === 'ally' ? [passive] : [],
         });
 
@@ -668,6 +683,220 @@ function runSuite() {
         const hasA = ally.statuses.some((status) => status.id === 'test_applied_a');
         const hasB = ally.statuses.some((status) => status.id === 'test_applied_b');
         assert(hasA && hasB, `Expected statusApplied hook to chain apply B; got A=${hasA} B=${hasB}`);
+    });
+
+    test('Golden fixture: coinRoll status triggers before hit resolution', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        registerStatusDefinition({ id: 'fixture_bleed', label: 'Fixture Bleed' });
+        registerStatusDefinition({
+            id: 'fixture_bleed',
+            label: 'Fixture Bleed',
+            description: 'On coin roll, take fixed damage equal to Potency, then lose 1 Count.',
+            stackModel: {
+                potency: { enabled: true, min: 0, max: 99, application: 'add' },
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {
+                coinRoll: [
+                    {
+                        actions: [
+                            {
+                                type: 'dealFixedDamage',
+                                target: 'self',
+                                statusId: 'fixture_bleed',
+                                amount: {
+                                    statusPotency: {
+                                        target: 'self',
+                                        statusId: 'fixture_bleed',
+                                    },
+                                },
+                            },
+                            {
+                                type: 'adjustStatus',
+                                target: 'self',
+                                statusId: 'fixture_bleed',
+                                countDelta: -1,
+                            },
+                        ],
+                    },
+                ],
+            },
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const playerSkill = {
+            id: 'two_coin',
+            name: 'Two Coin',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 1,
+            coinCount: 2,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const enemySkill = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 1,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'golden-coinroll-before-hit',
+            name: 'Golden CoinRoll Before Hit',
+            playerUnits: [createUnit('ally', 'Ally', [playerSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [{ type: 'heads', value: 0 }],
+            'enemy-slot-1': [{ type: 'heads', value: 0 }],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.addStatus('player', { id: 'fixture_bleed', potency: 2, count: 1 }, 0);
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('two_coin');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const state = engine.getState();
+            const normalizedEvents = state.events.map((event) => ({
+                type: event.type,
+                turn: event.turn,
+                data: event.data,
+            }));
+            const firstBleed = normalizedEvents.findIndex((event) => event.type === 'status_triggered' && event.data?.statusId === 'fixture_bleed');
+            const firstHit = normalizedEvents.findIndex((event) => event.type === 'hit_resolved');
+            assert(firstBleed >= 0, 'Expected at least one fixture_bleed status_triggered event.');
+            assert(firstHit >= 0, 'Expected at least one hit_resolved event.');
+            assert(firstBleed < firstHit, `Expected fixture_bleed trigger to occur before hit resolution. bleed=${firstBleed} hit=${firstHit}`);
+            assert(state.playerUnits[0].hp === 28, `Expected Ally HP 28 after one 2-damage bleed proc, got ${state.playerUnits[0].hp}`);
+            assert(!state.playerUnits[0].statuses.some((status) => status.id === 'fixture_bleed'), 'Expected fixture_bleed to expire after count reaches 0.');
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Golden fixture: clash repeated ties resolve via speed-break at 6', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 40,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const tieSkill = {
+            id: 'tie',
+            name: 'Tie',
+            skillType: 'attack',
+            basePower: 10,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'golden-clash-tie-break',
+            name: 'Golden Clash Tie Break',
+            playerUnits: [createUnit('ally', 'Ally', [tieSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [tieSkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [{ type: 'heads', value: 0 }],
+            'enemy-slot-1': [{ type: 'heads', value: 0 }],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('tie');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const events = engine.getState().events.map((event) => ({
+                type: event.type,
+                data: event.data,
+            }));
+            const clashRounds = events.filter((event) => event.type === 'clash_round');
+            assert(clashRounds.length === 7, `Expected 7 clash rounds (6 ties + speed break), got ${clashRounds.length}`);
+            const last = clashRounds[clashRounds.length - 1]?.data?.result || null;
+            assert(last === 'left-speed-break', `Expected final clash round to be left-speed-break, got ${last}`);
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
     });
 
     test('Export/import round-trip for a shipped battle pack', () => {
