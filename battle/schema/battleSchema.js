@@ -110,6 +110,10 @@
         'panicStateIs',
         'panicValueAtLeast',
         'panicValueAtOrBelow',
+        'waveAtLeast',
+        'waveAtOrBelow',
+        'resonanceAtLeast',
+        'resonanceAtOrBelow',
     ]);
 
     function cloneDefinition(definition) {
@@ -627,6 +631,21 @@
                 pushError(errors, `${path}.value`, 'must be a number.');
             }
             break;
+        case 'waveAtLeast':
+        case 'waveAtOrBelow':
+            if (!isFiniteNumber(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'resonanceAtLeast':
+        case 'resonanceAtOrBelow':
+            if (!condition.sinType || typeof condition.sinType !== 'string' || !SIN_TYPES.has(condition.sinType)) {
+                pushError(errors, `${path}.sinType`, 'must be a supported sin type.');
+            }
+            if (!isFiniteNumber(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
         case 'damageSourceIs':
             if (condition.value != null && !['skill', 'status', 'burst'].includes(condition.value)) {
                 pushError(errors, `${path}.value`, 'must be "skill", "status", or "burst" when provided.');
@@ -851,6 +870,7 @@
         case 'clearShield':
         case 'burstTremor':
         case 'adjustEncounterResource':
+        case 'setWave':
             if (effect.type !== 'clearShield' && effect.amount != null) {
                 validateAmountDefinition(errors, effect.amount, `${path}.amount`);
             } else if (effect.type !== 'clearShield' && !isFiniteNumber(effect.value)) {
@@ -1043,6 +1063,57 @@
             }
             if (effect.reason != null && typeof effect.reason !== 'string') {
                 pushError(errors, `${path}.reason`, 'must be a string when provided.');
+            }
+            break;
+        case 'spendUnitResource':
+            if (!effect.resourceId || typeof effect.resourceId !== 'string') {
+                pushError(errors, `${path}.resourceId`, 'must be a non-empty string.');
+            }
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (effect.cancelIfInsufficient != null && typeof effect.cancelIfInsufficient !== 'boolean') {
+                pushError(errors, `${path}.cancelIfInsufficient`, 'must be a boolean when provided.');
+            }
+            if (effect.reason != null && typeof effect.reason !== 'string') {
+                pushError(errors, `${path}.reason`, 'must be a string when provided.');
+            }
+            break;
+        case 'spendEncounterResource':
+            if (!effect.resourceId || typeof effect.resourceId !== 'string') {
+                pushError(errors, `${path}.resourceId`, 'must be a non-empty string.');
+            }
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (effect.cancelIfInsufficient != null && typeof effect.cancelIfInsufficient !== 'boolean') {
+                pushError(errors, `${path}.cancelIfInsufficient`, 'must be a boolean when provided.');
+            }
+            if (effect.reason != null && typeof effect.reason !== 'string') {
+                pushError(errors, `${path}.reason`, 'must be a string when provided.');
+            }
+            break;
+        case 'adjustResonance':
+            if (!effect.sinType || typeof effect.sinType !== 'string' || !SIN_TYPES.has(effect.sinType)) {
+                pushError(errors, `${path}.sinType`, 'must be a supported sin type.');
+            }
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (effect.operation != null && !['add', 'set'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
+            }
+            if (effect.min != null && !isFiniteNumber(effect.min)) {
+                pushError(errors, `${path}.min`, 'must be a number when provided.');
+            }
+            if (effect.max != null && !isFiniteNumber(effect.max)) {
+                pushError(errors, `${path}.max`, 'must be a number when provided.');
             }
             break;
         case 'setFlag':

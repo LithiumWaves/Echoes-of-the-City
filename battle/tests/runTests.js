@@ -1665,6 +1665,218 @@ function runSuite() {
         assert(mark === 1, `Expected panicStateIs/panicValueAtLeast to gate mark application, got ${mark}`);
     });
 
+    test('Effect runner: spendUnitResource cancels skill when insufficient', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const spendSkill = {
+            id: 'spend_skill',
+            name: 'Spend Skill',
+            skillType: 'attack',
+            basePower: 6,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [
+                { trigger: 'onSelect', type: 'spendUnitResource', target: 'self', resourceId: 'wrath', value: 1, cancelIfInsufficient: true },
+            ],
+        };
+        const enemySkill = {
+            id: 'enemy_hit',
+            name: 'Enemy Hit',
+            skillType: 'attack',
+            basePower: 8,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 40,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const battleDefinition = {
+            id: 'spend-unit-resource-cancel',
+            name: 'Spend Unit Resource Cancel',
+            playerUnits: [createUnit('ally', 'Ally', [spendSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'enemy-slot-1': [true],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('spend_skill');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const cancelled = engine.getState().events.find((event) => event.type === 'skill_cancelled' && event.data?.unitName === 'Ally')?.data || null;
+        assert(cancelled, 'Expected spendUnitResource to cancel skill.');
+        assert(cancelled.reason === 'insufficient wrath', `Expected cancel reason "insufficient wrath", got ${cancelled.reason}`);
+        const allyHits = engine.getState().events.filter((event) => event.type === 'hit_resolved' && event.data?.attackerName === 'Ally');
+        assert(allyHits.length === 0, `Expected cancelled ally to deal no hits, got ${allyHits.length}`);
+        const enemyHit = engine.getState().events.find((event) => event.type === 'hit_resolved' && event.data?.attackerName === 'Enemy')?.data || null;
+        assert(enemyHit, 'Expected enemy to still hit after ally cancellation.');
+    });
+
+    test('Effect runner: spendEncounterResource spends and gates by resonance/wave', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        registerStatusDefinition({ id: 'test_wave_mark', label: 'Wave Mark' });
+        registerStatusDefinition({
+            id: 'test_wave_mark',
+            label: 'Wave Mark',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const passive = {
+            id: 'wave_res_passive',
+            name: 'Wave+Resonance Passive',
+            hooks: {
+                battleStart: [
+                    {
+                        actions: [
+                            { type: 'adjustEncounterResource', resourceId: 'test_currency', value: 2, operation: 'set' },
+                            { type: 'setWave', value: 3 },
+                            { type: 'adjustResonance', sinType: 'wrath', value: 2, operation: 'set' },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        const spendSkill = {
+            id: 'spend_currency',
+            name: 'Spend Currency',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [
+                {
+                    trigger: 'onSelect',
+                    type: 'spendEncounterResource',
+                    resourceId: 'test_currency',
+                    value: 1,
+                    cancelIfInsufficient: true,
+                },
+            ],
+        };
+
+        const gatedPassive = {
+            id: 'gated_passive',
+            name: 'Gated Passive',
+            hooks: {
+                skillSelected: [
+                    {
+                        conditions: [
+                            { type: 'waveAtLeast', value: 3 },
+                            { type: 'resonanceAtLeast', sinType: 'wrath', value: 2 },
+                        ],
+                        actions: [
+                            { type: 'applyStatus', target: 'self', statusId: 'test_wave_mark', count: 1 },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        const enemySkill = {
+            id: 'enemy_guard',
+            name: 'Enemy Guard',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, passives = []) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 40,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives,
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'spend-encounter-resource-smoke',
+                name: 'Spend Encounter Resource Smoke',
+                playerUnits: [createUnit('ally', 'Ally', [spendSkill], [passive, gatedPassive])],
+                enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+        });
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('spend_currency');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const state = engine.getState();
+        assert(state.encounterResources.test_currency === 1, `Expected test_currency to be 1 after spending 1, got ${state.encounterResources.test_currency}`);
+        assert(state.wave === 3, `Expected wave to be 3, got ${state.wave}`);
+        assert(state.runtimeState?.resonanceBySinType?.wrath === 2, `Expected wrath resonance to be 2, got ${state.runtimeState?.resonanceBySinType?.wrath}`);
+        const mark = state.playerUnits[0].statuses.find((status) => status.id === 'test_wave_mark')?.count || 0;
+        assert(mark === 1, `Expected waveAtLeast+resonanceAtLeast to gate status application, got ${mark}`);
+    });
+
     test('Golden fixture: coinRoll status triggers before hit resolution', () => {
         const battleModules = createBattleEnvironment();
         const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;

@@ -475,6 +475,22 @@
             return unit.resources;
         }
 
+        function ensureBattleRuntimeState(targetBattle) {
+            if (!targetBattle || typeof targetBattle !== 'object') {
+                return null;
+            }
+            if (!targetBattle.runtimeState || typeof targetBattle.runtimeState !== 'object' || Array.isArray(targetBattle.runtimeState)) {
+                targetBattle.runtimeState = {};
+            }
+            if (!targetBattle.runtimeState.resonanceBySinType || typeof targetBattle.runtimeState.resonanceBySinType !== 'object' || Array.isArray(targetBattle.runtimeState.resonanceBySinType)) {
+                targetBattle.runtimeState.resonanceBySinType = {};
+            }
+            if (typeof targetBattle.wave !== 'number' || !Number.isFinite(targetBattle.wave)) {
+                targetBattle.wave = 1;
+            }
+            return targetBattle.runtimeState;
+        }
+
         function triggerStatusLifecycleHook(targetBattle, unit, hookName, statusId, payload = {}) {
             if (!targetBattle || !unit || !statusId || typeof invokeHooks !== 'function') {
                 return;
@@ -1849,6 +1865,127 @@
                         },
                     );
                     return;
+                case 'spendEncounterResource':
+                    if (!effect.resourceId || typeof getEncounterResource !== 'function' || typeof adjustEncounterResource !== 'function') {
+                        return;
+                    }
+                    {
+                        const resolvedAmount = Math.max(0, resolveEffectAmount(runtime, effect));
+                        const currentValue = getEncounterResource(targetBattle, effect.resourceId) || 0;
+                        if (currentValue < resolvedAmount && effect.cancelIfInsufficient) {
+                            if (context) {
+                                context.cancelled = true;
+                                context.cancelReason = `insufficient ${effect.resourceId}`;
+                            }
+                            if (typeof emitEvent === 'function' && runtime?.unit && skill) {
+                                emitEvent(targetBattle, 'skill_cancelled', {
+                                    unitName: runtime.unit.name,
+                                    skillName: skill.name,
+                                    reason: `insufficient ${effect.resourceId}`,
+                                });
+                            }
+                            return;
+                        }
+                        adjustEncounterResource(targetBattle, effect.resourceId, -resolvedAmount, {
+                            operation: 'add',
+                            min: 0,
+                            reason: effect.reason || skill?.name || effect.resourceId,
+                            unit: sourceUnit || runtime?.unit || null,
+                        });
+                    }
+                    return;
+                case 'spendUnitResource':
+                    if (!effect.resourceId) {
+                        return;
+                    }
+                    targetUnits.forEach((unit) => {
+                        if (!unit) {
+                            return;
+                        }
+                        const resources = ensureUnitResources(unit);
+                        if (!resources) {
+                            return;
+                        }
+                        const resolvedAmount = Math.max(0, resolveEffectAmount(runtime, effect));
+                        const currentValue = typeof resources[effect.resourceId] === 'number' && Number.isFinite(resources[effect.resourceId])
+                            ? resources[effect.resourceId]
+                            : 0;
+                        if (currentValue < resolvedAmount && effect.cancelIfInsufficient) {
+                            if (context) {
+                                context.cancelled = true;
+                                context.cancelReason = `insufficient ${effect.resourceId}`;
+                            }
+                            if (typeof emitEvent === 'function' && runtime?.unit && skill) {
+                                emitEvent(targetBattle, 'skill_cancelled', {
+                                    unitName: runtime.unit.name,
+                                    skillName: skill.name,
+                                    reason: `insufficient ${effect.resourceId}`,
+                                });
+                            }
+                            return;
+                        }
+                        const nextValue = Math.max(0, currentValue - resolvedAmount);
+                        resources[effect.resourceId] = nextValue;
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'unit_resource_changed', {
+                                unitId: unit.id,
+                                unitName: unit.name,
+                                resourceId: effect.resourceId,
+                                previousValue: currentValue,
+                                nextValue,
+                                reason: effect.reason || skill?.name || effect.resourceId,
+                            });
+                        }
+                    });
+                    return;
+                case 'adjustResonance':
+                    if (!effect.sinType) {
+                        return;
+                    }
+                    {
+                        const battleRuntimeState = ensureBattleRuntimeState(targetBattle);
+                        if (!battleRuntimeState) {
+                            return;
+                        }
+                        const resonance = battleRuntimeState.resonanceBySinType;
+                        const previousValue = typeof resonance[effect.sinType] === 'number' && Number.isFinite(resonance[effect.sinType])
+                            ? resonance[effect.sinType]
+                            : 0;
+                        const delta = resolveEffectAmount(runtime, effect);
+                        const nextRaw = effect.operation === 'set'
+                            ? delta
+                            : previousValue + delta;
+                        const min = typeof effect.min === 'number' && Number.isFinite(effect.min) ? effect.min : null;
+                        const max = typeof effect.max === 'number' && Number.isFinite(effect.max) ? effect.max : null;
+                        const nextClamped = max != null
+                            ? Math.min(max, min != null ? Math.max(min, nextRaw) : nextRaw)
+                            : (min != null ? Math.max(min, nextRaw) : nextRaw);
+                        resonance[effect.sinType] = nextClamped;
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'resonance_changed', {
+                                sinType: effect.sinType,
+                                previousValue,
+                                nextValue: nextClamped,
+                            });
+                        }
+                    }
+                    return;
+                case 'setWave':
+                    {
+                        const wave = Math.max(1, Math.round(resolveEffectAmount(runtime, effect)));
+                        const previousWave = typeof targetBattle.wave === 'number' && Number.isFinite(targetBattle.wave)
+                            ? targetBattle.wave
+                            : 1;
+                        targetBattle.wave = wave;
+                        ensureBattleRuntimeState(targetBattle);
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'wave_changed', {
+                                previousWave,
+                                nextWave: targetBattle.wave,
+                            });
+                        }
+                    }
+                    return;
                 case 'retargetSlot':
                     if (!effect.selector) {
                         return;
@@ -2336,6 +2473,35 @@
                 ? runtimeState.panicValue
                 : 0;
             return value <= conditionValue;
+        }
+        case 'waveAtLeast':
+        {
+            const wave = typeof runtime?.battle?.wave === 'number' && Number.isFinite(runtime.battle.wave)
+                ? runtime.battle.wave
+                : 1;
+            return wave >= conditionValue;
+        }
+        case 'waveAtOrBelow':
+        {
+            const wave = typeof runtime?.battle?.wave === 'number' && Number.isFinite(runtime.battle.wave)
+                ? runtime.battle.wave
+                : 1;
+            return wave <= conditionValue;
+        }
+        case 'resonanceAtLeast':
+        case 'resonanceAtOrBelow':
+        {
+            const resonance = runtime?.battle?.runtimeState?.resonanceBySinType
+                && typeof runtime.battle.runtimeState.resonanceBySinType === 'object'
+                && !Array.isArray(runtime.battle.runtimeState.resonanceBySinType)
+                ? runtime.battle.runtimeState.resonanceBySinType
+                : {};
+            const value = typeof resonance?.[condition.sinType] === 'number' && Number.isFinite(resonance[condition.sinType])
+                ? resonance[condition.sinType]
+                : 0;
+            return condition.type === 'resonanceAtLeast'
+                ? value >= conditionValue
+                : value <= conditionValue;
         }
         default:
             return false;

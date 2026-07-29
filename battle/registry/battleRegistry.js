@@ -275,6 +275,10 @@
         consumeStatus: { id: 'consumeStatus', label: 'Consume Status' },
         adjustEncounterResource: { id: 'adjustEncounterResource', label: 'Adjust Encounter Resource' },
         adjustUnitResource: { id: 'adjustUnitResource', label: 'Adjust Unit Resource' },
+        spendEncounterResource: { id: 'spendEncounterResource', label: 'Spend Encounter Resource' },
+        spendUnitResource: { id: 'spendUnitResource', label: 'Spend Unit Resource' },
+        adjustResonance: { id: 'adjustResonance', label: 'Adjust Resonance' },
+        setWave: { id: 'setWave', label: 'Set Wave' },
         setFlag: { id: 'setFlag', label: 'Set Flag' },
         clearFlag: { id: 'clearFlag', label: 'Clear Flag' },
         adjustCounter: { id: 'adjustCounter', label: 'Adjust Counter' },
@@ -540,6 +544,14 @@
                 return `Adjust ${effect.resourceId} on ${effect.target || 'opponent'} by ${formatSignedNumber(effect.value)}.`;
             }
             return `Adjust ${effect.resourceId} on ${effect.target || 'opponent'}.`;
+        case 'spendEncounterResource':
+            return `Spend ${effect.resourceId}.`;
+        case 'spendUnitResource':
+            return `Spend ${effect.resourceId} on ${effect.target || 'opponent'}.`;
+        case 'adjustResonance':
+            return `Adjust resonance ${effect.sinType}.`;
+        case 'setWave':
+            return 'Set wave.';
         case 'setFlag':
             return `Set flag "${effect.flagId}" on ${effect.target || 'opponent'}.`;
         case 'clearFlag':
@@ -689,6 +701,14 @@
             return `Panic value is at least ${condition.value}`;
         case 'panicValueAtOrBelow':
             return `Panic value is at most ${condition.value}`;
+        case 'waveAtLeast':
+            return `Wave >= ${condition.value}`;
+        case 'waveAtOrBelow':
+            return `Wave <= ${condition.value}`;
+        case 'resonanceAtLeast':
+            return `Resonance ${condition.sinType} >= ${condition.value}`;
+        case 'resonanceAtOrBelow':
+            return `Resonance ${condition.sinType} <= ${condition.value}`;
         default:
             return condition.type;
         }

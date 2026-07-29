@@ -3386,6 +3386,7 @@
 
             const nextBattle = {
                 turn: 0,
+                wave: 1,
                 phase: 'setup',
                 winner: null,
                 log: [],
@@ -3397,6 +3398,9 @@
                 enemySlots,
                 activePlayerSlotId: playerSlots[0]?.id || null,
                 encounterResources: {},
+                runtimeState: {
+                    resonanceBySinType: {},
+                },
                 speedOrder: [],
                 resolutionQueue: [],
                 lastResolution: null,
