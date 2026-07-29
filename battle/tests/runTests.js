@@ -2219,6 +2219,309 @@ function runSuite() {
         }
     });
 
+    test('Golden snapshot: randomCost ammo spends deterministic buckets', () => {
+        const runScenario = (randomValue, expected) => {
+            const battleModules = createBattleEnvironment();
+            const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+            assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+            registerStatusDefinition({
+                id: 'test_random_ammo',
+                label: 'Test Random Ammo',
+            });
+            registerStatusDefinition({
+                id: 'test_random_ammo',
+                label: 'Test Random Ammo',
+                description: 'Test ammo with both Count and Potency.',
+                stackModel: {
+                    potency: { enabled: true, min: 0, max: 99, application: 'add' },
+                    count: { enabled: true, min: 0, max: 99, application: 'add' },
+                    expireWhen: { countLte: 0, potencyLte: 0 },
+                },
+                ammoProfile: {
+                    canCancelAttacksWhenEmpty: true,
+                },
+            });
+
+            const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+            const createUnit = (id, name, skills) => ({
+                id,
+                name,
+                level: 1,
+                maxHp: 30,
+                sp: 0,
+                speedRange: [2, 2],
+                resistances: {
+                    physical: { slash: 1, pierce: 1, blunt: 1 },
+                    sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                },
+                staggerThresholds: [],
+                sprites: { skills: {} },
+                skills,
+                passives: [],
+            });
+
+            const ammoSkill = {
+                id: 'random_shot',
+                name: 'Random Shot',
+                skillType: 'attack',
+                basePower: 4,
+                coinPower: 0,
+                coinCount: 1,
+                damageType: 'slash',
+                sinType: 'wrath',
+                ammo: {
+                    statusId: 'test_random_ammo',
+                    countCost: 1,
+                    randomCost: 2,
+                    cancelIfInsufficient: true,
+                },
+                effects: [],
+            };
+            const enemySkill = {
+                id: 'poke',
+                name: 'Poke',
+                skillType: 'attack',
+                basePower: 4,
+                coinPower: 0,
+                coinCount: 1,
+                damageType: 'slash',
+                sinType: 'wrath',
+                effects: [],
+            };
+
+            const battleDefinition = {
+                id: 'golden-snapshot-ammo-random-cost',
+                name: 'Golden Snapshot Ammo Random Cost',
+                playerUnits: [createUnit('ally', 'Ally', [ammoSkill])],
+                enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            };
+
+            const forcedTokens = {
+                'player-slot-1': [false],
+                'enemy-slot-1': [false],
+            };
+            const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+            const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+            const previousNow = Date.now;
+            const previousRandom = Math.random;
+            try {
+                Date.now = () => 1700000000000;
+                Math.random = () => randomValue;
+                const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+                engine.addStatus('player', { id: 'test_random_ammo', potency: 2, count: 2 }, 0);
+
+                engine.selectSlot('player-slot-1');
+                engine.selectSkill('random_shot');
+                engine.selectTarget('enemy-slot-1');
+                engine.resolveTurn();
+
+                const stream = engine.getState().events
+                    .filter((event) => {
+                        if (event.type === 'skill_ammo_spent') {
+                            return true;
+                        }
+                        return event.type === 'status_changed' && event.data?.statusId === 'test_random_ammo';
+                    })
+                    .map((event) => {
+                        const data = event.data || {};
+                        if (event.type === 'status_changed') {
+                            return {
+                                type: event.type,
+                                unitName: data.unitName,
+                                statusId: data.statusId,
+                                previousPotency: data.previousPotency,
+                                previousCount: data.previousCount,
+                                nextPotency: data.nextPotency,
+                                nextCount: data.nextCount,
+                            };
+                        }
+                        return { type: event.type, unitName: data.unitName, skillName: data.skillName, summary: data.summary };
+                    });
+
+                assert(stableStringify(stream) === stableStringify(expected.stream), `Unexpected randomCost stream:\n${JSON.stringify(stream, null, 2)}`);
+
+                const status = engine.getState().playerUnits[0].statuses.find((entry) => entry.id === 'test_random_ammo') || null;
+                assert(status, 'Expected test_random_ammo to remain on Ally.');
+                assert(status.count === expected.remaining.count && status.potency === expected.remaining.potency, `Expected remaining ammo ${JSON.stringify(expected.remaining)}, got ${JSON.stringify({ count: status.count, potency: status.potency })}`);
+            } finally {
+                Date.now = previousNow;
+                Math.random = previousRandom;
+            }
+        };
+
+        runScenario(0, {
+            stream: [
+                { type: 'status_changed', unitName: 'Ally', statusId: 'test_random_ammo', previousPotency: 2, previousCount: 2, nextPotency: 0, nextCount: 1 },
+                { type: 'skill_ammo_spent', unitName: 'Ally', skillName: 'Random Shot', summary: '1 Count Test Random Ammo, 2 Potency Test Random Ammo' },
+            ],
+            remaining: { potency: 0, count: 1 },
+        });
+
+        runScenario(0.99, {
+            stream: [
+                { type: 'status_changed', unitName: 'Ally', statusId: 'test_random_ammo', previousPotency: 2, previousCount: 2, nextPotency: 1, nextCount: 0 },
+                { type: 'skill_ammo_spent', unitName: 'Ally', skillName: 'Random Shot', summary: '2 Count Test Random Ammo, 1 Potency Test Random Ammo' },
+            ],
+            remaining: { potency: 1, count: 0 },
+        });
+    });
+
+    test('Golden snapshot: aggro overrides enemy target selection deterministically', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'aggro.js'));
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills, speed) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const poke = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'golden-snapshot-aggro-targeting',
+            name: 'Golden Snapshot Aggro Targeting',
+            playerUnits: [
+                createUnit('ally-1', 'Ally 1', [poke], 1),
+                createUnit('ally-2', 'Ally 2', [poke], 1),
+            ],
+            enemyUnits: [
+                createUnit('enemy', 'Enemy', [poke], 1),
+            ],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'random' },
+            },
+        };
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({
+                battleDefinition,
+                clamp,
+                onTurnStarted: (battle) => {
+                    const unit = battle.playerUnits[1];
+                    unit.pendingStatuses.push({ statusId: 'aggro', potency: 0, count: 3 });
+                },
+            });
+
+            const intent = engine.getState().events.find((event) => event.type === 'enemy_intent_set')?.data || null;
+            assert(intent, 'Expected enemy_intent_set to exist.');
+            assert(intent.targetLabel === 'Ally 2 Slot 2', `Expected aggro target to be Ally 2 Slot 2, got ${intent.targetLabel}`);
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Golden snapshot: enemy AI random target selection is deterministic', () => {
+        const runScenario = (randomValue, expectedTarget) => {
+            const battleModules = createBattleEnvironment();
+            require(path.resolve(battleRoot, 'ai', 'enemyAi.js'));
+            const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+            const createUnit = (id, name, skills) => ({
+                id,
+                name,
+                level: 1,
+                maxHp: 30,
+                sp: 0,
+                speedRange: [1, 1],
+                resistances: {
+                    physical: { slash: 1, pierce: 1, blunt: 1 },
+                    sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                },
+                staggerThresholds: [],
+                sprites: { skills: {} },
+                skills,
+                passives: [],
+            });
+
+            const poke = {
+                id: 'poke',
+                name: 'Poke',
+                skillType: 'attack',
+                basePower: 3,
+                coinPower: 0,
+                coinCount: 1,
+                damageType: 'slash',
+                sinType: 'wrath',
+                effects: [],
+            };
+
+            const battleDefinition = {
+                id: 'golden-snapshot-enemy-ai-random-target',
+                name: 'Golden Snapshot Enemy AI Random Target',
+                playerUnits: [
+                    createUnit('ally-1', 'Ally 1', [poke]),
+                    createUnit('ally-2', 'Ally 2', [poke]),
+                ],
+                enemyUnits: [
+                    createUnit('enemy', 'Enemy', [poke]),
+                ],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'random' },
+                },
+            };
+
+            const previousNow = Date.now;
+            const previousRandom = Math.random;
+            try {
+                Date.now = () => 1700000000000;
+                Math.random = () => randomValue;
+                const engine = battleModules.createBattleEngine({ battleDefinition, clamp });
+                const intent = engine.getState().events.find((event) => event.type === 'enemy_intent_set')?.data || null;
+                assert(intent, 'Expected enemy_intent_set to exist.');
+                assert(intent.targetLabel === expectedTarget, `Expected target ${expectedTarget}, got ${intent.targetLabel}`);
+            } finally {
+                Date.now = previousNow;
+                Math.random = previousRandom;
+            }
+        };
+
+        runScenario(0, 'Ally 1 Slot 1');
+        runScenario(0.99, 'Ally 2 Slot 2');
+    });
+
     test('Golden snapshot: ammo spend increments cumulative spent encounter resource', () => {
         const battleModules = createBattleEnvironment();
         require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'tigermarkRound.js'));
