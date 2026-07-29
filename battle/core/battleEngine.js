@@ -1647,17 +1647,32 @@
         }
 
         function calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical) {
+            const detailed = calculateHitDamageDetailed(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
+            return detailed.damage;
+        }
+
+        function calculateHitDamageDetailed(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical) {
             const damageContext = buildDamageContext(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
 
             if (damageFormula?.calculateDamage) {
-                const calculated = damageFormula.calculateDamage(damageContext).damage;
+                const result = damageFormula.calculateDamage(damageContext);
+                const calculated = result.damage;
                 const cap = attackContext?.damageCapByCoin?.[damageContext.modifiers.attack.currentCoinIndex]
                     ?? attackContext?.damageCap
                     ?? null;
                 if (typeof cap === 'number' && Number.isFinite(cap) && cap >= 0) {
-                    return Math.min(calculated, cap);
+                    const cappedDamage = Math.min(calculated, cap);
+                    return {
+                        damage: cappedDamage,
+                        breakdown: {
+                            ...(result.breakdown || null),
+                            cap,
+                            cappedDamage,
+                            capApplied: cappedDamage !== calculated,
+                        },
+                    };
                 }
-                return calculated;
+                return { damage: calculated, breakdown: result.breakdown || null };
             }
 
             const levelDifference = damageContext.offenseLevel - damageContext.defenseLevel;
@@ -1706,9 +1721,43 @@
                 ?? attackContext?.damageCap
                 ?? null;
             if (typeof cap === 'number' && Number.isFinite(cap) && cap >= 0) {
-                return Math.min(uncapped, cap);
+                const cappedDamage = Math.min(uncapped, cap);
+                return {
+                    damage: cappedDamage,
+                    breakdown: {
+                        basePower: finalPower,
+                        resistance: { physical: physicalResistance, sin: sinResistance },
+                        levelDifference,
+                        levelModifier,
+                        damageMultiplier: damageContext.modifiers.attack.damageMultiplier,
+                        weakResistanceBonus: damageContext.modifiers.attack.weakResistanceDamageBonus,
+                        incomingReduction: damageContext.modifiers.defense.damageReductionMultiplier,
+                        flatReduction: reducedFlat,
+                        additiveDamage: damageContext.modifiers.attack.additiveDamage,
+                        rawDamage,
+                        uncappedDamage: uncapped,
+                        cap,
+                        cappedDamage,
+                        capApplied: cappedDamage !== uncapped,
+                    },
+                };
             }
-            return uncapped;
+            return {
+                damage: uncapped,
+                breakdown: {
+                    basePower: finalPower,
+                    resistance: { physical: physicalResistance, sin: sinResistance },
+                    levelDifference,
+                    levelModifier,
+                    damageMultiplier: damageContext.modifiers.attack.damageMultiplier,
+                    weakResistanceBonus: damageContext.modifiers.attack.weakResistanceDamageBonus,
+                    incomingReduction: damageContext.modifiers.defense.damageReductionMultiplier,
+                    flatReduction: reducedFlat,
+                    additiveDamage: damageContext.modifiers.attack.additiveDamage,
+                    rawDamage,
+                    uncappedDamage: uncapped,
+                },
+            };
         }
         const applySkillEffects = typeof battleModules.createSkillEffectRunner === 'function'
             ? battleModules.createSkillEffectRunner({
@@ -2190,6 +2239,10 @@
                 defeatedById: defeatedByUnit?.id || null,
                 defeatedByName: defeatedByUnit?.name || null,
             });
+            invokeScriptedEvents(targetBattle, 'unitDefeated', {
+                defeatedUnit: unit,
+                defeatedByUnit: defeatedByUnit || null,
+            });
             invokeHooks(unit, 'unitDefeated', { battle: targetBattle, unit, opponent: defeatedByUnit || null });
         }
 
@@ -2213,6 +2266,11 @@
                     winner: 'draw',
                     winnerName: 'Draw',
                 });
+                invokeScriptedEvents(targetBattle, 'battleEnd', {
+                    winner: 'draw',
+                    winnerUnit: null,
+                    reason: null,
+                });
                 getAllUnits(targetBattle).forEach((unit) => {
                     invokeHooks(unit, 'battleEnd', {
                         battle: targetBattle,
@@ -2232,6 +2290,11 @@
                     winnerId: winnerUnit.id,
                     winnerName: winnerUnit.name,
                 });
+                invokeScriptedEvents(targetBattle, 'battleEnd', {
+                    winner: 'player',
+                    winnerUnit,
+                    reason: null,
+                });
                 getAllUnits(targetBattle).forEach((unit) => {
                     invokeHooks(unit, 'battleEnd', {
                         battle: targetBattle,
@@ -2250,6 +2313,11 @@
                 winner: 'enemy',
                 winnerId: winnerUnit.id,
                 winnerName: winnerUnit.name,
+            });
+            invokeScriptedEvents(targetBattle, 'battleEnd', {
+                winner: 'enemy',
+                winnerUnit,
+                reason: null,
             });
             getAllUnits(targetBattle).forEach((unit) => {
                 invokeHooks(unit, 'battleEnd', {
@@ -2276,6 +2344,12 @@
                 winner,
                 winnerId: winnerUnit?.id || null,
                 winnerName: winnerUnit?.name || winnerName,
+                reason: options.reason || null,
+            });
+
+            invokeScriptedEvents(targetBattle, 'battleEnd', {
+                winner,
+                winnerUnit: winnerUnit || null,
                 reason: options.reason || null,
             });
 
@@ -2404,8 +2478,8 @@
                     });
                 }
 
-                const damage = calculateHitDamage(attacker, skill, resolvedDefender, finalPower, attackContext, defendContext, isCritical);
-                const shieldState = absorbDamageWithShields(targetBattle, resolvedDefender, damage);
+                const damageDetails = calculateHitDamageDetailed(attacker, skill, resolvedDefender, finalPower, attackContext, defendContext, isCritical);
+                const shieldState = absorbDamageWithShields(targetBattle, resolvedDefender, damageDetails.damage);
                 const minimumHp = typeof defendContext.minHpAfterDamage === 'number' && Number.isFinite(defendContext.minHpAfterDamage)
                     ? Math.max(0, Math.round(defendContext.minHpAfterDamage))
                     : 0;
@@ -2436,6 +2510,7 @@
                     isHeads: roll.isHeads,
                     isCritical,
                     targetHp: resolvedDefender.hp,
+                    breakdown: damageDetails.breakdown || null,
                 });
 
                 emitEvent(targetBattle, 'hit_resolved', {
@@ -2453,6 +2528,7 @@
                     previousHp: resolvedPreviousHp,
                     nextHp: resolvedDefender.hp,
                     isCritical,
+                    breakdown: damageDetails.breakdown || null,
                 });
 
                 invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: resolvedDefender, skill, attackContext, defendContext, coinIndex: coinIndex + 1, finalPower, damage: shieldState.remainingDamage, isCritical });
@@ -2811,8 +2887,8 @@
                     nextHp: Math.max(0, defender.hp - previewShieldState.remainingDamage),
                     isCritical,
                 });
-                const damage = calculateHitDamage(attacker, attackSkill, defender, finalPower, attackContext, defendContext, isCritical);
-                const shieldState = absorbDamageWithShields(targetBattle, defender, damage);
+                const damageDetails = calculateHitDamageDetailed(attacker, attackSkill, defender, finalPower, attackContext, defendContext, isCritical);
+                const shieldState = absorbDamageWithShields(targetBattle, defender, damageDetails.damage);
                 const minimumHp = typeof defendContext.minHpAfterDamage === 'number' && Number.isFinite(defendContext.minHpAfterDamage)
                     ? Math.max(0, Math.round(defendContext.minHpAfterDamage))
                     : 0;
@@ -2842,6 +2918,7 @@
                     isHeads: roll.isHeads,
                     isCritical,
                     targetHp: defender.hp,
+                    breakdown: damageDetails.breakdown || null,
                 });
 
                 emitEvent(targetBattle, 'hit_resolved', {
@@ -2859,6 +2936,7 @@
                     previousHp,
                     nextHp: defender.hp,
                     isCritical,
+                    breakdown: damageDetails.breakdown || null,
                 });
 
                 invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill: attackSkill, attackContext, defendContext, coinIndex: coinIndex + 1, finalPower, damage: shieldState.remainingDamage, isCritical });
@@ -3609,6 +3687,100 @@
             return null;
         }
 
+        function getScriptedEventDefinitions() {
+            const rules = battleDefinition?.rules;
+            const events = rules?.scriptedEvents;
+            return Array.isArray(events) ? events : [];
+        }
+
+        function ensureScriptedEventOwners(targetBattle) {
+            if (!targetBattle || !targetBattle.runtimeState) {
+                return null;
+            }
+            if (!targetBattle.runtimeState.scriptedEventOwners || typeof targetBattle.runtimeState.scriptedEventOwners !== 'object' || Array.isArray(targetBattle.runtimeState.scriptedEventOwners)) {
+                targetBattle.runtimeState.scriptedEventOwners = {};
+            }
+            return targetBattle.runtimeState.scriptedEventOwners;
+        }
+
+        function ensureScriptedEventOwner(targetBattle, eventDefinition) {
+            const owners = ensureScriptedEventOwners(targetBattle);
+            if (!owners || !eventDefinition?.id) {
+                return null;
+            }
+            if (!owners[eventDefinition.id]) {
+                owners[eventDefinition.id] = {
+                    id: eventDefinition.id,
+                    runtimeState: {
+                        oncePer: {
+                            battle: {},
+                            turn: {},
+                            skill: {},
+                            coin: {},
+                        },
+                    },
+                };
+            }
+            return owners[eventDefinition.id];
+        }
+
+        function resetScriptedEventRuntimeState(targetBattle) {
+            const owners = ensureScriptedEventOwners(targetBattle);
+            if (!owners) {
+                return;
+            }
+            Object.values(owners).forEach((owner) => {
+                resetHookOwnerRuntimeState(owner, ['turn', 'skill', 'coin']);
+            });
+        }
+
+        function getScriptedEventContextUnit(targetBattle, eventDefinition) {
+            if (!targetBattle || !eventDefinition) {
+                return null;
+            }
+            if (eventDefinition.unitId) {
+                return getUnitById(targetBattle, eventDefinition.unitId);
+            }
+            const side = eventDefinition.side === 'enemy' ? 'enemy' : 'player';
+            const units = getUnitsForSide(targetBattle, side);
+            return units.find((unit) => isUnitAlive(unit)) || units[0] || null;
+        }
+
+        function invokeScriptedEvents(targetBattle, trigger, extraRuntime = {}) {
+            const events = getScriptedEventDefinitions();
+            if (!events.length) {
+                return;
+            }
+            const runner = ensurePassiveEffectRunner();
+            if (typeof runner !== 'function') {
+                return;
+            }
+            events.forEach((eventDefinition) => {
+                if (!eventDefinition || eventDefinition.trigger !== trigger || !eventDefinition.hook) {
+                    return;
+                }
+                const owner = ensureScriptedEventOwner(targetBattle, eventDefinition);
+                const unit = getScriptedEventContextUnit(targetBattle, eventDefinition);
+                const unitSide = unit?.side || (eventDefinition.side === 'enemy' ? 'enemy' : 'player');
+                const opposingUnits = getUnitsForSide(targetBattle, getOpposingSide(unitSide));
+                const runtime = {
+                    battle: targetBattle,
+                    unit,
+                    sourceUnit: unit,
+                    opposingUnits,
+                    scriptedEvent: {
+                        id: eventDefinition.id,
+                        trigger,
+                    },
+                    ...extraRuntime,
+                };
+                runner(targetBattle, trigger, eventDefinition.hook, runtime, {
+                    hookOwner: owner,
+                    hookOwnerType: 'scriptedEvent',
+                });
+            });
+        }
+
         function getTotalWaves() {
             const waves = getWaveDefinitions();
             return waves && waves.length ? waves.length : 1;
@@ -3648,6 +3820,9 @@
                 wave: waveIndex,
                 totalWaves: targetBattle.totalWaves || getTotalWaves(),
                 enemyTeamName: enemyUnits.map((unit) => unit.name).join(', '),
+            });
+            invokeScriptedEvents(targetBattle, 'waveStart', {
+                wave: waveIndex,
             });
             return true;
         }
@@ -3706,6 +3881,7 @@
                 playerTeamName: playerUnits.map((unit) => unit.name).join(', '),
                 enemyTeamName: enemyUnits.map((unit) => unit.name).join(', '),
             });
+            invokeScriptedEvents(nextBattle, 'battleStart');
             getAllUnits(nextBattle).forEach((unit) => {
                 invokeHooks(unit, 'battleStart', {
                     battle: nextBattle,
@@ -3966,6 +4142,7 @@
             if (targetBattle.runtimeState?.absoluteResonanceBonusBySide) {
                 targetBattle.runtimeState.absoluteResonanceBonusBySide = { player: {}, enemy: {} };
             }
+            resetScriptedEventRuntimeState(targetBattle);
             if (typeof onTurnStarted === 'function') {
                 onTurnStarted(targetBattle);
             }
@@ -3983,6 +4160,7 @@
             });
 
             processSanityModelAtTurnStart(targetBattle);
+            invokeScriptedEvents(targetBattle, 'turnStart', { turn: targetBattle.turn });
 
             getAllSlots(targetBattle).forEach((slot) => {
                 const unit = getUnitById(targetBattle, slot.unitId);
@@ -4516,6 +4694,7 @@
                 expireShieldsForPhase(battle, unit, 'turnEnd');
             });
 
+            invokeScriptedEvents(battle, 'turnEnd', { turn: battle.turn });
             finalizeBattleAfterTurn(battle);
             if (!battle.winner) {
                 battle.phase = 'resolved';

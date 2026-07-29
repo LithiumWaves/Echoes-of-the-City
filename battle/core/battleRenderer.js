@@ -1189,6 +1189,26 @@
             const debugStatusPotency = typeof uiState?.debugStatusPotency === 'string' ? uiState.debugStatusPotency : '0';
             const debugStatusCount = typeof uiState?.debugStatusCount === 'string' ? uiState.debugStatusCount : '1';
             const debugSanityValue = typeof uiState?.debugSanityValue === 'string' ? uiState.debugSanityValue : '';
+            const lastHitEvent = unit && Array.isArray(battle?.events)
+                ? [...battle.events].reverse().find((event) => event?.type === 'hit_resolved' && (event.data?.attackerId === unit.id || event.data?.defenderId === unit.id) && event.data?.breakdown)
+                : null;
+            const lastHitDetails = lastHitEvent?.data?.breakdown
+                ? escapeHtml(JSON.stringify(lastHitEvent.data.breakdown, null, 2))
+                : '';
+            const lastHitSummary = lastHitEvent?.data
+                ? `${lastHitEvent.data.attackerName} -> ${lastHitEvent.data.defenderName} (${lastHitEvent.data.skillName})`
+                : '';
+            const lastHitMarkup = lastHitEvent?.data?.breakdown
+                ? `
+                    <div class="echoes-battle-panel__inspect-block">
+                        <strong>Damage Formula</strong>
+                        <details>
+                            <summary>${escapeAttribute(lastHitSummary)}</summary>
+                            <pre style="white-space: pre-wrap; margin: 0.55rem 0 0; padding: 0.65rem; border: 1px solid rgba(255,255,255,0.14); background: rgba(8,10,14,0.66);">${lastHitDetails}</pre>
+                        </details>
+                    </div>
+                `
+                : '';
             const debugHint = `{"set":{"unit.${unit?.id || 'unitId'}.hp":50,"unit.${unit?.id || 'unitId'}.sp":0,"battle.wave":2}}`;
             const debugUnitIdMarkup = Array.isArray(debugIds?.units) && debugIds.units.length
                 ? debugIds.units.map((entry) => `${entry.id}`).join(', ')
@@ -1333,6 +1353,7 @@
                                 ${skillMarkup || '<span>None</span>'}
                             </div>
                         </div>
+                        ${lastHitMarkup}
                         ${debugMarkup}
                     </div>
                 </aside>

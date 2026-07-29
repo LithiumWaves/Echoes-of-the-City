@@ -1859,6 +1859,40 @@
             }
         }
 
+        const scriptedEvents = normalizedDefinition.rules?.scriptedEvents;
+        if (scriptedEvents != null) {
+            if (!Array.isArray(scriptedEvents) || !scriptedEvents.length) {
+                pushError(errors, 'battle.rules.scriptedEvents', 'must be a non-empty array when provided.');
+            } else {
+                scriptedEvents.forEach((entry, entryIndex) => {
+                    const entryPath = `battle.rules.scriptedEvents[${entryIndex}]`;
+                    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+                        pushError(errors, entryPath, 'must be an object.');
+                        return;
+                    }
+                    if (!entry.id || typeof entry.id !== 'string') {
+                        pushError(errors, `${entryPath}.id`, 'must be a non-empty string.');
+                    }
+                    if (!entry.trigger || typeof entry.trigger !== 'string') {
+                        pushError(errors, `${entryPath}.trigger`, 'must be a non-empty string.');
+                    } else if (!PASSIVE_HOOKS.has(entry.trigger)) {
+                        pushError(errors, `${entryPath}.trigger`, 'must be a supported hook trigger name.');
+                    }
+                    if (entry.side != null && !['player', 'enemy'].includes(entry.side)) {
+                        pushError(errors, `${entryPath}.side`, 'must be "player" or "enemy" when provided.');
+                    }
+                    if (entry.unitId != null && (typeof entry.unitId !== 'string' || !entry.unitId)) {
+                        pushError(errors, `${entryPath}.unitId`, 'must be a non-empty string when provided.');
+                    }
+                    if (entry.hook == null) {
+                        pushError(errors, `${entryPath}.hook`, 'must be provided.');
+                    } else {
+                        validateHookDefinition(errors, new Set(), entry.hook, `${entryPath}.hook`);
+                    }
+                });
+            }
+        }
+
         normalizedDefinition.playerUnits.forEach((unit, index) => validateUnit(errors, unit, `battle.playerUnits[${index}]`));
         normalizedDefinition.enemyUnits.forEach((unit, index) => validateUnit(errors, unit, `battle.enemyUnits[${index}]`));
 

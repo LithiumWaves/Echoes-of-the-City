@@ -2679,6 +2679,274 @@ function runSuite() {
         assert(ended, 'Expected battle_ended reason turn_limit.');
     });
 
+    test('Engine: scripted encounter events trigger across battle lifecycle', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        const registerMark = (id, label) => {
+            registerStatusDefinition({ id, label });
+            registerStatusDefinition({
+                id,
+                label,
+                countOnly: true,
+                stackModel: {
+                    count: { enabled: true, min: 0, max: 99, application: 'add' },
+                    expireWhen: { countLte: 0 },
+                },
+                hooks: {},
+            });
+        };
+
+        registerMark('evt_battle_start', 'Event Battle Start');
+        registerMark('evt_turn_start', 'Event Turn Start');
+        registerMark('evt_turn_end', 'Event Turn End');
+        registerMark('evt_unit_defeated', 'Event Unit Defeated');
+        registerMark('evt_battle_end', 'Event Battle End');
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const finisher = {
+            id: 'finisher',
+            name: 'Finisher',
+            skillType: 'attack',
+            basePower: 99,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const poke = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'pride',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed, hp = 10) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: hp,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const scriptedEvents = [
+            { id: 'evt_battle_start', trigger: 'battleStart', side: 'player', hook: [{ type: 'applyStatus', target: 'self', statusId: 'evt_battle_start', count: 1 }] },
+            { id: 'evt_turn_start', trigger: 'turnStart', side: 'player', hook: [{ type: 'applyStatus', target: 'self', statusId: 'evt_turn_start', count: 1 }] },
+            { id: 'evt_turn_end', trigger: 'turnEnd', side: 'player', hook: [{ type: 'applyStatus', target: 'self', statusId: 'evt_turn_end', count: 1 }] },
+            { id: 'evt_unit_defeated', trigger: 'unitDefeated', side: 'player', hook: [{ type: 'applyStatus', target: 'self', statusId: 'evt_unit_defeated', count: 1 }] },
+            { id: 'evt_battle_end', trigger: 'battleEnd', side: 'player', hook: [{ type: 'applyStatus', target: 'self', statusId: 'evt_battle_end', count: 1 }] },
+        ];
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'scripted-events-lifecycle',
+                name: 'Scripted Events Lifecycle',
+                playerUnits: [createUnit('ally', 'Ally', [finisher], 5, 999)],
+                enemyUnits: [createUnit('enemy', 'Enemy', [poke], 1, 5)],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 10,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    scriptedEvents,
+                },
+            },
+            clamp,
+        });
+
+        const initial = engine.getState();
+        const initialMarks = new Map((initial.playerUnits[0].statuses || []).map((status) => [status.id, status.count || 0]));
+        assert(initialMarks.get('evt_battle_start') === 1, `Expected evt_battle_start to be 1, got ${initialMarks.get('evt_battle_start')}`);
+        assert(initialMarks.get('evt_turn_start') === 1, `Expected evt_turn_start to be 1, got ${initialMarks.get('evt_turn_start')}`);
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('finisher');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const after = engine.getState();
+        assert(after.winner === 'player', `Expected player to win, got ${after.winner}`);
+        const afterMarks = new Map((after.playerUnits[0].statuses || []).map((status) => [status.id, status.count || 0]));
+        assert(afterMarks.get('evt_turn_end') === 1, `Expected evt_turn_end to be 1, got ${afterMarks.get('evt_turn_end')}`);
+        assert(afterMarks.get('evt_unit_defeated') === 1, `Expected evt_unit_defeated to be 1, got ${afterMarks.get('evt_unit_defeated')}`);
+        assert(afterMarks.get('evt_battle_end') === 1, `Expected evt_battle_end to be 1, got ${afterMarks.get('evt_battle_end')}`);
+    });
+
+    test('Engine: scripted encounter events trigger on waveStart', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        registerStatusDefinition({ id: 'evt_wave_start', label: 'Event Wave Start' });
+        registerStatusDefinition({
+            id: 'evt_wave_start',
+            label: 'Event Wave Start',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const bigHit = {
+            id: 'big_hit',
+            name: 'Big Hit',
+            skillType: 'attack',
+            basePower: 50,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const weakHit = {
+            id: 'weak_hit',
+            name: 'Weak Hit',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'pride',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed, hp = 20) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: hp,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'scripted-events-wave',
+                name: 'Scripted Events Wave',
+                playerUnits: [createUnit('ally', 'Ally', [bigHit], 5, 999)],
+                enemyUnits: [createUnit('wave1', 'Wave 1 Enemy', [weakHit], 1, 5)],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 10,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    waves: [
+                        { enemyUnits: [createUnit('wave1', 'Wave 1 Enemy', [weakHit], 1, 5)] },
+                        { enemyUnits: [createUnit('wave2', 'Wave 2 Enemy', [weakHit], 1, 5)] },
+                    ],
+                    scriptedEvents: [
+                        { id: 'evt_wave_start', trigger: 'waveStart', side: 'player', hook: [{ type: 'applyStatus', target: 'self', statusId: 'evt_wave_start', count: 1 }] },
+                    ],
+                },
+            },
+            clamp,
+        });
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('big_hit');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const afterWave1 = engine.getState();
+        assert(afterWave1.wave === 2, `Expected wave to advance to 2, got ${afterWave1.wave}`);
+        assert(afterWave1.winner == null, `Expected no winner after wave 1, got ${afterWave1.winner}`);
+        const waveMark = afterWave1.playerUnits[0].statuses.find((status) => status.id === 'evt_wave_start')?.count || 0;
+        assert(waveMark === 1, `Expected evt_wave_start to be 1, got ${waveMark}`);
+    });
+
+    test('Engine: hit_resolved carries damage formula breakdown data', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const poke = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 5,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed, hp = 30) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: hp,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'breakdown-smoke',
+                name: 'Breakdown Smoke',
+                playerUnits: [createUnit('ally', 'Ally', [poke], 5)],
+                enemyUnits: [createUnit('enemy', 'Enemy', [poke], 1)],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+        });
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('poke');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const state = engine.getState();
+        const hit = state.events.find((event) => event.type === 'hit_resolved' && event.data?.attackerName === 'Ally')?.data || null;
+        assert(hit, 'Expected Ally hit_resolved event.');
+        assert(hit.breakdown && typeof hit.breakdown === 'object', 'Expected hit_resolved.breakdown to be an object.');
+        assert(typeof hit.breakdown.basePower === 'number', `Expected breakdown.basePower to be a number, got ${typeof hit.breakdown.basePower}`);
+    });
+
     test('Effect runner: encounterResource amount supports side scoping', () => {
         const battleModules = createBattleEnvironment();
         const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
