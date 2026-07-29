@@ -2106,6 +2106,122 @@ function runSuite() {
         assert(state.encounterResources['enemy:pride'] === 1, `Expected enemy:pride to be 1, got ${state.encounterResources['enemy:pride']}`);
     });
 
+    test('Engine: Attack Weight targets untargeted slots and hits multiple targets', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const weightSkill = {
+            id: 'weight_skill',
+            name: 'Weight Skill',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            attackWeight: 2,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const dummySkill = {
+            id: 'dummy_skill',
+            name: 'Dummy Skill',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const enemyGuard = {
+            id: 'enemy_guard',
+            name: 'Enemy Guard',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'pride',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed, extra = {}) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 999,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+            ...extra,
+        });
+
+        const forcedTokens = {
+            'player-slot-1': [true, true],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'attack-weight-smoke',
+                name: 'Attack Weight Smoke',
+                playerUnits: [
+                    createUnit('attacker', 'Attacker', [weightSkill], 6),
+                    createUnit('dummy', 'Dummy', [dummySkill], 5),
+                ],
+                enemyUnits: [
+                    createUnit('enemy1', 'Enemy 1', [enemyGuard], 1),
+                    createUnit('enemy2', 'Enemy 2', [enemyGuard], 1),
+                    createUnit('enemy3', 'Enemy 3', [enemyGuard], 1),
+                ],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+            peekRollToken,
+            consumeRollToken,
+        });
+
+        engine.selectSlot('player-slot-2');
+        engine.selectSkill('dummy_skill');
+        engine.selectTarget('enemy-slot-2');
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('weight_skill');
+        engine.selectTarget('enemy-slot-2');
+
+        engine.selectSlot('player-slot-2');
+        engine.selectTarget('enemy-slot-3');
+
+        const stateBefore = engine.getState();
+        const attackerSlot = stateBefore.playerSlots.find((slot) => slot.id === 'player-slot-1');
+        assert(Array.isArray(attackerSlot?.targetSlotIds), 'Expected attackerSlot.targetSlotIds to be an array.');
+        assert(attackerSlot.targetSlotIds[0] === 'enemy-slot-2', `Expected primary target to be enemy-slot-2, got ${attackerSlot.targetSlotIds[0]}`);
+        assert(attackerSlot.targetSlotIds[1] === 'enemy-slot-1', `Expected Attack Weight to pick untargeted enemy-slot-1 as extra, got ${attackerSlot.targetSlotIds[1]}`);
+
+        engine.resolveTurn();
+
+        const state = engine.getState();
+        const hitsByAttacker = state.events
+            .filter((event) => event.type === 'hit_resolved' && event.data?.attackerName === 'Attacker')
+            .map((event) => event.data?.defenderName);
+        assert(hitsByAttacker.includes('Enemy 2'), `Expected attacker to hit Enemy 2, got [${hitsByAttacker.join(', ')}]`);
+        assert(hitsByAttacker.includes('Enemy 1'), `Expected attacker to hit Enemy 1 via Attack Weight, got [${hitsByAttacker.join(', ')}]`);
+    });
+
     test('Effect runner: encounterResource amount supports side scoping', () => {
         const battleModules = createBattleEnvironment();
         const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;

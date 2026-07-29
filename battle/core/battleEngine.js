@@ -173,9 +173,13 @@
             intentSkillId: null,
             intentTargetSlotId: null,
             targetSlotId: null,
+            targetSlotIds: null,
             manualTargetLock: false,
             resolved: false,
+            slotWeight: Number.isInteger(unit?.slotWeight) && unit.slotWeight > 0 ? unit.slotWeight : 1,
             ammoState: null,
+            attackContext: null,
+            onUseGranted: false,
         };
     }
 
@@ -2866,13 +2870,15 @@
             };
         }
 
-        function resolveClashEngagement(targetBattle, actingSlot, targetSlot) {
+        function resolveClashEngagement(targetBattle, actingSlot, targetSlot, options = {}) {
             const actingUnit = getUnitById(targetBattle, actingSlot.unitId);
             const targetUnit = getUnitById(targetBattle, targetSlot.unitId);
             const actingSkill = getSkillById(actingUnit, actingSlot.selectedSkillId);
             const targetSkill = getSkillById(targetUnit, targetSlot.selectedSkillId);
-            const actingContext = createSkillContext(targetBattle, actingUnit, actingSlot, actingSkill, targetUnit);
-            const targetContext = createSkillContext(targetBattle, targetUnit, targetSlot, targetSkill, actingUnit);
+            const actingContext = actingSlot.attackContext || createSkillContext(targetBattle, actingUnit, actingSlot, actingSkill, targetUnit);
+            const targetContext = targetSlot.attackContext || createSkillContext(targetBattle, targetUnit, targetSlot, targetSkill, actingUnit);
+            actingSlot.attackContext = actingContext;
+            targetSlot.attackContext = targetContext;
             const leftSideIsPlayer = actingSlot.side === 'player';
             const leftSlot = leftSideIsPlayer ? actingSlot : targetSlot;
             const rightSlot = leftSideIsPlayer ? targetSlot : actingSlot;
@@ -2900,7 +2906,14 @@
                     totalDamage: 0,
                     remainingCoins: 0,
                 };
-                return;
+                return {
+                    winnerSlot: null,
+                    winnerUnit: null,
+                    winnerSkill: null,
+                    winnerContext: null,
+                    loserSlot: null,
+                    loserUnit: null,
+                };
             }
 
             if (leftContext.cancelled || rightContext.cancelled) {
@@ -2910,7 +2923,10 @@
                 const winnerContext = leftContext.cancelled ? rightContext : leftContext;
                 const winnerSlot = leftContext.cancelled ? rightSlot : leftSlot;
                 const loserSlot = leftContext.cancelled ? leftSlot : rightSlot;
-                grantEgoResourceOnUse(targetBattle, clashWinnerUnit, winnerSkill);
+                if (!winnerSlot.onUseGranted) {
+                    grantEgoResourceOnUse(targetBattle, clashWinnerUnit, winnerSkill);
+                    winnerSlot.onUseGranted = true;
+                }
                 const coinBonus = typeof winnerContext?.coinCountBonus === 'number' && Number.isFinite(winnerContext.coinCountBonus)
                     ? winnerContext.coinCountBonus
                     : 0;
@@ -2928,7 +2944,9 @@
                     remainingCoins,
                 );
                 const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
-                applyAttackEndEffects(targetBattle, clashWinnerUnit, winnerSkill, winnerContext);
+                if (!options.skipAttackEnd) {
+                    applyAttackEndEffects(targetBattle, clashWinnerUnit, winnerSkill, winnerContext);
+                }
                 targetBattle.clashPresentation = createOneSidedPresentation(
                     winnerSlot,
                     loserSlot,
@@ -2947,11 +2965,24 @@
                     totalDamage,
                     remainingCoins,
                 };
-                return;
+                return {
+                    winnerSlot,
+                    winnerUnit: clashWinnerUnit,
+                    winnerSkill,
+                    winnerContext,
+                    loserSlot,
+                    loserUnit: clashLoserUnit,
+                };
             }
 
-            grantEgoResourceOnUse(targetBattle, leftUnit, leftSkill);
-            grantEgoResourceOnUse(targetBattle, rightUnit, rightSkill);
+            if (!leftSlot.onUseGranted) {
+                grantEgoResourceOnUse(targetBattle, leftUnit, leftSkill);
+                leftSlot.onUseGranted = true;
+            }
+            if (!rightSlot.onUseGranted) {
+                grantEgoResourceOnUse(targetBattle, rightUnit, rightSkill);
+                rightSlot.onUseGranted = true;
+            }
 
             const clashResult = resolveClash(targetBattle, leftSlot, rightSlot, leftUnit, leftSkill, rightUnit, rightSkill, leftContext, rightContext);
             const clashWinnerUnit = clashResult.winnerSide === 'left' ? leftUnit : rightUnit;
@@ -3015,7 +3046,9 @@
             );
             const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
 
-            applyAttackEndEffects(targetBattle, clashWinnerUnit, winnerSkill, winnerContext);
+            if (!options.skipAttackEnd) {
+                applyAttackEndEffects(targetBattle, clashWinnerUnit, winnerSkill, winnerContext);
+            }
 
             if (!isUnitAlive(clashLoserUnit)) {
                 markUnitDefeated(targetBattle, clashLoserUnit, clashWinnerUnit);
@@ -3044,6 +3077,14 @@
                 actingSkillName: winnerSkill.name,
                 totalDamage,
                 remainingCoins,
+            };
+            const engagementResult = {
+                winnerSlot,
+                winnerUnit: clashWinnerUnit,
+                winnerSkill,
+                winnerContext,
+                loserSlot,
+                loserUnit: clashLoserUnit,
             };
 
             if (loserContext.followUpSkillIdOnClashLose && isUnitAlive(clashLoserUnit) && isUnitAlive(clashWinnerUnit)) {
@@ -3078,13 +3119,16 @@
                     };
                 }
             }
+
+            return engagementResult;
         }
 
-        function resolveOneSidedEngagement(targetBattle, actingSlot, targetSlot) {
+        function resolveOneSidedEngagement(targetBattle, actingSlot, targetSlot, options = {}) {
             const actingUnit = getUnitById(targetBattle, actingSlot.unitId);
             const targetUnit = getUnitById(targetBattle, targetSlot.unitId);
             const actingSkill = getSkillById(actingUnit, actingSlot.selectedSkillId);
-            const attackContext = createSkillContext(targetBattle, actingUnit, actingSlot, actingSkill, targetUnit);
+            const attackContext = actingSlot.attackContext || createSkillContext(targetBattle, actingUnit, actingSlot, actingSkill, targetUnit);
+            actingSlot.attackContext = attackContext;
             const defendingSkill = getActiveDefenseSkill(targetBattle, targetSlot, actingSlot);
             const defendContext = { damageReductionMultiplier: 1, damageReductionFlat: 0 };
             const defenseState = ensureDefenseState(targetSlot);
@@ -3102,7 +3146,10 @@
             if (attackContext.cancelled) {
                 hits = [];
             } else if (isEvadeSkill(defendingSkill) && !defenseState.broken && isUnitAlive(targetUnit)) {
-                grantEgoResourceOnUse(targetBattle, actingUnit, actingSkill);
+                if (!actingSlot.onUseGranted) {
+                    grantEgoResourceOnUse(targetBattle, actingUnit, actingSkill);
+                    actingSlot.onUseGranted = true;
+                }
                 if (!defenseState.context) {
                     defenseState.context = createSkillContext(targetBattle, targetUnit, targetSlot, defendingSkill, actingUnit);
                 }
@@ -3121,7 +3168,10 @@
                 }
             } else {
                 if (!attackContext.cancelled) {
-                    grantEgoResourceOnUse(targetBattle, actingUnit, actingSkill);
+                    if (!actingSlot.onUseGranted) {
+                        grantEgoResourceOnUse(targetBattle, actingUnit, actingSkill);
+                        actingSlot.onUseGranted = true;
+                    }
                 }
                 if (isGuardSkill(defendingSkill) && isUnitAlive(targetUnit)) {
                     guardResult = activateGuardDefense(targetBattle, targetSlot, targetUnit, actingSlot, actingUnit, actingSkill, attackContext);
@@ -3129,7 +3179,7 @@
                 hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, Math.max(0, (actingSkill.coinCount || 0) + (attackContext?.coinCountBonus || 0)));
             }
 
-            if (!attackContext.cancelled) {
+            if (!attackContext.cancelled && !options.skipAttackEnd) {
                 applyAttackEndEffects(targetBattle, actingUnit, actingSkill, attackContext);
             }
             const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
@@ -3187,6 +3237,14 @@
                     remainingCoins: counterResult.skill.coinCount,
                 };
             }
+
+            return {
+                actingUnit,
+                actingSkill,
+                attackContext,
+                hits,
+                totalDamage,
+            };
         }
 
         function getSkillMaxPower(skill) {
@@ -3366,6 +3424,7 @@
                 }
 
                 enemySlot.targetSlotId = enemySlot.intentTargetSlotId || getFirstLivingSlotId(targetBattle, 'player');
+                enemySlot.targetSlotIds = enemySlot.targetSlotId ? [enemySlot.targetSlotId] : null;
             });
 
             targetBattle.enemySlots.forEach((enemySlot) => {
@@ -3406,6 +3465,8 @@
                 if (redirectingSlot) {
                     enemySlot.targetSlotId = redirectingSlot.id;
                 }
+                enemySlot.targetSlotIds = enemySlot.targetSlotId ? [enemySlot.targetSlotId] : null;
+                refreshAttackWeightTargetsForSlot(targetBattle, enemySlot, { force: true });
             });
         }
 
@@ -3530,6 +3591,8 @@
                 slot.intentTargetSlotId = null;
                 slot.manualTargetLock = false;
                 slot.ammoState = null;
+                slot.attackContext = null;
+                slot.onUseGranted = false;
                 slot.defenseState = {
                     activated: false,
                     used: false,
@@ -3539,10 +3602,12 @@
                 if (isUnitStaggered(unit)) {
                     slot.speed = 0;
                     slot.targetSlotId = null;
+                    slot.targetSlotIds = null;
                     slot.resolved = true;
                 } else {
                     slot.speed = randomInt(...unit.speedRange);
                     slot.targetSlotId = getFirstLivingSlotId(targetBattle, getOpposingSide(slot.side));
+                    slot.targetSlotIds = slot.targetSlotId ? [slot.targetSlotId] : null;
                 }
                 unit.speed = slot.speed;
 
@@ -3564,6 +3629,8 @@
                 const skill = getSkillById(enemyUnit, slot.selectedSkillId);
                 slot.intentTargetSlotId = getAutoTargetSlotId(targetBattle, slot, skill) || pickEnemyTargetSlotId(targetBattle, slot);
                 slot.targetSlotId = slot.intentTargetSlotId;
+                slot.targetSlotIds = slot.targetSlotId ? [slot.targetSlotId] : null;
+                refreshAttackWeightTargetsForSlot(targetBattle, slot, { force: true });
                 emitEvent(targetBattle, 'enemy_intent_set', {
                     unitName: enemyUnit.name,
                     slotLabel: getSlotLabel(slot),
@@ -3626,6 +3693,8 @@
             slot.targetSlotId = skill.targeting === 'highestMaxPower'
                 ? getAutoTargetSlotId(battle, slot, skill)
                 : (slot.targetSlotId || getFirstLivingSlotId(battle, 'enemy'));
+            slot.targetSlotIds = slot.targetSlotId ? [slot.targetSlotId] : null;
+            refreshAttackWeightTargetsForSlot(battle, slot, { force: true });
             slot.defenseState = {
                 activated: false,
                 used: false,
@@ -3658,6 +3727,8 @@
             const unit = getUnitById(battle, slot.unitId);
             slot.targetSlotId = targetSlot.id;
             slot.manualTargetLock = true;
+            slot.targetSlotIds = slot.targetSlotId ? [slot.targetSlotId] : null;
+            refreshAttackWeightTargetsForSlot(battle, slot, { force: true });
 
             battle.activePlayerSlotId = slot.id;
             refreshRedirectedTargets(battle);
@@ -3682,9 +3753,89 @@
                 } else if (!slot.targetSlotId || !isSlotAlive(targetBattle, getSlotById(targetBattle, slot.targetSlotId))) {
                     slot.targetSlotId = getFirstLivingSlotId(targetBattle, getOpposingSide(slot.side));
                 }
+                if (!slot.targetSlotId) {
+                    slot.targetSlotIds = null;
+                    return;
+                }
+                if (!slot.manualTargetLock) {
+                    slot.targetSlotIds = [slot.targetSlotId];
+                    refreshAttackWeightTargetsForSlot(targetBattle, slot);
+                }
             });
 
             refreshRedirectedTargets(targetBattle);
+        }
+
+        function getSkillAttackWeight(skill) {
+            return Number.isInteger(skill?.attackWeight) && skill.attackWeight > 0 ? skill.attackWeight : 1;
+        }
+
+        function getSlotAssignedTargetIds(slot) {
+            if (Array.isArray(slot?.targetSlotIds) && slot.targetSlotIds.length) {
+                return slot.targetSlotIds.filter(Boolean);
+            }
+            return slot?.targetSlotId ? [slot.targetSlotId] : [];
+        }
+
+        function refreshAttackWeightTargetsForSlot(targetBattle, slot, options = {}) {
+            if (!targetBattle || !slot || !slot.selectedSkillId || !slot.targetSlotId || !isSlotActionable(targetBattle, slot)) {
+                return;
+            }
+
+            if (slot.manualTargetLock && !options.force && Array.isArray(slot.targetSlotIds) && slot.targetSlotIds.length) {
+                return;
+            }
+
+            const unit = getUnitById(targetBattle, slot.unitId);
+            const skill = getSkillById(unit, slot.selectedSkillId);
+            if (!skill || isDefenseSkill(skill)) {
+                slot.targetSlotIds = [slot.targetSlotId];
+                return;
+            }
+
+            const attackWeight = getSkillAttackWeight(skill);
+            if (attackWeight <= 1) {
+                slot.targetSlotIds = [slot.targetSlotId];
+                return;
+            }
+
+            const opponentSide = getOpposingSide(slot.side);
+            const primaryTargetSlot = getSlotById(targetBattle, slot.targetSlotId);
+            if (!primaryTargetSlot || !isSlotAlive(targetBattle, primaryTargetSlot)) {
+                slot.targetSlotIds = [slot.targetSlotId];
+                return;
+            }
+
+            const targetedBySide = new Set(
+                getSlotsForSide(targetBattle, slot.side)
+                    .filter((candidate) => candidate?.id && candidate.id !== slot.id && candidate.selectedSkillId && isSlotActionable(targetBattle, candidate))
+                    .flatMap((candidate) => getSlotAssignedTargetIds(candidate)),
+            );
+
+            const candidates = getSlotsForSide(targetBattle, opponentSide)
+                .filter((candidate) => candidate?.id && isSlotAlive(targetBattle, candidate) && candidate.id !== primaryTargetSlot.id);
+            candidates.sort((left, right) => {
+                if (right.speed !== left.speed) {
+                    return right.speed - left.speed;
+                }
+                return left.index - right.index;
+            });
+
+            const untargeted = candidates.filter((candidate) => !targetedBySide.has(candidate.id));
+            const alreadyTargeted = candidates.filter((candidate) => targetedBySide.has(candidate.id));
+            const ordered = [...untargeted, ...alreadyTargeted];
+
+            const nextTargets = [primaryTargetSlot.id];
+            let remainingWeight = attackWeight - (Number.isInteger(primaryTargetSlot.slotWeight) && primaryTargetSlot.slotWeight > 0 ? primaryTargetSlot.slotWeight : 1);
+            for (const candidate of ordered) {
+                if (remainingWeight <= 0) {
+                    break;
+                }
+                nextTargets.push(candidate.id);
+                remainingWeight -= (Number.isInteger(candidate.slotWeight) && candidate.slotWeight > 0 ? candidate.slotWeight : 1);
+            }
+
+            slot.targetSlotIds = nextTargets;
         }
 
         function computeSinResonance(targetBattle) {
@@ -3896,12 +4047,48 @@
                 );
 
                 if (mutualTarget) {
-                    resolveClashEngagement(battle, slot, targetSlot);
+                    const clashOutcome = resolveClashEngagement(battle, slot, targetSlot, { skipAttackEnd: true });
                     slot.resolved = true;
                     targetSlot.resolved = true;
+                    const winnerSlot = clashOutcome?.winnerSlot;
+                    const winnerUnit = clashOutcome?.winnerUnit;
+                    const winnerSkill = clashOutcome?.winnerSkill;
+                    const winnerContext = clashOutcome?.winnerContext;
+                    const loserSlot = clashOutcome?.loserSlot;
+                    if (winnerSlot && winnerUnit && winnerSkill && winnerContext && !winnerContext.cancelled) {
+                        const extraTargets = getSlotAssignedTargetIds(winnerSlot)
+                            .filter((targetId) => targetId && (!loserSlot || targetId !== loserSlot.id));
+                        for (const extraTargetId of extraTargets) {
+                            if (battle.winner || !isUnitAlive(winnerUnit)) {
+                                break;
+                            }
+                            const extraTargetSlot = getSlotById(battle, extraTargetId);
+                            if (!extraTargetSlot || extraTargetSlot.side !== getOpposingSide(winnerSlot.side) || !isSlotAlive(battle, extraTargetSlot)) {
+                                continue;
+                            }
+                            resolveOneSidedEngagement(battle, winnerSlot, extraTargetSlot, { skipAttackEnd: true });
+                        }
+                        applyAttackEndEffects(battle, winnerUnit, winnerSkill, winnerContext);
+                    }
                 } else {
-                    resolveOneSidedEngagement(battle, slot, targetSlot);
+                    resolveOneSidedEngagement(battle, slot, targetSlot, { skipAttackEnd: true });
                     slot.resolved = true;
+                    const attackContext = slot.attackContext;
+                    if (attackContext && !attackContext.cancelled) {
+                        const extraTargets = getSlotAssignedTargetIds(slot)
+                            .filter((targetId) => targetId && targetId !== slot.targetSlotId);
+                        for (const extraTargetId of extraTargets) {
+                            if (battle.winner || !isUnitAlive(actingUnit)) {
+                                break;
+                            }
+                            const extraTargetSlot = getSlotById(battle, extraTargetId);
+                            if (!extraTargetSlot || extraTargetSlot.side !== getOpposingSide(slot.side) || !isSlotAlive(battle, extraTargetSlot)) {
+                                continue;
+                            }
+                            resolveOneSidedEngagement(battle, slot, extraTargetSlot, { skipAttackEnd: true });
+                        }
+                        applyAttackEndEffects(battle, actingUnit, actingSkill, attackContext);
+                    }
                 }
             }
 

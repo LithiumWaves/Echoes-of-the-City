@@ -1426,6 +1426,9 @@
         if (skill.showInPlanner != null && typeof skill.showInPlanner !== 'boolean') {
             pushError(errors, `${path}.showInPlanner`, 'must be a boolean when provided.');
         }
+        if (skill.attackWeight != null && (!Number.isInteger(skill.attackWeight) || skill.attackWeight <= 0)) {
+            pushError(errors, `${path}.attackWeight`, 'must be a positive integer when provided.');
+        }
         if (skill.ammo != null) {
             if (typeof skill.ammo !== 'object' || Array.isArray(skill.ammo)) {
                 pushError(errors, `${path}.ammo`, 'must be an object when provided.');
@@ -1501,6 +1504,9 @@
         }
         if (!Array.isArray(unit.speedRange) || unit.speedRange.length !== 2 || !unit.speedRange.every((value) => Number.isInteger(value))) {
             pushError(errors, `${path}.speedRange`, 'must be a two-number integer array.');
+        }
+        if (unit.slotWeight != null && (!Number.isInteger(unit.slotWeight) || unit.slotWeight <= 0)) {
+            pushError(errors, `${path}.slotWeight`, 'must be a positive integer when provided.');
         }
         if (!Array.isArray(unit.skills) || !unit.skills.length) {
             pushError(errors, `${path}.skills`, 'must contain at least one skill.');

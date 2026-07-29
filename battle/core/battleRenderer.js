@@ -1112,12 +1112,35 @@
                 `;
             }).join('');
 
-            const statuses = unit
-                ? getRenderableStatuses(unit)
-                    .map((status) => isCountOnlyStatus(status.id)
-                        ? `${getStatusLabel(status.id)} ${status.count}`
-                        : `${getStatusLabel(status.id)} ${status.potency || 0}/${status.count || 0}`)
-                    .join(', ')
+            const statusList = unit ? getRenderableStatuses(unit) : [];
+            const statusMarkup = statusList.length
+                ? statusList.map((status) => {
+                    const label = getStatusLabel(status.id);
+                    const summary = isCountOnlyStatus(status.id)
+                        ? `${label} ${status.count}`
+                        : `${label} ${status.potency || 0}/${status.count || 0}`;
+                    const definition = typeof registry.getStatusDefinition === 'function'
+                        ? registry.getStatusDefinition(status.id)
+                        : null;
+                    const hookLines = definition?.hooks && typeof registry.describeHookDefinition === 'function'
+                        ? registry.describeHookDefinition(definition.hooks)
+                        : [];
+                    const hookMarkup = Array.isArray(hookLines) && hookLines.length
+                        ? `
+                            <div class="echoes-battle-panel__inspect-effects">
+                                ${hookLines.map((line) => `<span>${escapeAttribute(line)}</span>`).join('')}
+                            </div>
+                        `
+                        : '';
+                    const description = definition?.description || '';
+                    return `
+                        <div class="echoes-battle-panel__inspect-skill">
+                            <strong>${summary}</strong>
+                            ${description ? `<span>${escapeAttribute(description)}</span>` : ''}
+                            ${hookMarkup}
+                        </div>
+                    `;
+                }).join('')
                 : '';
 
             const physicalRes = unit ? getResistanceSummary(unit, physicalDamageTypes, 'physical') : '';
@@ -1190,7 +1213,9 @@
                         </div>
                         <div class="echoes-battle-panel__inspect-block">
                             <strong>Statuses</strong>
-                            <span>${statuses || 'None'}</span>
+                            <div class="echoes-battle-panel__inspect-skills">
+                                ${statusMarkup || '<span>None</span>'}
+                            </div>
                         </div>
                         <div class="echoes-battle-panel__inspect-block">
                             <strong>Passives</strong>
