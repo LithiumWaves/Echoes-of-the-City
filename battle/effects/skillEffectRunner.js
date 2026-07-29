@@ -1630,6 +1630,30 @@
                         context.rerollTailsRemaining = previousValue + delta;
                     }
                     return;
+                case 'reuseCoins':
+                    if (!context) {
+                        return;
+                    }
+                    {
+                        const delta = Math.max(0, Math.round(resolveEffectAmount(runtime, effect)));
+                        const previousValue = typeof context.remainingCoinBonus === 'number' && Number.isFinite(context.remainingCoinBonus)
+                            ? context.remainingCoinBonus
+                            : 0;
+                        context.remainingCoinBonus = previousValue + delta;
+                    }
+                    return;
+                case 'breakCoins':
+                    if (!context) {
+                        return;
+                    }
+                    {
+                        const delta = Math.max(0, Math.round(resolveEffectAmount(runtime, effect)));
+                        const previousValue = typeof context.remainingCoinBonus === 'number' && Number.isFinite(context.remainingCoinBonus)
+                            ? context.remainingCoinBonus
+                            : 0;
+                        context.remainingCoinBonus = previousValue - delta;
+                    }
+                    return;
                 case 'setDamageCap':
                     if (!context) {
                         return;

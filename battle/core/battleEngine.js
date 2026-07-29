@@ -1384,7 +1384,15 @@
         function getEffectiveCoinPower(unit, skill, attackContext) {
             const basePower = typeof skill.coinPower === 'number' ? skill.coinPower : 0;
             const directModifier = attackContext.coinPowerBonus || 0;
-            return basePower + directModifier;
+            const coinIndex = attackContext?.currentCoinIndex || 0;
+            const perCoinBonus = coinIndex > 0
+                && attackContext?.coinPowerBonusByCoin
+                && typeof attackContext.coinPowerBonusByCoin === 'object'
+                && !Array.isArray(attackContext.coinPowerBonusByCoin)
+                && typeof attackContext.coinPowerBonusByCoin[coinIndex] === 'number'
+                ? attackContext.coinPowerBonusByCoin[coinIndex]
+                : 0;
+            return basePower + directModifier + perCoinBonus;
         }
 
         function rollSingleCoin(targetBattle, unit, skill, attackContext, forcedIsHeads = null) {
@@ -1887,6 +1895,7 @@
                 coinCountBonus: 0,
                 flatPowerBonus: 0,
                 clashPowerBonus: 0,
+                remainingCoinBonus: 0,
                 critChanceBonus: 0,
                 damageMultiplier: 1,
                 damageCap: null,
@@ -1901,6 +1910,7 @@
                 observationBonus: 0,
                 additiveDamage: 0,
                 damageCapByCoin: {},
+                coinPowerBonusByCoin: {},
                 criticalBonusByCoin: {},
                 critChanceBonusByCoin: {},
                 staticDamageBonusByCoin: {},
@@ -2862,6 +2872,13 @@
                 const winnerContext = leftContext.cancelled ? rightContext : leftContext;
                 const winnerSlot = leftContext.cancelled ? rightSlot : leftSlot;
                 const loserSlot = leftContext.cancelled ? leftSlot : rightSlot;
+                const coinBonus = typeof winnerContext?.coinCountBonus === 'number' && Number.isFinite(winnerContext.coinCountBonus)
+                    ? winnerContext.coinCountBonus
+                    : 0;
+                const remainingBonus = typeof winnerContext?.remainingCoinBonus === 'number' && Number.isFinite(winnerContext.remainingCoinBonus)
+                    ? winnerContext.remainingCoinBonus
+                    : 0;
+                const remainingCoins = Math.max(0, (winnerSkill.coinCount || 0) + coinBonus + remainingBonus);
                 const hits = resolveOneSidedAttack(
                     targetBattle,
                     clashWinnerUnit,
@@ -2869,7 +2886,7 @@
                     clashLoserUnit,
                     winnerContext,
                     { damageReductionMultiplier: 1, damageReductionFlat: 0 },
-                    winnerSkill.coinCount,
+                    remainingCoins,
                 );
                 const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
                 applyAttackEndEffects(targetBattle, clashWinnerUnit, winnerSkill, winnerContext);
@@ -2889,7 +2906,7 @@
                     targetUnitName: clashLoserUnit.name,
                     actingSkillName: winnerSkill.name,
                     totalDamage,
-                    remainingCoins: winnerSkill.coinCount,
+                    remainingCoins,
                 };
                 return;
             }
@@ -2901,15 +2918,10 @@
             const winnerContext = clashResult.winnerSide === 'left' ? leftContext : rightContext;
             const loserSkill = clashResult.winnerSide === 'left' ? rightSkill : leftSkill;
             const loserContext = clashResult.winnerSide === 'left' ? rightContext : leftContext;
-            const remainingCoins = clashResult.winnerSide === 'left' ? clashResult.leftRemainingCoins : clashResult.rightRemainingCoins;
+            let remainingCoins = clashResult.winnerSide === 'left' ? clashResult.leftRemainingCoins : clashResult.rightRemainingCoins;
             const winnerSlot = clashResult.winnerSide === 'left' ? leftSlot : rightSlot;
             const loserSlot = clashResult.winnerSide === 'left' ? rightSlot : leftSlot;
 
-            emitEvent(targetBattle, 'clash_won', {
-                winnerName: clashWinnerUnit.name,
-                loserName: clashLoserUnit.name,
-                remainingCoins,
-            });
             applySkillEffects(targetBattle, 'onClashWin', {
                 sourceUnit: clashWinnerUnit,
                 targetUnit: clashLoserUnit,
@@ -2923,6 +2935,16 @@
                 skill: loserSkill,
                 attackContext: loserContext,
                 outcome: 'lose',
+            });
+            const remainingBonus = typeof winnerContext?.remainingCoinBonus === 'number' && Number.isFinite(winnerContext.remainingCoinBonus)
+                ? Math.round(winnerContext.remainingCoinBonus)
+                : 0;
+            remainingCoins = Math.max(0, remainingCoins + remainingBonus);
+
+            emitEvent(targetBattle, 'clash_won', {
+                winnerName: clashWinnerUnit.name,
+                loserName: clashLoserUnit.name,
+                remainingCoins,
             });
 
             const winnerSanity = adjustSanity(clashWinnerUnit, 5);

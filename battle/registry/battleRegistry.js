@@ -281,6 +281,8 @@
         adjustCoinCount: { id: 'adjustCoinCount', label: 'Adjust Coin Count' },
         forceCoinOutcome: { id: 'forceCoinOutcome', label: 'Force Coin Outcome' },
         grantCoinReroll: { id: 'grantCoinReroll', label: 'Grant Coin Reroll' },
+        reuseCoins: { id: 'reuseCoins', label: 'Reuse Coins' },
+        breakCoins: { id: 'breakCoins', label: 'Break Coins' },
         setDamageCap: { id: 'setDamageCap', label: 'Set Damage Cap' },
         chooseRandomActions: { id: 'chooseRandomActions', label: 'Choose Random Actions' },
         chooseWeightedActions: { id: 'chooseWeightedActions', label: 'Choose Weighted Actions' },
@@ -547,6 +549,10 @@
             return `Force coin ${effect.coinIndex || 'all'} to ${effect.coinOutcome}.`;
         case 'grantCoinReroll':
             return 'Grant coin reroll.';
+        case 'reuseCoins':
+            return 'Reuse coins after clash.';
+        case 'breakCoins':
+            return 'Break coins after clash.';
         case 'setDamageCap':
             return `Set damage cap ${effect.coinIndex ? `for coin ${effect.coinIndex}` : ''}.`;
         case 'chooseRandomActions':

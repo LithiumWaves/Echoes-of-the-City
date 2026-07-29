@@ -1336,6 +1336,240 @@ function runSuite() {
         }
     });
 
+    test('Effect runner: reuseCoins adds post-clash hits', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const reuseSkill = {
+            id: 'reuse_skill',
+            name: 'Reuse Skill',
+            skillType: 'attack',
+            basePower: 12,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [
+                { trigger: 'onClashWin', type: 'reuseCoins', value: 1 },
+            ],
+        };
+
+        const enemySkill = {
+            id: 'enemy_skill',
+            name: 'Enemy Skill',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 60,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const battleDefinition = {
+            id: 'reuse-coins-smoke',
+            name: 'Reuse Coins Smoke',
+            playerUnits: [createUnit('ally', 'Ally', [reuseSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [true, true, true],
+            'enemy-slot-1': [true],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('reuse_skill');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const hits = engine.getState().events.filter((event) => event.type === 'hit_resolved' && event.data?.attackerName === 'Ally');
+        assert(hits.length === 2, `Expected 2 post-clash hits after reuseCoins(+1), got ${hits.length}`);
+    });
+
+    test('Effect runner: breakCoins removes post-clash hits', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const breakSkill = {
+            id: 'break_skill',
+            name: 'Break Skill',
+            skillType: 'attack',
+            basePower: 12,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [
+                { trigger: 'onClashWin', type: 'breakCoins', value: 1 },
+            ],
+        };
+
+        const enemySkill = {
+            id: 'enemy_skill',
+            name: 'Enemy Skill',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 60,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const battleDefinition = {
+            id: 'break-coins-smoke',
+            name: 'Break Coins Smoke',
+            playerUnits: [createUnit('ally', 'Ally', [breakSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [true],
+            'enemy-slot-1': [true],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('break_skill');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const hits = engine.getState().events.filter((event) => event.type === 'hit_resolved' && event.data?.attackerName === 'Ally');
+        assert(hits.length === 0, `Expected 0 post-clash hits after breakCoins(+1), got ${hits.length}`);
+    });
+
+    test('Effect runner: coinPowerBonusByCoin via modifyCoinMap affects final power', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const skill = {
+            id: 'coin_power_by_coin',
+            name: 'Coin Power By Coin',
+            skillType: 'attack',
+            basePower: 5,
+            coinPower: 2,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [
+                { trigger: 'onSelect', type: 'modifyCoinMap', field: 'coinPowerBonusByCoin', coinIndex: 1, value: 3 },
+            ],
+        };
+
+        const enemySkill = {
+            id: 'enemy_guard',
+            name: 'Enemy Guard',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 60,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const battleDefinition = {
+            id: 'coin-power-by-coin-smoke',
+            name: 'Coin Power By Coin Smoke',
+            playerUnits: [createUnit('ally', 'Ally', [skill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [true],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('coin_power_by_coin');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const hit = engine.getState().events.find((event) => event.type === 'hit_resolved' && event.data?.attackerName === 'Ally')?.data || null;
+        assert(hit, 'Expected Ally hit_resolved event.');
+        assert(hit.finalPower === 10, `Expected finalPower 10 (5 + (2+3)), got ${hit.finalPower}`);
+    });
+
     test('Golden fixture: coinRoll status triggers before hit resolution', () => {
         const battleModules = createBattleEnvironment();
         const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;

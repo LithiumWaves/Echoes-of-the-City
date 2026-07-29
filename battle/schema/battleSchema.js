@@ -33,6 +33,7 @@
         'rerollTailsRemaining',
     ]);
     const COIN_MAP_FIELDS = new Set([
+        'coinPowerBonusByCoin',
         'criticalBonusByCoin',
         'critChanceBonusByCoin',
         'staticDamageBonusByCoin',
@@ -1084,6 +1085,14 @@
             }
             break;
         case 'grantCoinReroll':
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'reuseCoins':
+        case 'breakCoins':
             if (effect.amount != null) {
                 validateAmountDefinition(errors, effect.amount, `${path}.amount`);
             } else if (!isFiniteNumber(effect.value)) {
