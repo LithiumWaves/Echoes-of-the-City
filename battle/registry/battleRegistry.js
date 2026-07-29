@@ -245,6 +245,7 @@
         queueStatus: { id: 'queueStatus', label: 'Queue Status' },
         dealFixedDamage: { id: 'dealFixedDamage', label: 'Deal Fixed Damage' },
         dealHpPercentDamage: { id: 'dealHpPercentDamage', label: 'Deal HP Percent Damage' },
+        endBattle: { id: 'endBattle', label: 'End Battle' },
         adjustSanity: { id: 'adjustSanity', label: 'Adjust Sanity' },
         setSanity: { id: 'setSanity', label: 'Set Sanity' },
         healHp: { id: 'healHp', label: 'Heal HP' },
@@ -281,6 +282,9 @@
         spendUnitResource: { id: 'spendUnitResource', label: 'Spend Unit Resource' },
         adjustResonance: { id: 'adjustResonance', label: 'Adjust Resonance' },
         setWave: { id: 'setWave', label: 'Set Wave' },
+        spawnWave: { id: 'spawnWave', label: 'Spawn Wave' },
+        advanceWave: { id: 'advanceWave', label: 'Advance Wave' },
+        spawnReinforcement: { id: 'spawnReinforcement', label: 'Spawn Reinforcement' },
         setFlag: { id: 'setFlag', label: 'Set Flag' },
         clearFlag: { id: 'clearFlag', label: 'Clear Flag' },
         adjustCounter: { id: 'adjustCounter', label: 'Adjust Counter' },
@@ -525,6 +529,8 @@
             return `Deal fixed damage to ${effect.target || 'opponent'}.`;
         case 'dealHpPercentDamage':
             return `Deal ${effect.value ?? effect.amount ?? 0} max HP damage to ${effect.target || 'opponent'}.`;
+        case 'endBattle':
+            return `End battle as ${effect.winner || 'draw'}.`;
         case 'adjustSanity':
             if (typeof effect.amount === 'number') {
                 return `Adjust ${effect.target || 'opponent'} SP by ${formatSignedNumber(effect.amount)}.`;
@@ -615,6 +621,12 @@
             return `Adjust resonance ${effect.sinType}.`;
         case 'setWave':
             return 'Set wave.';
+        case 'spawnWave':
+            return 'Spawn wave.';
+        case 'advanceWave':
+            return 'Advance wave.';
+        case 'spawnReinforcement':
+            return `Spawn ${effect.side === 'player' ? 'player' : 'enemy'} reinforcement.`;
         case 'setFlag':
             return `Set flag "${effect.flagId}" on ${effect.target || 'opponent'}.`;
         case 'clearFlag':

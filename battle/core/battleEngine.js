@@ -3827,6 +3827,42 @@
             return true;
         }
 
+        function spawnReinforcement(targetBattle, side, template) {
+            if (!targetBattle || !template || typeof template !== 'object') {
+                return null;
+            }
+            const resolvedSide = side === 'enemy' ? 'enemy' : 'player';
+            const unitsKey = resolvedSide === 'enemy' ? 'enemyUnits' : 'playerUnits';
+            const slotsKey = resolvedSide === 'enemy' ? 'enemySlots' : 'playerSlots';
+            const currentUnits = Array.isArray(targetBattle[unitsKey]) ? targetBattle[unitsKey] : [];
+            const currentSlots = Array.isArray(targetBattle[slotsKey]) ? targetBattle[slotsKey] : [];
+            const existingUnitIds = new Set(getAllUnits(targetBattle).map((unit) => unit?.id).filter(Boolean));
+            const baseId = typeof template.id === 'string' && template.id ? template.id : `${resolvedSide}_reinforcement`;
+            let resolvedId = baseId;
+            let suffix = 1;
+            while (existingUnitIds.has(resolvedId)) {
+                resolvedId = `${baseId}_${suffix}`;
+                suffix += 1;
+            }
+            const templateWithId = { ...template, id: resolvedId };
+            const index = currentUnits.length;
+            const unit = createBattleUnit(templateWithId, resolvedSide, index);
+            const slot = createBattleSlot(unit, resolvedSide, currentSlots.length);
+            targetBattle[unitsKey] = [...currentUnits, unit];
+            targetBattle[slotsKey] = [...currentSlots, slot];
+            refreshRedirectedTargets(targetBattle);
+            refreshSpeedOrder(targetBattle);
+            ensureActivePlayerSlot(targetBattle);
+            emitEvent(targetBattle, 'reinforcement_spawned', {
+                side: resolvedSide,
+                unitId: unit.id,
+                unitName: unit.name,
+                slotId: slot.id,
+                wave: targetBattle.wave || 1,
+            });
+            return { unit, slot };
+        }
+
         function createBattleState() {
             const playerUnits = getPlayerTemplates().map((template, index) => createBattleUnit(template, 'player', index));
             const enemyUnits = getEnemyTemplatesForWave(1).map((template, index) => createBattleUnit(template, 'enemy', index));
@@ -3875,6 +3911,30 @@
                 lastResolution: null,
                 clashPresentation: null,
                 resolutionHistory: [],
+            };
+
+            nextBattle.engineActions = {
+                endBattle(winner, options = {}) {
+                    endBattleWithOutcome(nextBattle, winner, options);
+                },
+                spawnWave(waveIndex) {
+                    if (!Number.isInteger(waveIndex) || waveIndex < 1) {
+                        return false;
+                    }
+                    nextBattle.wave = waveIndex;
+                    return spawnEnemyWave(nextBattle, waveIndex);
+                },
+                advanceWave(delta = 1) {
+                    const nextWave = (Number.isInteger(nextBattle.wave) ? nextBattle.wave : 1) + (Number.isInteger(delta) ? delta : 1);
+                    if (nextWave < 1) {
+                        return false;
+                    }
+                    nextBattle.wave = nextWave;
+                    return spawnEnemyWave(nextBattle, nextWave);
+                },
+                spawnReinforcement(side, template) {
+                    return spawnReinforcement(nextBattle, side, template);
+                },
             };
 
             emitEvent(nextBattle, 'battle_started', {
@@ -4006,7 +4066,11 @@
             const behavior = definition?.behavior && typeof definition.behavior === 'object' && !Array.isArray(definition.behavior)
                 ? definition.behavior
                 : {};
-            const mode = behavior.mode === 'skip' ? 'skip' : (behavior.mode === 'none' ? 'none' : 'ai');
+            const mode = behavior.mode === 'skip'
+                ? 'skip'
+                : (behavior.mode === 'none'
+                    ? 'none'
+                    : (behavior.mode === 'corrode' ? 'corrode' : 'ai'));
             const lockPlayerInput = behavior.lockPlayerInput != null
                 ? Boolean(behavior.lockPlayerInput)
                 : mode !== 'none';
@@ -4019,6 +4083,9 @@
                 mode,
                 lockPlayerInput,
                 aiProfile,
+                forcedSkillId: typeof behavior.forcedSkillId === 'string' && behavior.forcedSkillId ? behavior.forcedSkillId : null,
+                forcedSkillTag: typeof behavior.forcedSkillTag === 'string' && behavior.forcedSkillTag ? behavior.forcedSkillTag : null,
+                forcedTarget: typeof behavior.forcedTarget === 'string' && behavior.forcedTarget ? behavior.forcedTarget : null,
             };
         }
 
@@ -4036,6 +4103,21 @@
             if (!skills.length) {
                 return null;
             }
+            if (behavior?.mode === 'corrode') {
+                if (behavior.forcedSkillId) {
+                    const forced = skills.find((skill) => skill?.id === behavior.forcedSkillId);
+                    if (forced?.id) {
+                        return forced.id;
+                    }
+                }
+                if (behavior.forcedSkillTag) {
+                    const tagged = skills.filter((skill) => Array.isArray(skill?.tags) && skill.tags.includes(behavior.forcedSkillTag));
+                    if (tagged.length) {
+                        return tagged[randomInt(0, tagged.length - 1)]?.id || null;
+                    }
+                }
+                return skills[randomInt(0, skills.length - 1)]?.id || null;
+            }
             const mode = behavior?.aiProfile?.skill || 'random';
             if (mode === 'first') {
                 return skills[0]?.id || null;
@@ -4052,7 +4134,7 @@
 
         function pickPanicTargetSlotId(targetBattle, slot, behavior) {
             const opponentSide = getOpposingSide(slot.side);
-            const mode = behavior?.aiProfile?.target || 'random';
+            const mode = behavior?.forcedTarget || behavior?.aiProfile?.target || 'random';
             if (mode === 'firstLiving') {
                 return getFirstLivingSlotId(targetBattle, opponentSide);
             }

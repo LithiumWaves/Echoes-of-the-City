@@ -1017,6 +1017,30 @@
                         applyFixedDamage(targetBattle, targetUnit, effect.statusId || 'effect', damageAmount);
                     }
                     return;
+                case 'endBattle':
+                    if (!targetBattle || targetBattle.winner) {
+                        return;
+                    }
+                    {
+                        const winner = effect.winner === 'player' || effect.winner === 'enemy' || effect.winner === 'draw'
+                            ? effect.winner
+                            : 'draw';
+                        const engineActions = targetBattle.engineActions;
+                        if (engineActions && typeof engineActions.endBattle === 'function') {
+                            engineActions.endBattle(winner, { reason: effect.reason || skill?.name || null });
+                        } else {
+                            targetBattle.phase = 'ended';
+                            targetBattle.winner = winner;
+                            if (typeof emitEvent === 'function') {
+                                emitEvent(targetBattle, 'battle_ended', {
+                                    winner,
+                                    winnerName: winner === 'player' ? 'Player' : (winner === 'enemy' ? 'Enemy' : 'Draw'),
+                                    reason: effect.reason || null,
+                                });
+                            }
+                        }
+                    }
+                    return;
                 case 'adjustSanity':
                     if (!targetUnit || typeof adjustSanity !== 'function') {
                         return;
@@ -2058,6 +2082,60 @@
                                 previousWave,
                                 nextWave: targetBattle.wave,
                             });
+                        }
+                    }
+                    return;
+                case 'spawnWave':
+                    {
+                        const wave = Math.max(1, Math.round(resolveEffectAmount(runtime, effect)));
+                        const previousWave = typeof targetBattle.wave === 'number' && Number.isFinite(targetBattle.wave)
+                            ? targetBattle.wave
+                            : 1;
+                        const engineActions = targetBattle.engineActions;
+                        const spawned = engineActions && typeof engineActions.spawnWave === 'function'
+                            ? engineActions.spawnWave(wave)
+                            : false;
+                        if (!spawned) {
+                            targetBattle.wave = wave;
+                            ensureBattleRuntimeState(targetBattle);
+                        }
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'wave_changed', {
+                                previousWave,
+                                nextWave: targetBattle.wave,
+                            });
+                        }
+                    }
+                    return;
+                case 'advanceWave':
+                    {
+                        const deltaRaw = resolveEffectAmount(runtime, effect);
+                        const delta = Number.isFinite(deltaRaw) ? Math.round(deltaRaw) : 1;
+                        const previousWave = typeof targetBattle.wave === 'number' && Number.isFinite(targetBattle.wave)
+                            ? targetBattle.wave
+                            : 1;
+                        const engineActions = targetBattle.engineActions;
+                        const advanced = engineActions && typeof engineActions.advanceWave === 'function'
+                            ? engineActions.advanceWave(delta)
+                            : false;
+                        if (!advanced) {
+                            targetBattle.wave = Math.max(1, previousWave + delta);
+                            ensureBattleRuntimeState(targetBattle);
+                        }
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'wave_changed', {
+                                previousWave,
+                                nextWave: targetBattle.wave,
+                            });
+                        }
+                    }
+                    return;
+                case 'spawnReinforcement':
+                    {
+                        const engineActions = targetBattle.engineActions;
+                        const side = effect.side === 'player' ? 'player' : 'enemy';
+                        if (engineActions && typeof engineActions.spawnReinforcement === 'function') {
+                            engineActions.spawnReinforcement(side, effect.unit);
                         }
                     }
                     return;

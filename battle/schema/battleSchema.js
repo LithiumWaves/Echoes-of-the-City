@@ -871,6 +871,14 @@
                 pushError(errors, `${path}.statusId`, 'must reference a supported status id when provided.');
             }
             break;
+        case 'endBattle':
+            if (effect.winner != null && !['player', 'enemy', 'draw'].includes(effect.winner)) {
+                pushError(errors, `${path}.winner`, 'must be "player", "enemy", or "draw" when provided.');
+            }
+            if (effect.reason != null && typeof effect.reason !== 'string') {
+                pushError(errors, `${path}.reason`, 'must be a string when provided.');
+            }
+            break;
         case 'adjustSanity':
             if (effect.amount != null) {
                 validateAmountDefinition(errors, effect.amount, `${path}.amount`);
@@ -900,6 +908,8 @@
         case 'burstTremor':
         case 'adjustEncounterResource':
         case 'setWave':
+        case 'spawnWave':
+        case 'advanceWave':
             if (effect.type !== 'clearShield' && effect.amount != null) {
                 validateAmountDefinition(errors, effect.amount, `${path}.amount`);
             } else if (effect.type !== 'clearShield' && !isFiniteNumber(effect.value)) {
@@ -959,6 +969,16 @@
                 if (effect.max != null && (!isFiniteNumber(effect.max) || effect.max < 0)) {
                     pushError(errors, `${path}.max`, 'must be a non-negative number when provided.');
                 }
+            }
+            break;
+        case 'spawnReinforcement':
+            if (effect.side != null && !['player', 'enemy'].includes(effect.side)) {
+                pushError(errors, `${path}.side`, 'must be "player" or "enemy" when provided.');
+            }
+            if (!effect.unit || typeof effect.unit !== 'object' || Array.isArray(effect.unit)) {
+                pushError(errors, `${path}.unit`, 'must be a unit definition object.');
+            } else {
+                validateUnit(errors, effect.unit, `${path}.unit`);
             }
             break;
         case 'adjustStatus':
@@ -1708,11 +1728,22 @@
             if (typeof behavior !== 'object' || Array.isArray(behavior)) {
                 pushError(errors, `${path}.behavior`, 'must be an object when provided.');
             } else {
-                if (behavior.mode != null && !['none', 'ai', 'skip'].includes(behavior.mode)) {
-                    pushError(errors, `${path}.behavior.mode`, 'must be "none", "ai", or "skip" when provided.');
+                if (behavior.mode != null && !['none', 'ai', 'skip', 'corrode'].includes(behavior.mode)) {
+                    pushError(errors, `${path}.behavior.mode`, 'must be "none", "ai", "skip", or "corrode" when provided.');
                 }
                 if (behavior.lockPlayerInput != null && typeof behavior.lockPlayerInput !== 'boolean') {
                     pushError(errors, `${path}.behavior.lockPlayerInput`, 'must be a boolean when provided.');
+                }
+                if (behavior.forcedSkillId != null && (typeof behavior.forcedSkillId !== 'string' || !behavior.forcedSkillId)) {
+                    pushError(errors, `${path}.behavior.forcedSkillId`, 'must be a non-empty string when provided.');
+                }
+                if (behavior.forcedSkillTag != null && (typeof behavior.forcedSkillTag !== 'string' || !behavior.forcedSkillTag)) {
+                    pushError(errors, `${path}.behavior.forcedSkillTag`, 'must be a non-empty string when provided.');
+                }
+                if (behavior.forcedTarget != null && (typeof behavior.forcedTarget !== 'string' || !behavior.forcedTarget)) {
+                    pushError(errors, `${path}.behavior.forcedTarget`, 'must be a non-empty string when provided.');
+                } else if (behavior.forcedTarget && !ENEMY_AI_TARGETS.has(behavior.forcedTarget)) {
+                    pushError(errors, `${path}.behavior.forcedTarget`, 'is not a supported value.');
                 }
                 if (behavior.aiProfile != null) {
                     if (typeof behavior.aiProfile !== 'object' || Array.isArray(behavior.aiProfile)) {

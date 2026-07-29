@@ -2947,6 +2947,283 @@ function runSuite() {
         assert(typeof hit.breakdown.basePower === 'number', `Expected breakdown.basePower to be a number, got ${typeof hit.breakdown.basePower}`);
     });
 
+    test('Effect runner: endBattle can end the encounter from scripted events', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const poke = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed, hp = 30) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: hp,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'end-battle-smoke',
+                name: 'End Battle Smoke',
+                playerUnits: [createUnit('ally', 'Ally', [poke], 5)],
+                enemyUnits: [createUnit('enemy', 'Enemy', [poke], 1)],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 10,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    scriptedEvents: [
+                        { id: 'end_now', trigger: 'battleStart', side: 'player', hook: [{ type: 'endBattle', winner: 'player', reason: 'scripted' }] },
+                    ],
+                },
+            },
+            clamp,
+        });
+
+        const state = engine.getState();
+        assert(state.winner === 'player', `Expected winner to be player, got ${state.winner}`);
+        const ended = state.events.some((event) => event.type === 'battle_ended' && event.data?.winner === 'player' && event.data?.reason === 'scripted');
+        assert(ended, 'Expected battle_ended event with scripted reason.');
+    });
+
+    test('Effect runner: spawnWave spawns the requested wave', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const poke = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed, hp = 30) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: hp,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'spawn-wave-smoke',
+                name: 'Spawn Wave Smoke',
+                playerUnits: [createUnit('ally', 'Ally', [poke], 5)],
+                enemyUnits: [createUnit('wave1', 'Wave 1 Enemy', [poke], 1)],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 10,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    waves: [
+                        { enemyUnits: [createUnit('wave1', 'Wave 1 Enemy', [poke], 1)] },
+                        { enemyUnits: [createUnit('wave2', 'Wave 2 Enemy', [poke], 1)] },
+                    ],
+                    scriptedEvents: [
+                        { id: 'force_wave_2', trigger: 'battleStart', side: 'player', hook: [{ type: 'spawnWave', value: 2 }] },
+                    ],
+                },
+            },
+            clamp,
+        });
+
+        const state = engine.getState();
+        assert(state.wave === 2, `Expected wave to be 2, got ${state.wave}`);
+        assert(state.enemyUnits[0]?.name === 'Wave 2 Enemy', `Expected wave 2 enemy, got ${state.enemyUnits[0]?.name}`);
+        const waveStarted = state.events.some((event) => event.type === 'wave_started' && event.data?.wave === 2);
+        assert(waveStarted, 'Expected wave_started event for wave 2.');
+    });
+
+    test('Effect runner: spawnReinforcement adds a new unit mid-encounter', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const poke = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed, hp = 30) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: hp,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'reinforcement-smoke',
+                name: 'Reinforcement Smoke',
+                playerUnits: [createUnit('ally', 'Ally', [poke], 5)],
+                enemyUnits: [createUnit('enemy', 'Enemy', [poke], 1)],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 10,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    scriptedEvents: [
+                        {
+                            id: 'spawn_reinforcement',
+                            trigger: 'battleStart',
+                            side: 'player',
+                            hook: [
+                                {
+                                    type: 'spawnReinforcement',
+                                    side: 'enemy',
+                                    unit: createUnit('enemy_reinforce', 'Reinforcement', [poke], 1),
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
+            clamp,
+        });
+
+        const state = engine.getState();
+        assert(state.enemyUnits.length === 2, `Expected 2 enemies after reinforcement, got ${state.enemyUnits.length}`);
+        const spawned = state.events.some((event) => event.type === 'reinforcement_spawned' && event.data?.side === 'enemy');
+        assert(spawned, 'Expected reinforcement_spawned event.');
+    });
+
+    test('Engine: panic state corrode mode forces a skill selection', () => {
+        const battleModules = createBattleEnvironment();
+        const registerPanicStateDefinition = battleModules.registry?.registerPanicStateDefinition || battleModules.registerPanicStateDefinition;
+        assert(typeof registerPanicStateDefinition === 'function', 'Expected registerPanicStateDefinition to exist.');
+
+        registerPanicStateDefinition({
+            id: 'corrode_panic',
+            label: 'Corrode Panic',
+            behavior: {
+                mode: 'corrode',
+                lockPlayerInput: true,
+                forcedSkillId: 'skill_b',
+                forcedTarget: 'firstLiving',
+            },
+        }, { allowOverwrite: true });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const skillA = {
+            id: 'skill_a',
+            name: 'Skill A',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const skillB = {
+            id: 'skill_b',
+            name: 'Skill B',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed, sp = -45, hp = 30) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: hp,
+            sp,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'corrode-smoke',
+                name: 'Corrode Smoke',
+                playerUnits: [createUnit('ally', 'Ally', [skillA, skillB], 5, -45)],
+                enemyUnits: [createUnit('enemy', 'Enemy', [skillA], 1, 0)],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    sanityModel: {
+                        panic: { spAtOrBelow: -45, stateId: 'corrode_panic' },
+                        clearSpAtOrAbove: -29,
+                    },
+                },
+            },
+            clamp,
+        });
+
+        const state = engine.getState();
+        assert(state.playerUnits[0].runtimeState?.panicStateId === 'corrode_panic', `Expected panicStateId to be corrode_panic, got ${state.playerUnits[0].runtimeState?.panicStateId}`);
+        assert(state.playerSlots[0].selectedSkillId === 'skill_b', `Expected corrode to force skill_b, got ${state.playerSlots[0].selectedSkillId}`);
+        assert(engine.selectSlot('player-slot-1') === false, 'Expected slot selection to be locked by corrode panic.');
+    });
+
     test('Effect runner: encounterResource amount supports side scoping', () => {
         const battleModules = createBattleEnvironment();
         const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;

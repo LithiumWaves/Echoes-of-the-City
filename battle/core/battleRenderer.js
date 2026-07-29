@@ -1189,23 +1189,28 @@
             const debugStatusPotency = typeof uiState?.debugStatusPotency === 'string' ? uiState.debugStatusPotency : '0';
             const debugStatusCount = typeof uiState?.debugStatusCount === 'string' ? uiState.debugStatusCount : '1';
             const debugSanityValue = typeof uiState?.debugSanityValue === 'string' ? uiState.debugSanityValue : '';
-            const lastHitEvent = unit && Array.isArray(battle?.events)
-                ? [...battle.events].reverse().find((event) => event?.type === 'hit_resolved' && (event.data?.attackerId === unit.id || event.data?.defenderId === unit.id) && event.data?.breakdown)
-                : null;
-            const lastHitDetails = lastHitEvent?.data?.breakdown
-                ? escapeHtml(JSON.stringify(lastHitEvent.data.breakdown, null, 2))
-                : '';
-            const lastHitSummary = lastHitEvent?.data
-                ? `${lastHitEvent.data.attackerName} -> ${lastHitEvent.data.defenderName} (${lastHitEvent.data.skillName})`
-                : '';
-            const lastHitMarkup = lastHitEvent?.data?.breakdown
+            const hitEvents = unit && Array.isArray(battle?.events)
+                ? battle.events.filter((event) => event?.type === 'hit_resolved'
+                    && (event.data?.attackerId === unit.id || event.data?.defenderId === unit.id)
+                    && event.data?.breakdown)
+                : [];
+            const recentHitEvents = hitEvents.length
+                ? hitEvents.slice(-8).reverse()
+                : [];
+            const hitBreakdownMarkup = recentHitEvents.length
                 ? `
                     <div class="echoes-battle-panel__inspect-block">
                         <strong>Damage Formula</strong>
-                        <details>
-                            <summary>${escapeAttribute(lastHitSummary)}</summary>
-                            <pre style="white-space: pre-wrap; margin: 0.55rem 0 0; padding: 0.65rem; border: 1px solid rgba(255,255,255,0.14); background: rgba(8,10,14,0.66);">${lastHitDetails}</pre>
-                        </details>
+                        ${recentHitEvents.map((event) => {
+                            const summary = `${event.data.attackerName} -> ${event.data.defenderName} (${event.data.skillName})`;
+                            const details = escapeHtml(JSON.stringify(event.data.breakdown, null, 2));
+                            return `
+                                <details>
+                                    <summary>${escapeAttribute(summary)}</summary>
+                                    <pre style="white-space: pre-wrap; margin: 0.55rem 0 0; padding: 0.65rem; border: 1px solid rgba(255,255,255,0.14); background: rgba(8,10,14,0.66);">${details}</pre>
+                                </details>
+                            `;
+                        }).join('')}
                     </div>
                 `
                 : '';
@@ -1353,7 +1358,7 @@
                                 ${skillMarkup || '<span>None</span>'}
                             </div>
                         </div>
-                        ${lastHitMarkup}
+                        ${hitBreakdownMarkup}
                         ${debugMarkup}
                     </div>
                 </aside>
