@@ -2372,6 +2372,17 @@
                 ? runtime.battle.encounterResources
                 : null;
             const hasEncounterResourceKey = (key) => Boolean(encounterResources && Object.prototype.hasOwnProperty.call(encounterResources, key));
+            if (condition.side) {
+                const selfSide = runtime?.unit?.side || 'player';
+                const opponentSide = selfSide === 'player' ? 'enemy' : 'player';
+                const resolvedSide = condition.side === 'self'
+                    ? selfSide
+                    : (condition.side === 'opponent' ? opponentSide : condition.side);
+                if (resolvedSide !== 'player' && resolvedSide !== 'enemy') {
+                    return 0;
+                }
+                return getEncounterResource(runtime.battle, `${resolvedSide}:${condition.resourceId}`);
+            }
             if (conditionUnit?.id) {
                 const scopedResourceId = `${conditionUnit.id}:${condition.resourceId}`;
                 if (hasEncounterResourceKey(scopedResourceId)) {

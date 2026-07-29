@@ -638,9 +638,9 @@
         case 'statusCountAtOrBelow':
             return `${target} ${getStatusLabel(condition.statusId)} Count <= ${condition.value ?? 0}`;
         case 'encounterResourceAtLeast':
-            return `${condition.resourceId} >= ${condition.value ?? 0}`;
+            return `${condition.side ? `${condition.side} ` : ''}${condition.resourceId} >= ${condition.value ?? 0}`;
         case 'encounterResourceAtOrBelow':
-            return `${condition.resourceId} <= ${condition.value ?? 0}`;
+            return `${condition.side ? `${condition.side} ` : ''}${condition.resourceId} <= ${condition.value ?? 0}`;
         case 'unitResourceAtLeast':
             return `${target} ${condition.resourceId} >= ${condition.value ?? 0}`;
         case 'unitResourceAtOrBelow':

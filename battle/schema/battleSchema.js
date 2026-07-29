@@ -483,6 +483,9 @@
             if (!isFiniteNumber(condition.value)) {
                 pushError(errors, `${path}.value`, 'must be a number.');
             }
+            if (condition.side != null && !['self', 'opponent', 'player', 'enemy'].includes(condition.side)) {
+                pushError(errors, `${path}.side`, 'must be "self", "opponent", "player", or "enemy" when provided.');
+            }
             break;
         case 'unitResourceAtLeast':
         case 'unitResourceAtOrBelow':
