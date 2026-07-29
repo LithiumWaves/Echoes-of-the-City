@@ -2222,6 +2222,317 @@ function runSuite() {
         assert(hitsByAttacker.includes('Enemy 1'), `Expected attacker to hit Enemy 1 via Attack Weight, got [${hitsByAttacker.join(', ')}]`);
     });
 
+    test('Effect targeting: deployment order breaks ties for highest HP', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        registerStatusDefinition({
+            id: 'deployment_mark',
+            label: 'Deployment Mark',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const markPassive = {
+            id: 'markPassive',
+            name: 'Mark Passive',
+            description: 'Marks the highest HP opponent.',
+            hooks: {
+                turnStart: [
+                    {
+                        actions: [
+                            { type: 'applyStatus', target: 'highestHpOpponent', statusId: 'deployment_mark', count: 1 },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        const createUnit = (id, name, skills, speed, extra = {}) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 100,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+            ...extra,
+        });
+
+        const noopSkill = {
+            id: 'noop',
+            name: 'No-op',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'deployment-tiebreak',
+                name: 'Deployment Tiebreak',
+                playerUnits: [
+                    createUnit('ally', 'Ally', [noopSkill], 5, { passives: [markPassive] }),
+                ],
+                enemyUnits: [
+                    createUnit('enemyA', 'Enemy A', [noopSkill], 1, { deploymentOrder: 2 }),
+                    createUnit('enemyB', 'Enemy B', [noopSkill], 1, { deploymentOrder: 1 }),
+                ],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+        });
+
+        const state = engine.getState();
+        const enemyB = state.enemyUnits.find((unit) => unit.id === 'enemyB');
+        const enemyA = state.enemyUnits.find((unit) => unit.id === 'enemyA');
+        const markOnB = enemyB?.statuses?.some((status) => status.id === 'deployment_mark') || false;
+        const markOnA = enemyA?.statuses?.some((status) => status.id === 'deployment_mark') || false;
+        assert(markOnB === true, 'Expected deployment_mark to land on enemyB (lower deploymentOrder).');
+        assert(markOnA === false, 'Expected deployment_mark not to land on enemyA.');
+    });
+
+    test('Engine: sanity model triggers Low Morale panic state and locks player input', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        const registerPanicStateDefinition = battleModules.registry?.registerPanicStateDefinition || battleModules.registerPanicStateDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+        assert(typeof registerPanicStateDefinition === 'function', 'Expected registerPanicStateDefinition to exist.');
+
+        registerStatusDefinition({ id: 'panic_hook_mark', label: 'Panic Hook Mark' });
+        registerStatusDefinition({
+            id: 'panic_hook_mark',
+            label: 'Panic Hook Mark',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        registerPanicStateDefinition({
+            id: 'low_morale',
+            label: 'Low Morale',
+            behavior: {
+                mode: 'ai',
+                lockPlayerInput: true,
+                aiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+            hooks: {
+                turnStart: [
+                    {
+                        actions: [
+                            { type: 'applyStatus', target: 'self', statusId: 'panic_hook_mark', count: 1 },
+                        ],
+                    },
+                ],
+            },
+        }, { allowOverwrite: true });
+        registerPanicStateDefinition({
+            id: 'panic',
+            label: 'Panic',
+            behavior: {
+                mode: 'skip',
+                lockPlayerInput: true,
+            },
+        }, { allowOverwrite: true });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const skillA = {
+            id: 'skill_a',
+            name: 'Skill A',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const skillB = {
+            id: 'skill_b',
+            name: 'Skill B',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const enemyGuard = {
+            id: 'enemy_guard',
+            name: 'Enemy Guard',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'pride',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed, sp) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 999,
+            sp,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'sanity-low-morale-smoke',
+                name: 'Sanity Low Morale Smoke',
+                playerUnits: [createUnit('ally', 'Ally', [skillA, skillB], 5, -30)],
+                enemyUnits: [createUnit('enemy', 'Enemy', [enemyGuard], 1, 0)],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    sanityModel: {
+                        lowMorale: { spAtOrBelow: -30, stateId: 'low_morale', chance: 1 },
+                        panic: { spAtOrBelow: -45, stateId: 'panic' },
+                        clearSpAtOrAbove: -29,
+                    },
+                },
+            },
+            clamp,
+        });
+
+        const state = engine.getState();
+        assert(state.playerUnits[0].runtimeState?.panicStateId === 'low_morale', `Expected panicStateId to be low_morale, got ${state.playerUnits[0].runtimeState?.panicStateId}`);
+        assert(state.playerSlots[0].selectedSkillId === 'skill_a', `Expected Low Morale to auto-select skill_a, got ${state.playerSlots[0].selectedSkillId}`);
+        const markCount = state.playerUnits[0].statuses.find((status) => status.id === 'panic_hook_mark')?.count || 0;
+        assert(markCount === 1, `Expected Low Morale turnStart hook to apply mark, got ${markCount}`);
+
+        assert(engine.selectSkill('skill_b', 'player-slot-1') === false, 'Expected skill selection to be locked by Low Morale.');
+        assert(engine.selectTarget('enemy-slot-1', 'player-slot-1') === false, 'Expected target selection to be locked by Low Morale.');
+    });
+
+    test('Engine: sanity model Panic at -45 skips turn', () => {
+        const battleModules = createBattleEnvironment();
+        const registerPanicStateDefinition = battleModules.registry?.registerPanicStateDefinition || battleModules.registerPanicStateDefinition;
+        assert(typeof registerPanicStateDefinition === 'function', 'Expected registerPanicStateDefinition to exist.');
+
+        registerPanicStateDefinition({
+            id: 'panic',
+            label: 'Panic',
+            behavior: {
+                mode: 'skip',
+                lockPlayerInput: true,
+            },
+        }, { allowOverwrite: true });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const skillA = {
+            id: 'skill_a',
+            name: 'Skill A',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const enemySkill = {
+            id: 'enemy_skill',
+            name: 'Enemy Skill',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'pride',
+            effects: [],
+        };
+        const createUnit = (id, name, skills, speed, sp) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 999,
+            sp,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'sanity-panic-smoke',
+                name: 'Sanity Panic Smoke',
+                playerUnits: [createUnit('ally', 'Ally', [skillA], 5, -45)],
+                enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill], 1, 0)],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    sanityModel: {
+                        lowMorale: { spAtOrBelow: -30, stateId: 'low_morale', chance: 1 },
+                        panic: { spAtOrBelow: -45, stateId: 'panic' },
+                        clearSpAtOrAbove: -29,
+                    },
+                },
+            },
+            clamp,
+        });
+
+        const state = engine.getState();
+        assert(state.playerUnits[0].runtimeState?.panicStateId === 'panic', `Expected panicStateId to be panic, got ${state.playerUnits[0].runtimeState?.panicStateId}`);
+        assert(state.playerSlots[0].resolved === true, 'Expected Panic to resolve the slot immediately.');
+        assert(state.playerSlots[0].selectedSkillId == null, `Expected Panic to clear selectedSkillId, got ${state.playerSlots[0].selectedSkillId}`);
+        assert(engine.selectSlot('player-slot-1') === false, 'Expected slot selection to be locked by Panic.');
+
+        engine.resolveTurn();
+        const stateAfter = engine.getState();
+        const skipped = stateAfter.events.some((event) => event.type === 'panic_turn_skipped' && event.data?.unitName === 'Ally');
+        assert(skipped, 'Expected panic_turn_skipped event to be emitted.');
+    });
+
     test('Effect runner: encounterResource amount supports side scoping', () => {
         const battleModules = createBattleEnvironment();
         const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;

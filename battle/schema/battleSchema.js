@@ -1670,6 +1670,82 @@
         };
     }
 
+    function validatePanicStateDefinition(definition) {
+        const normalizedDefinition = cloneDefinition(definition || {});
+        const errors = [];
+        const path = 'panicState';
+
+        if (!normalizedDefinition.id || typeof normalizedDefinition.id !== 'string') {
+            pushError(errors, `${path}.id`, 'must be a non-empty string.');
+        }
+        if (!normalizedDefinition.label && !normalizedDefinition.name) {
+            pushError(errors, `${path}.label`, 'must provide label or name.');
+        }
+        if (normalizedDefinition.label != null && typeof normalizedDefinition.label !== 'string') {
+            pushError(errors, `${path}.label`, 'must be a string when provided.');
+        }
+        if (normalizedDefinition.name != null && typeof normalizedDefinition.name !== 'string') {
+            pushError(errors, `${path}.name`, 'must be a string when provided.');
+        }
+        if (normalizedDefinition.description != null && typeof normalizedDefinition.description !== 'string') {
+            pushError(errors, `${path}.description`, 'must be a string when provided.');
+        }
+
+        const behavior = normalizedDefinition.behavior;
+        if (behavior != null) {
+            if (typeof behavior !== 'object' || Array.isArray(behavior)) {
+                pushError(errors, `${path}.behavior`, 'must be an object when provided.');
+            } else {
+                if (behavior.mode != null && !['none', 'ai', 'skip'].includes(behavior.mode)) {
+                    pushError(errors, `${path}.behavior.mode`, 'must be "none", "ai", or "skip" when provided.');
+                }
+                if (behavior.lockPlayerInput != null && typeof behavior.lockPlayerInput !== 'boolean') {
+                    pushError(errors, `${path}.behavior.lockPlayerInput`, 'must be a boolean when provided.');
+                }
+                if (behavior.aiProfile != null) {
+                    if (typeof behavior.aiProfile !== 'object' || Array.isArray(behavior.aiProfile)) {
+                        pushError(errors, `${path}.behavior.aiProfile`, 'must be an object when provided.');
+                    } else {
+                        if (behavior.aiProfile.skill != null && typeof behavior.aiProfile.skill !== 'string') {
+                            pushError(errors, `${path}.behavior.aiProfile.skill`, 'must be a string when provided.');
+                        } else if (behavior.aiProfile.skill && !ENEMY_AI_SKILLS.has(behavior.aiProfile.skill)) {
+                            pushError(errors, `${path}.behavior.aiProfile.skill`, 'is not a supported value.');
+                        }
+                        if (behavior.aiProfile.target != null && typeof behavior.aiProfile.target !== 'string') {
+                            pushError(errors, `${path}.behavior.aiProfile.target`, 'must be a string when provided.');
+                        } else if (behavior.aiProfile.target && !ENEMY_AI_TARGETS.has(behavior.aiProfile.target)) {
+                            pushError(errors, `${path}.behavior.aiProfile.target`, 'is not a supported value.');
+                        }
+                    }
+                }
+            }
+        }
+
+        if (normalizedDefinition.hooks != null) {
+            if (typeof normalizedDefinition.hooks !== 'object' || Array.isArray(normalizedDefinition.hooks)) {
+                pushError(errors, `${path}.hooks`, 'must be an object when provided.');
+            } else {
+                Object.entries(normalizedDefinition.hooks).forEach(([hookName, hookDefinition]) => {
+                    if (!PASSIVE_HOOKS.has(hookName)) {
+                        pushError(errors, `${path}.hooks.${hookName}`, 'is not a supported panic state hook.');
+                        return;
+                    }
+
+                    validateHookDefinition(errors, new Set(), hookDefinition, `${path}.hooks.${hookName}`);
+                });
+            }
+        }
+
+        if (!normalizedDefinition.label && typeof normalizedDefinition.name === 'string') {
+            normalizedDefinition.label = normalizedDefinition.name;
+        }
+
+        return {
+            normalizedDefinition,
+            errors,
+        };
+    }
+
     function validateBattleDefinition(definition) {
         const normalizedDefinition = normalizeBattleDefinition(definition);
         const errors = [];
@@ -1706,6 +1782,48 @@
                 }
             } else {
                 pushError(errors, 'battle.rules.enemyAiProfile', 'must be a string or object.');
+            }
+        }
+
+        const sanityModel = normalizedDefinition.rules?.sanityModel || normalizedDefinition.rules?.sanity;
+        if (sanityModel != null) {
+            if (typeof sanityModel !== 'object' || Array.isArray(sanityModel)) {
+                pushError(errors, 'battle.rules.sanityModel', 'must be an object when provided.');
+            } else {
+                if (sanityModel.clearSpAtOrAbove != null && !isFiniteNumber(sanityModel.clearSpAtOrAbove)) {
+                    pushError(errors, 'battle.rules.sanityModel.clearSpAtOrAbove', 'must be a number when provided.');
+                }
+                ['lowMorale', 'panic'].forEach((field) => {
+                    const entry = sanityModel[field];
+                    if (entry == null) {
+                        return;
+                    }
+                    if (typeof entry !== 'object' || Array.isArray(entry)) {
+                        pushError(errors, `battle.rules.sanityModel.${field}`, 'must be an object when provided.');
+                        return;
+                    }
+                    if (entry.spAtOrBelow != null && !isFiniteNumber(entry.spAtOrBelow)) {
+                        pushError(errors, `battle.rules.sanityModel.${field}.spAtOrBelow`, 'must be a number when provided.');
+                    }
+                    if (entry.stateId != null && (typeof entry.stateId !== 'string' || !entry.stateId)) {
+                        pushError(errors, `battle.rules.sanityModel.${field}.stateId`, 'must be a non-empty string when provided.');
+                    }
+                    if (field === 'lowMorale' && entry.chance != null) {
+                        if (isFiniteNumber(entry.chance)) {
+                            return;
+                        }
+                        if (typeof entry.chance !== 'object' || Array.isArray(entry.chance)) {
+                            pushError(errors, 'battle.rules.sanityModel.lowMorale.chance', 'must be a number or object when provided.');
+                            return;
+                        }
+                        if (entry.chance.base != null && !isFiniteNumber(entry.chance.base)) {
+                            pushError(errors, 'battle.rules.sanityModel.lowMorale.chance.base', 'must be a number when provided.');
+                        }
+                        if (entry.chance.perSpBelowThreshold != null && !isFiniteNumber(entry.chance.perSpBelowThreshold)) {
+                            pushError(errors, 'battle.rules.sanityModel.lowMorale.chance.perSpBelowThreshold', 'must be a number when provided.');
+                        }
+                    }
+                });
             }
         }
 
@@ -1824,6 +1942,7 @@
     battleModules.schema.validateBattleDefinition = validateBattleDefinition;
     battleModules.schema.validateUnitDefinition = validateUnitDefinition;
     battleModules.schema.validateStatusDefinition = validateStatusDefinition;
+    battleModules.schema.validatePanicStateDefinition = validatePanicStateDefinition;
     battleModules.schema.validateContentPackManifest = validateContentPackManifest;
     battleModules.schema.formatBattleDefinitionErrors = formatBattleDefinitionErrors;
 
@@ -1831,6 +1950,7 @@
     battleModules.validateBattleDefinition = validateBattleDefinition;
     battleModules.validateUnitDefinition = validateUnitDefinition;
     battleModules.validateStatusDefinition = validateStatusDefinition;
+    battleModules.validatePanicStateDefinition = validatePanicStateDefinition;
     battleModules.validateContentPackManifest = validateContentPackManifest;
     battleModules.formatBattleDefinitionErrors = formatBattleDefinitionErrors;
 
@@ -1840,6 +1960,7 @@
         validateBattleDefinition,
         validateUnitDefinition,
         validateStatusDefinition,
+        validatePanicStateDefinition,
         validateContentPackManifest,
     };
 })();

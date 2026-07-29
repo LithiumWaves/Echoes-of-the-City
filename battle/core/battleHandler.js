@@ -59,6 +59,8 @@
         let battlefieldHeight = loadPersistedBattlefieldHeight();
         let activeResizePointerId = null;
         let turnDebugEnabled = enableDebugTools ? loadPersistedTurnDebugEnabled() : false;
+        let debugPatchInput = '';
+        let debugPatchMessage = null;
         let inspectState = typeof battleModules.createInspectState === 'function'
             ? battleModules.createInspectState()
             : { isOpen: false, unitId: null };
@@ -347,6 +349,9 @@
             const displayBattle = playbackState.isRunning && playbackState.previewBattle
                 ? playbackState.previewBattle
                 : resolvedBattle;
+            const debugIds = enableDebugTools && engine?.debug?.listIds
+                ? engine.debug.listIds()
+                : null;
 
             applyBattlefieldHeight();
             renderer.render(displayBattle, {
@@ -356,6 +361,9 @@
                 turnDebugEnabled,
                 debugToolsEnabled: enableDebugTools,
                 debugRollState: debugRollManager?.getUiState?.() || null,
+                debugPatchInput,
+                debugPatchMessage,
+                debugIds,
                 inspect: inspectState,
             });
         }
@@ -431,6 +439,37 @@
                 return;
             }
 
+            if (action === 'debug-apply-patch' && enableDebugTools && engine?.debug?.applyPatchJson) {
+                const result = engine.debug.applyPatchJson(debugPatchInput);
+                debugPatchMessage = result?.ok
+                    ? `Applied patch (${Array.isArray(result?.results) ? result.results.filter((entry) => entry.ok).length : 'ok'}).`
+                    : (result?.message || 'Failed to apply patch.');
+                render();
+                return;
+            }
+
+            if (action === 'debug-dump-battle' && enableDebugTools && engine?.debug?.dumpBattleJson) {
+                debugPatchInput = engine.debug.dumpBattleJson();
+                debugPatchMessage = 'Dumped battle JSON.';
+                render();
+                return;
+            }
+
+            if (action === 'debug-dump-unit' && enableDebugTools && engine?.debug?.dumpUnitJson) {
+                const dumpTargetId = unitId || inspectState?.unitId;
+                debugPatchInput = dumpTargetId ? engine.debug.dumpUnitJson(dumpTargetId) : '';
+                debugPatchMessage = dumpTargetId ? `Dumped unit JSON (${dumpTargetId}).` : 'No unit selected.';
+                render();
+                return;
+            }
+
+            if (action === 'debug-dump-slot' && enableDebugTools && engine?.debug?.dumpSlotJson) {
+                debugPatchInput = slotId ? engine.debug.dumpSlotJson(slotId) : '';
+                debugPatchMessage = slotId ? `Dumped slot JSON (${slotId}).` : 'No slot selected.';
+                render();
+                return;
+            }
+
             if (action === 'select-slot' && slotId) {
                 engine.selectSlot(slotId);
                 render();
@@ -479,6 +518,12 @@
         }
 
         function handleChange(event) {
+            const patchInput = event.target.closest('[data-action="debug-patch-input"]');
+            if (patchInput && enableDebugTools) {
+                debugPatchInput = patchInput.value || '';
+                return;
+            }
+
             if (!enableDebugTools || !debugRollManager?.setSequence) {
                 return;
             }

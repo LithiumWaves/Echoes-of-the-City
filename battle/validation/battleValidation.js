@@ -76,6 +76,31 @@
         };
     }
 
+    function validatePanicStateDefinition(definition) {
+        const validator = battleModules.schema?.validatePanicStateDefinition || battleModules.validatePanicStateDefinition;
+        const formatter = battleModules.schema?.formatBattleDefinitionErrors || battleModules.formatBattleDefinitionErrors;
+
+        if (typeof validator !== 'function') {
+            return {
+                normalizedDefinition: definition,
+                errors: [],
+                message: null,
+            };
+        }
+
+        const result = validator(definition);
+        const errors = Array.isArray(result?.errors) ? result.errors : [];
+        const message = errors.length
+            ? (typeof formatter === 'function' ? formatter(errors) : errors.join('\n'))
+            : null;
+
+        return {
+            normalizedDefinition: result?.normalizedDefinition || definition,
+            errors,
+            message,
+        };
+    }
+
     function assertValidBattleDefinition(definition) {
         const { normalizedDefinition, errors, message } = validateAndNormalizeBattleDefinition(definition);
         if (errors.length) {
@@ -103,6 +128,15 @@
         return normalizedDefinition;
     }
 
+    function assertValidPanicStateDefinition(definition) {
+        const { normalizedDefinition, errors, message } = validatePanicStateDefinition(definition);
+        if (errors.length) {
+            throw new Error(message || 'Panic state definition is invalid.');
+        }
+
+        return normalizedDefinition;
+    }
+
     battleModules.validation = battleModules.validation || {};
     battleModules.validation.validateAndNormalizeBattleDefinition = validateAndNormalizeBattleDefinition;
     battleModules.validation.assertValidBattleDefinition = assertValidBattleDefinition;
@@ -110,6 +144,8 @@
     battleModules.validation.assertValidUnitDefinition = assertValidUnitDefinition;
     battleModules.validation.validateStatusDefinition = validateStatusDefinition;
     battleModules.validation.assertValidStatusDefinition = assertValidStatusDefinition;
+    battleModules.validation.validatePanicStateDefinition = validatePanicStateDefinition;
+    battleModules.validation.assertValidPanicStateDefinition = assertValidPanicStateDefinition;
 
     battleModules.validateAndNormalizeBattleDefinition = validateAndNormalizeBattleDefinition;
     battleModules.assertValidBattleDefinition = assertValidBattleDefinition;
@@ -117,6 +153,8 @@
     battleModules.assertValidUnitDefinition = assertValidUnitDefinition;
     battleModules.validateStatusDefinition = validateStatusDefinition;
     battleModules.assertValidStatusDefinition = assertValidStatusDefinition;
+    battleModules.validatePanicStateDefinition = validatePanicStateDefinition;
+    battleModules.assertValidPanicStateDefinition = assertValidPanicStateDefinition;
 
     window.EchoesOfTheCityBattle = {
         ...window.EchoesOfTheCityBattle,
@@ -126,5 +164,7 @@
         assertValidUnitDefinition,
         validateStatusDefinition,
         assertValidStatusDefinition,
+        validatePanicStateDefinition,
+        assertValidPanicStateDefinition,
     };
 })();

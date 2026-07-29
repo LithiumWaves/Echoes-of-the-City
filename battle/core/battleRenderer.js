@@ -1090,6 +1090,7 @@
                 return '';
             }
 
+            const debugToolsEnabled = uiState?.debugToolsEnabled !== false;
             const allUnits = getAllUnits(battle);
             const allSlots = getAllSlots(battle);
             const selectedUnitId = inspectState.unitId || allUnits[0]?.id || null;
@@ -1181,6 +1182,40 @@
                 `).join('')
                 : '';
 
+            const debugIds = uiState?.debugIds;
+            const debugPatchInput = typeof uiState?.debugPatchInput === 'string' ? uiState.debugPatchInput : '';
+            const debugPatchMessage = typeof uiState?.debugPatchMessage === 'string' ? uiState.debugPatchMessage : null;
+            const debugHint = `{"set":{"unit.${unit?.id || 'unitId'}.hp":50,"unit.${unit?.id || 'unitId'}.sp":0,"battle.wave":2}}`;
+            const debugUnitIdMarkup = Array.isArray(debugIds?.units) && debugIds.units.length
+                ? debugIds.units.map((entry) => `${entry.id}`).join(', ')
+                : '';
+            const debugSlotIdMarkup = Array.isArray(debugIds?.slots) && debugIds.slots.length
+                ? debugIds.slots.map((entry) => `${entry.id}`).join(', ')
+                : '';
+            const debugMarkup = debugToolsEnabled
+                ? `
+                    <div class="echoes-battle-panel__inspect-block">
+                        <strong>Debug Patch</strong>
+                        <span style="white-space: pre-wrap;">${escapeAttribute(debugPatchMessage || 'Apply a JSON patch to battle/unit/slot state.')}</span>
+                        <span style="white-space: pre-wrap;">Example: ${escapeAttribute(debugHint)}</span>
+                        ${debugUnitIdMarkup ? `<span style="white-space: pre-wrap;">Units: ${escapeAttribute(debugUnitIdMarkup)}</span>` : ''}
+                        ${debugSlotIdMarkup ? `<span style="white-space: pre-wrap;">Slots: ${escapeAttribute(debugSlotIdMarkup)}</span>` : ''}
+                        <textarea
+                            data-action="debug-patch-input"
+                            rows="8"
+                            style="width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit; line-height: 1.35;"
+                            spellcheck="false"
+                        >${escapeHtml(debugPatchInput)}</textarea>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+                            <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-apply-patch">Apply Patch</button>
+                            <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-dump-unit" data-unit-id="${escapeAttribute(unit?.id || '')}">Dump Unit</button>
+                            <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-dump-slot" data-slot-id="${escapeAttribute(slot?.id || '')}">Dump Slot</button>
+                            <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-dump-battle">Dump Battle</button>
+                        </div>
+                    </div>
+                `
+                : '';
+
             return `
                 <aside class="echoes-battle-panel__inspect" data-inspect="panel">
                     <div class="echoes-battle-panel__inspect-title">
@@ -1229,6 +1264,7 @@
                                 ${skillMarkup || '<span>None</span>'}
                             </div>
                         </div>
+                        ${debugMarkup}
                     </div>
                 </aside>
             `;

@@ -105,7 +105,12 @@
                     const hpA = unitA?.hp || 0;
                     const hpB = unitB?.hp || 0;
                     if (hpA === hpB) {
-                        return a.index - b.index;
+                        const orderA = Number.isInteger(unitA?.deploymentOrder) ? unitA.deploymentOrder : a.index;
+                        const orderB = Number.isInteger(unitB?.deploymentOrder) ? unitB.deploymentOrder : b.index;
+                        if (orderA === orderB) {
+                            return a.index - b.index;
+                        }
+                        return orderA - orderB;
                     }
                     return mode === 'highest' ? hpB - hpA : hpA - hpB;
                 });

@@ -178,6 +178,8 @@
         dark_flame: { id: 'dark_flame', label: 'Dark Flame', countOnly: true },
         photoelectricity: { id: 'photoelectricity', label: 'Photoelectricity', countOnly: true },
     };
+
+    const panicStateDefinitions = {};
     const statusDefinitionAliases = battleModules.statusDefinitionAliases || (battleModules.statusDefinitionAliases = {});
 
     const affinityLabels = {
@@ -300,6 +302,67 @@
         return battleModules.validation?.validateStatusDefinition
             || battleModules.validateStatusDefinition
             || null;
+    }
+
+    function getPanicStateDefinitionValidator() {
+        return battleModules.validation?.validatePanicStateDefinition
+            || battleModules.validatePanicStateDefinition
+            || null;
+    }
+
+    function getPanicStateDefinition(panicStateId) {
+        const definition = panicStateId ? (panicStateDefinitions[panicStateId] || null) : null;
+        return definition ? cloneRegistryValue(definition) : null;
+    }
+
+    function registerPanicStateDefinition(definition, options = {}) {
+        const validator = getPanicStateDefinitionValidator();
+        const { normalizedDefinition, errors, message } = typeof validator === 'function'
+            ? validator(definition)
+            : { normalizedDefinition: definition, errors: [], message: null };
+
+        if (Array.isArray(errors) && errors.length) {
+            throw new Error(message || 'Panic state definition is invalid.');
+        }
+
+        const registeredDefinition = normalizedDefinition || definition;
+        const definitionId = registeredDefinition?.id;
+        if (!definitionId || typeof definitionId !== 'string') {
+            throw new Error('Registered panic state definitions must have an id.');
+        }
+
+        if (panicStateDefinitions[definitionId] && !options.allowOverwrite) {
+            throw new Error(`Panic state definition "${definitionId}" is already registered.`);
+        }
+
+        panicStateDefinitions[definitionId] = cloneRegistryValue(registeredDefinition);
+        return getPanicStateDefinition(definitionId);
+    }
+
+    function unregisterPanicStateDefinition(definitionId) {
+        if (!definitionId || typeof definitionId !== 'string') {
+            return false;
+        }
+
+        if (!panicStateDefinitions[definitionId]) {
+            return false;
+        }
+
+        delete panicStateDefinitions[definitionId];
+        return true;
+    }
+
+    function listPanicStateDefinitions() {
+        return Object.entries(panicStateDefinitions).map(([key, definition]) => ({
+            key,
+            id: definition?.id || null,
+            label: definition?.label || definition?.name || key,
+        }));
+    }
+
+    function getPanicStateLabel(panicStateId) {
+        const definition = getPanicStateDefinition(panicStateId);
+        return definition?.label || definition?.name || panicStateId;
     }
 
     function getStatusDefinition(statusId) {
@@ -756,6 +819,7 @@
 
     const registry = {
         statusDefinitions,
+        panicStateDefinitions,
         effectDefinitions,
         passiveHookLabels,
         registerStatusDefinition,
@@ -766,6 +830,11 @@
         getStatusIconPath,
         isCountOnlyStatus,
         isSupportedStatusId,
+        registerPanicStateDefinition,
+        unregisterPanicStateDefinition,
+        listPanicStateDefinitions,
+        getPanicStateDefinition,
+        getPanicStateLabel,
         getEffectDefinition,
         isSupportedEffectType,
         getTriggerLabel,

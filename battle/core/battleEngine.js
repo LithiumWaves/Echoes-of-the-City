@@ -133,6 +133,27 @@
         passives.forEach((passive) => {
             resetHookOwnerRuntimeState(passive);
         });
+
+        const panicHookOwner = unit?.runtimeState?.panicHookOwner;
+        if (panicHookOwner) {
+            resetHookOwnerRuntimeState(panicHookOwner);
+        }
+    }
+
+    function ensureUnitRuntimeState(unit) {
+        if (!unit || typeof unit !== 'object') {
+            return null;
+        }
+        if (!unit.runtimeState || typeof unit.runtimeState !== 'object' || Array.isArray(unit.runtimeState)) {
+            unit.runtimeState = {};
+        }
+        if (!unit.runtimeState.flags || typeof unit.runtimeState.flags !== 'object' || Array.isArray(unit.runtimeState.flags)) {
+            unit.runtimeState.flags = {};
+        }
+        if (!unit.runtimeState.counters || typeof unit.runtimeState.counters !== 'object' || Array.isArray(unit.runtimeState.counters)) {
+            unit.runtimeState.counters = {};
+        }
+        return unit.runtimeState;
     }
 
     function createBattleUnit(template, side, index) {
@@ -140,6 +161,9 @@
             ...template,
             side,
             index,
+            deploymentOrder: Number.isInteger(template?.deploymentOrder) && template.deploymentOrder > 0
+                ? template.deploymentOrder
+                : index + 1,
             hp: template.maxHp,
             sp: template.sp,
             speed: 0,
@@ -380,6 +404,25 @@
                 safeInvoke(hookDefinition, hookContext);
             };
 
+            const runtimeState = ensureUnitRuntimeState(unit);
+            const panicStateId = runtimeState?.panicStateId;
+            if (panicStateId) {
+                const panicDefinition = getPanicStateDefinition(panicStateId);
+                if (panicDefinition?.hooks && typeof panicDefinition.hooks === 'object') {
+                    if (!runtimeState.panicHookOwner || runtimeState.panicHookOwner.id !== panicStateId) {
+                        runtimeState.panicHookOwner = {
+                            id: panicStateId,
+                            hooks: panicDefinition.hooks,
+                            hookRuntimeState: {},
+                        };
+                    } else {
+                        runtimeState.panicHookOwner.hooks = panicDefinition.hooks;
+                    }
+
+                    invokeHookDefinition(runtimeState.panicHookOwner.hooks?.[hookName], runtimeState.panicHookOwner, 'panicState');
+                }
+            }
+
             const statuses = Array.isArray(unit.statuses) ? unit.statuses : [];
             statuses.forEach((status) => {
                 invokeHookDefinition(status?.hooks?.[hookName], status, 'status');
@@ -407,6 +450,12 @@
         function getStatusDefinition(statusId) {
             return typeof registry.getStatusDefinition === 'function'
                 ? registry.getStatusDefinition(statusId)
+                : null;
+        }
+
+        function getPanicStateDefinition(panicStateId) {
+            return typeof registry.getPanicStateDefinition === 'function'
+                ? registry.getPanicStateDefinition(panicStateId)
                 : null;
         }
 
@@ -3550,6 +3599,238 @@
             return nextBattle;
         }
 
+        function getSanityModel() {
+            const model = battleDefinition?.rules?.sanityModel || battleDefinition?.rules?.sanity || null;
+            if (!model || typeof model !== 'object' || Array.isArray(model)) {
+                return null;
+            }
+            return model;
+        }
+
+        function resolveSanityChance(chanceDefinition, threshold, sp) {
+            if (typeof chanceDefinition === 'number' && Number.isFinite(chanceDefinition)) {
+                return clamp(chanceDefinition, 0, 1);
+            }
+
+            if (!chanceDefinition || typeof chanceDefinition !== 'object' || Array.isArray(chanceDefinition)) {
+                return 1;
+            }
+
+            const base = typeof chanceDefinition.base === 'number' && Number.isFinite(chanceDefinition.base)
+                ? chanceDefinition.base
+                : 1;
+            const perSpBelowThreshold = typeof chanceDefinition.perSpBelowThreshold === 'number' && Number.isFinite(chanceDefinition.perSpBelowThreshold)
+                ? chanceDefinition.perSpBelowThreshold
+                : 0;
+            const delta = typeof threshold === 'number' && Number.isFinite(threshold)
+                ? Math.max(0, threshold - sp)
+                : 0;
+            return clamp(base + (delta * perSpBelowThreshold), 0, 1);
+        }
+
+        function processSanityModelAtTurnStart(targetBattle) {
+            const model = getSanityModel();
+            if (!model) {
+                return;
+            }
+
+            const lowMorale = model.lowMorale && typeof model.lowMorale === 'object' && !Array.isArray(model.lowMorale)
+                ? model.lowMorale
+                : {};
+            const panic = model.panic && typeof model.panic === 'object' && !Array.isArray(model.panic)
+                ? model.panic
+                : {};
+
+            const lowMoraleThreshold = typeof lowMorale.spAtOrBelow === 'number' && Number.isFinite(lowMorale.spAtOrBelow)
+                ? lowMorale.spAtOrBelow
+                : -30;
+            const panicThreshold = typeof panic.spAtOrBelow === 'number' && Number.isFinite(panic.spAtOrBelow)
+                ? panic.spAtOrBelow
+                : -45;
+            const clearThreshold = typeof model.clearSpAtOrAbove === 'number' && Number.isFinite(model.clearSpAtOrAbove)
+                ? model.clearSpAtOrAbove
+                : (lowMoraleThreshold + 1);
+
+            const lowMoraleStateId = typeof lowMorale.stateId === 'string' && lowMorale.stateId
+                ? lowMorale.stateId
+                : 'lowMorale';
+            const panicStateId = typeof panic.stateId === 'string' && panic.stateId
+                ? panic.stateId
+                : 'panic';
+
+            getAllUnits(targetBattle).forEach((unit) => {
+                if (!unit || !Number.isFinite(unit.sp)) {
+                    return;
+                }
+
+                const runtimeState = ensureUnitRuntimeState(unit);
+                const previousStateId = runtimeState?.panicStateId || null;
+                let nextStateId = null;
+
+                if (unit.sp <= panicThreshold) {
+                    nextStateId = panicStateId;
+                } else if (unit.sp <= lowMoraleThreshold) {
+                    const chance = resolveSanityChance(lowMorale.chance, lowMoraleThreshold, unit.sp);
+                    nextStateId = Math.random() < chance ? lowMoraleStateId : null;
+                } else if (unit.sp >= clearThreshold) {
+                    nextStateId = null;
+                } else if (previousStateId === panicStateId && unit.sp > panicThreshold) {
+                    nextStateId = unit.sp <= lowMoraleThreshold ? lowMoraleStateId : null;
+                } else {
+                    nextStateId = previousStateId;
+                }
+
+                if (nextStateId === previousStateId) {
+                    return;
+                }
+
+                if (!nextStateId) {
+                    delete runtimeState.panicStateId;
+                    delete runtimeState.panicValue;
+                } else {
+                    runtimeState.panicStateId = nextStateId;
+                }
+
+                emitEvent(targetBattle, 'unit_panic_changed', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    previousStateId,
+                    nextStateId,
+                    sp: unit.sp,
+                    reason: 'sanity model',
+                });
+            });
+        }
+
+        function getPanicBehavior(unit) {
+            const panicStateId = unit?.runtimeState?.panicStateId;
+            if (!panicStateId) {
+                return null;
+            }
+
+            const definition = getPanicStateDefinition(panicStateId);
+            const behavior = definition?.behavior && typeof definition.behavior === 'object' && !Array.isArray(definition.behavior)
+                ? definition.behavior
+                : {};
+            const mode = behavior.mode === 'skip' ? 'skip' : (behavior.mode === 'none' ? 'none' : 'ai');
+            const lockPlayerInput = behavior.lockPlayerInput != null
+                ? Boolean(behavior.lockPlayerInput)
+                : mode !== 'none';
+            const aiProfile = behavior.aiProfile && typeof behavior.aiProfile === 'object' && !Array.isArray(behavior.aiProfile)
+                ? behavior.aiProfile
+                : null;
+
+            return {
+                panicStateId,
+                mode,
+                lockPlayerInput,
+                aiProfile,
+            };
+        }
+
+        function pickRandomLivingSlotId(targetBattle, side) {
+            const livingSlots = getSlotsForSide(targetBattle, side).filter((slot) => slot && isSlotAlive(targetBattle, slot));
+            if (!livingSlots.length) {
+                return null;
+            }
+            const choice = randomInt(0, livingSlots.length - 1);
+            return livingSlots[choice]?.id || null;
+        }
+
+        function pickPanicSkillId(unit, behavior) {
+            const skills = Array.isArray(unit?.skills) ? unit.skills : [];
+            if (!skills.length) {
+                return null;
+            }
+            const mode = behavior?.aiProfile?.skill || 'random';
+            if (mode === 'first') {
+                return skills[0]?.id || null;
+            }
+            if (mode === 'cycle') {
+                const runtimeState = ensureUnitRuntimeState(unit);
+                const nextIndex = Number.isInteger(runtimeState.panicCycleIndex) ? runtimeState.panicCycleIndex : 0;
+                const picked = skills[nextIndex % skills.length]?.id || null;
+                runtimeState.panicCycleIndex = (nextIndex + 1) % skills.length;
+                return picked;
+            }
+            return skills[randomInt(0, skills.length - 1)]?.id || null;
+        }
+
+        function pickPanicTargetSlotId(targetBattle, slot, behavior) {
+            const opponentSide = getOpposingSide(slot.side);
+            const mode = behavior?.aiProfile?.target || 'random';
+            if (mode === 'firstLiving') {
+                return getFirstLivingSlotId(targetBattle, opponentSide);
+            }
+            if (mode === 'mirror') {
+                const mirrorSlot = getSlotsForSide(targetBattle, opponentSide).find((candidate) => candidate && candidate.index === slot.index && isSlotAlive(targetBattle, candidate));
+                return mirrorSlot?.id || getFirstLivingSlotId(targetBattle, opponentSide);
+            }
+            return pickRandomLivingSlotId(targetBattle, opponentSide) || getFirstLivingSlotId(targetBattle, opponentSide);
+        }
+
+        function isSlotLockedByPanic(targetBattle, slot) {
+            if (!targetBattle || !slot || slot.side !== 'player') {
+                return false;
+            }
+            const unit = getUnitById(targetBattle, slot.unitId);
+            const behavior = getPanicBehavior(unit);
+            return Boolean(behavior && behavior.lockPlayerInput && behavior.mode !== 'none');
+        }
+
+        function applyPanicSelectionsForTurn(targetBattle) {
+            getAllSlots(targetBattle).forEach((slot) => {
+                if (!slot || !isSlotActionable(targetBattle, slot)) {
+                    return;
+                }
+                const unit = getUnitById(targetBattle, slot.unitId);
+                const behavior = getPanicBehavior(unit);
+                if (!behavior || behavior.mode === 'none') {
+                    return;
+                }
+
+                if (behavior.mode === 'skip') {
+                    slot.selectedSkillId = null;
+                    slot.intentSkillId = null;
+                    slot.intentTargetSlotId = null;
+                    slot.targetSlotId = null;
+                    slot.targetSlotIds = null;
+                    slot.manualTargetLock = true;
+                    slot.resolved = true;
+                    emitEvent(targetBattle, 'panic_turn_skipped', {
+                        unitId: unit.id,
+                        unitName: unit.name,
+                        panicStateId: behavior.panicStateId,
+                    });
+                    return;
+                }
+
+                const pickedSkillId = pickPanicSkillId(unit, behavior);
+                if (!pickedSkillId) {
+                    return;
+                }
+                const pickedSkill = getSkillById(unit, pickedSkillId);
+                if (!pickedSkill) {
+                    return;
+                }
+                slot.selectedSkillId = pickedSkillId;
+                slot.intentSkillId = pickedSkillId;
+                slot.manualTargetLock = true;
+                slot.targetSlotId = pickPanicTargetSlotId(targetBattle, slot, behavior);
+                slot.intentTargetSlotId = slot.targetSlotId;
+                slot.targetSlotIds = slot.targetSlotId ? [slot.targetSlotId] : null;
+                refreshAttackWeightTargetsForSlot(targetBattle, slot, { force: true });
+                emitEvent(targetBattle, 'panic_action_selected', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    slotLabel: getSlotLabel(slot),
+                    panicStateId: behavior.panicStateId,
+                    skillId: pickedSkillId,
+                    targetSlotId: slot.targetSlotId,
+                });
+            });
+        }
+
         function startBattleTurn(targetBattle) {
             if (targetBattle.winner) {
                 return;
@@ -3582,6 +3863,8 @@
                 expireShieldsForPhase(targetBattle, unit, 'turnStart');
                 progressStaggerTurnState(targetBattle, unit);
             });
+
+            processSanityModelAtTurnStart(targetBattle);
 
             getAllSlots(targetBattle).forEach((slot) => {
                 const unit = getUnitById(targetBattle, slot.unitId);
@@ -3639,6 +3922,8 @@
                 });
             });
 
+            applyPanicSelectionsForTurn(targetBattle);
+
             refreshRedirectedTargets(targetBattle);
 
             refreshSpeedOrder(targetBattle);
@@ -3667,6 +3952,9 @@
             if (!slot || slot.side !== 'player' || !isSlotActionable(battle, slot)) {
                 return false;
             }
+            if (isSlotLockedByPanic(battle, slot)) {
+                return false;
+            }
 
             battle.activePlayerSlotId = slot.id;
             return true;
@@ -3679,6 +3967,9 @@
 
             const slot = getSlotById(battle, slotId);
             if (!slot || slot.side !== 'player' || !isSlotActionable(battle, slot)) {
+                return false;
+            }
+            if (isSlotLockedByPanic(battle, slot)) {
                 return false;
             }
 
@@ -3721,6 +4012,9 @@
             const slot = getSlotById(battle, slotId);
             const targetSlot = getSlotById(battle, targetSlotId);
             if (!slot || slot.side !== 'player' || !isSlotActionable(battle, slot) || !targetSlot || targetSlot.side !== 'enemy' || !isSlotAlive(battle, targetSlot)) {
+                return false;
+            }
+            if (isSlotLockedByPanic(battle, slot)) {
                 return false;
             }
 
@@ -4155,6 +4449,213 @@
             return true;
         }
 
+        function getSlotByDebugId(slotId) {
+            return slotId ? getSlotById(battle, slotId) : null;
+        }
+
+        function getUnitByDebugId(unitId) {
+            return unitId ? getUnitById(battle, unitId) : null;
+        }
+
+        function splitDebugPath(path) {
+            if (!path || typeof path !== 'string') {
+                return [];
+            }
+            return path
+                .split('.')
+                .map((segment) => segment.trim())
+                .filter(Boolean);
+        }
+
+        function getDebugRootForPath(pathSegments) {
+            const [rootType] = pathSegments;
+            if (rootType === 'battle') {
+                return { root: battle, rest: pathSegments.slice(1) };
+            }
+            if (rootType === 'unit') {
+                const unitId = pathSegments[1];
+                const unit = getUnitByDebugId(unitId);
+                return unit ? { root: unit, rest: pathSegments.slice(2) } : null;
+            }
+            if (rootType === 'slot') {
+                const slotId = pathSegments[1];
+                const slot = getSlotByDebugId(slotId);
+                return slot ? { root: slot, rest: pathSegments.slice(2) } : null;
+            }
+            return null;
+        }
+
+        function getDebugPathValue(root, segments) {
+            let current = root;
+            for (const segment of segments) {
+                if (current == null) {
+                    return undefined;
+                }
+                const index = Number.parseInt(segment, 10);
+                const key = Number.isInteger(index) && String(index) === segment ? index : segment;
+                current = current[key];
+            }
+            return current;
+        }
+
+        function setDebugPathValue(root, segments, value) {
+            if (!segments.length) {
+                return false;
+            }
+            let current = root;
+            for (let i = 0; i < segments.length - 1; i += 1) {
+                const segment = segments[i];
+                const index = Number.parseInt(segment, 10);
+                const key = Number.isInteger(index) && String(index) === segment ? index : segment;
+                if (current[key] == null || typeof current[key] !== 'object') {
+                    current[key] = {};
+                }
+                current = current[key];
+            }
+            const last = segments[segments.length - 1];
+            const lastIndex = Number.parseInt(last, 10);
+            const lastKey = Number.isInteger(lastIndex) && String(lastIndex) === last ? lastIndex : last;
+            current[lastKey] = value;
+            return true;
+        }
+
+        function deleteDebugPathValue(root, segments) {
+            if (!segments.length) {
+                return false;
+            }
+            const parentSegments = segments.slice(0, -1);
+            const last = segments[segments.length - 1];
+            const parent = parentSegments.length ? getDebugPathValue(root, parentSegments) : root;
+            if (!parent || typeof parent !== 'object') {
+                return false;
+            }
+            const lastIndex = Number.parseInt(last, 10);
+            const lastKey = Number.isInteger(lastIndex) && String(lastIndex) === last ? lastIndex : last;
+            if (!(lastKey in parent)) {
+                return false;
+            }
+            delete parent[lastKey];
+            return true;
+        }
+
+        function applyDebugOperations(debugPatch) {
+            const results = [];
+            const applySetMap = (map, mode) => {
+                if (!map || typeof map !== 'object' || Array.isArray(map)) {
+                    return;
+                }
+                Object.entries(map).forEach(([path, value]) => {
+                    const segments = splitDebugPath(path);
+                    const resolved = getDebugRootForPath(segments);
+                    if (!resolved) {
+                        results.push({ ok: false, path, message: 'Unknown root.' });
+                        return;
+                    }
+                    if (!resolved.rest.length) {
+                        results.push({ ok: false, path, message: 'Path is empty.' });
+                        return;
+                    }
+                    if (mode === 'add') {
+                        const current = getDebugPathValue(resolved.root, resolved.rest);
+                        const delta = typeof value === 'number' ? value : Number.parseFloat(value);
+                        const base = typeof current === 'number' ? current : Number.parseFloat(current);
+                        if (!Number.isFinite(delta) || !Number.isFinite(base)) {
+                            results.push({ ok: false, path, message: 'Add requires numeric current value and delta.' });
+                            return;
+                        }
+                        setDebugPathValue(resolved.root, resolved.rest, base + delta);
+                        results.push({ ok: true, path });
+                        return;
+                    }
+                    setDebugPathValue(resolved.root, resolved.rest, value);
+                    results.push({ ok: true, path });
+                });
+            };
+
+            applySetMap(debugPatch?.set, 'set');
+            applySetMap(debugPatch?.add, 'add');
+
+            const deletions = Array.isArray(debugPatch?.delete) ? debugPatch.delete : [];
+            deletions.forEach((path) => {
+                const segments = splitDebugPath(path);
+                const resolved = getDebugRootForPath(segments);
+                if (!resolved || !resolved.rest.length) {
+                    results.push({ ok: false, path, message: 'Unknown root.' });
+                    return;
+                }
+                const ok = deleteDebugPathValue(resolved.root, resolved.rest);
+                results.push({ ok, path, message: ok ? null : 'Delete failed.' });
+            });
+
+            if (debugPatch?.clearEvents) {
+                battle.events = [];
+                results.push({ ok: true, path: 'battle.events', message: 'Cleared events.' });
+            }
+
+            return results;
+        }
+
+        function applyDebugPatch(debugPatch) {
+            if (!debugPatch || typeof debugPatch !== 'object' || Array.isArray(debugPatch)) {
+                return { ok: false, message: 'Debug patch must be an object.' };
+            }
+
+            const results = applyDebugOperations(debugPatch);
+
+            refreshRedirectedTargets(battle);
+            refreshSpeedOrder(battle);
+            ensureActivePlayerSlot(battle);
+
+            emitEvent(battle, 'debug_patch_applied', {
+                ok: results.every((entry) => entry.ok),
+                applied: results.filter((entry) => entry.ok).length,
+                failed: results.filter((entry) => !entry.ok).length,
+            });
+
+            return {
+                ok: results.every((entry) => entry.ok),
+                results,
+            };
+        }
+
+        function applyDebugPatchJson(rawText) {
+            if (rawText == null) {
+                return { ok: false, message: 'Debug patch is empty.' };
+            }
+            const trimmed = String(rawText).trim();
+            if (!trimmed) {
+                return { ok: false, message: 'Debug patch is empty.' };
+            }
+            let parsed;
+            try {
+                parsed = JSON.parse(trimmed);
+            } catch (error) {
+                return { ok: false, message: `Failed to parse JSON: ${error?.message || String(error)}` };
+            }
+            return applyDebugPatch(parsed);
+        }
+
+        function dumpBattleJson() {
+            return JSON.stringify(battle, null, 2);
+        }
+
+        function dumpUnitJson(unitId) {
+            const unit = getUnitByDebugId(unitId);
+            return unit ? JSON.stringify(unit, null, 2) : '';
+        }
+
+        function dumpSlotJson(slotId) {
+            const slot = getSlotByDebugId(slotId);
+            return slot ? JSON.stringify(slot, null, 2) : '';
+        }
+
+        function listDebugIds() {
+            return {
+                units: getAllUnits(battle).map((unit) => ({ id: unit.id, name: unit.name, side: unit.side })),
+                slots: getAllSlots(battle).map((slot) => ({ id: slot.id, unitId: slot.unitId, side: slot.side, index: slot.index })),
+            };
+        }
+
         return {
             getState,
             selectSlot,
@@ -4165,6 +4666,14 @@
             reset,
             addStatus,
             clearStatuses,
+            debug: {
+                applyPatch: applyDebugPatch,
+                applyPatchJson: applyDebugPatchJson,
+                dumpBattleJson,
+                dumpUnitJson,
+                dumpSlotJson,
+                listIds: listDebugIds,
+            },
         };
     }
 

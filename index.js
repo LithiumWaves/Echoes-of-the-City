@@ -7,6 +7,7 @@
     const PANEL_GAP = 24;
     const DRAG_THRESHOLD = 6;
     const PANEL_ASPECT_RATIO = 1640 / 4120;
+    const BATTLE_DEBUG_TOOLS_STORAGE_KEY = `${EXTENSION_ID}:battle-debug-tools-enabled`;
     const BATTLE_BASE_PACK_SCRIPT_RELATIVE_PATHS = [
         'battle/content/packs/base/statuses/bleed.js',
         'battle/content/packs/base/statuses/burn.js',
@@ -102,6 +103,29 @@
         heavyPanel: 'audio/battlewindow/heavypanel.wav',
     };
 
+    function loadBooleanSetting(key, fallbackValue = false) {
+        try {
+            const rawValue = window.localStorage?.getItem(key);
+            if (rawValue === '1') {
+                return true;
+            }
+            if (rawValue === '0') {
+                return false;
+            }
+        } catch (error) {
+            return fallbackValue;
+        }
+        return fallbackValue;
+    }
+
+    function persistBooleanSetting(key, value) {
+        try {
+            window.localStorage?.setItem(key, value ? '1' : '0');
+        } catch (error) {
+            return;
+        }
+    }
+
     const state = {
         isOpen: false,
         activeScreen: 'main-menu',
@@ -111,6 +135,7 @@
         battleSelectionPromise: null,
         availableBattles: [],
         selectedBattleId: null,
+        battleDebugToolsEnabled: loadBooleanSetting(BATTLE_DEBUG_TOOLS_STORAGE_KEY, false),
         audioEnabled: false,
         audioUnlocked: false,
         audioUnlockPromise: null,
@@ -580,6 +605,16 @@
                         ${selectedBattle?.isDebug ? 'Launch Debug Battle' : 'Launch Battle'}
                     </button>
                 </div>
+                ${selectedBattle && !selectedBattle.isDebug
+                    ? `
+                        <div style="margin-top: 0.8rem; display: flex; justify-content: center;">
+                            <label class="echoes-battle-panel__planner-empty" style="display: inline-flex; gap: 0.55rem; align-items: center; cursor: pointer;">
+                                <input type="checkbox" data-action="toggle-debug-tools" ${state.battleDebugToolsEnabled ? 'checked' : ''} />
+                                <span>Enable Debug Tools</span>
+                            </label>
+                        </div>
+                    `
+                    : ''}
                 <div style="margin-top: 1rem; display: grid; gap: 0.55rem; text-align: left;">
                     <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
                         Import a battle, unit, status, or a full content pack JSON object. Export the selected battle by itself or as a reusable dependency pack.
@@ -639,7 +674,7 @@
                 clamp,
                 resolveAssetUrl: resolveExtensionUrl,
                 battleDefinition,
-                enableDebugTools: false,
+                enableDebugTools: Boolean(state.battleDebugToolsEnabled),
                 storageKeyPrefix: `echoes-of-the-city:battle:${battleDefinition.id}`,
             });
         }
@@ -723,6 +758,14 @@
             const textarea = event.target.closest('[data-action="content-json-input"]');
             if (textarea) {
                 state.contentJsonInput = textarea.value || '';
+                return;
+            }
+
+            const debugToggle = event.target.closest('[data-action="toggle-debug-tools"]');
+            if (debugToggle) {
+                state.battleDebugToolsEnabled = Boolean(debugToggle.checked);
+                persistBooleanSetting(BATTLE_DEBUG_TOOLS_STORAGE_KEY, state.battleDebugToolsEnabled);
+                renderBattleStartScreen();
                 return;
             }
 
