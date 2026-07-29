@@ -33,12 +33,6 @@
             return 1 + (levelDifference / (Math.abs(levelDifference) + 25));
         }
 
-        function getProtectionModifier(protection) {
-            return protection > 0
-                ? Math.max(0, 1 - (Math.min(protection, 10) * 0.1))
-                : 1;
-        }
-
         function getCriticalContribution(context, attackModifiers) {
             if (!context?.isCritical) {
                 return 0;
@@ -59,10 +53,6 @@
             };
             const levelDifference = (context?.offenseLevel || 0) - (context?.defenseLevel || 0);
             const levelModifier = getLevelModifier(levelDifference);
-            const protection = typeof getStatusCount === 'function'
-                ? getStatusCount(defender, 'protection')
-                : 0;
-            const protectionModifier = getProtectionModifier(protection);
             const damageMultiplier = attackModifiers.damageMultiplier ?? 1;
             const weakResistanceBonus = attackModifiers.weakResistanceDamageBonus ?? 0;
             const additiveDamage = attackModifiers.additiveDamage || 0;
@@ -79,7 +69,6 @@
                 defenseBonus: defenseModifiers.staticDamageBonus || 0,
             };
             const dynamicContributions = {
-                protection: protectionModifier - 1,
                 damageMultiplier: damageMultiplier - 1,
                 weakResistanceBonus: ((resistance.physical > 1 || resistance.sin > 1) ? (1 + weakResistanceBonus) : 1) - 1,
                 incomingReduction: incomingReduction - 1,
@@ -110,8 +99,6 @@
                     resistance,
                     levelDifference,
                     levelModifier,
-                    protection,
-                    protectionModifier,
                     damageMultiplier,
                     weakResistanceBonus,
                     incomingReduction,

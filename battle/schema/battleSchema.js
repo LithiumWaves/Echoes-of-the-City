@@ -9,9 +9,13 @@
     const EFFECT_TYPES = new Set(Object.keys(registry.effectDefinitions || {}));
     const CONTEXT_FIELDS = new Set([
         'coinPowerBonus',
+        'coinCountBonus',
         'flatPowerBonus',
         'clashPowerBonus',
+        'critChanceBonus',
+        'damage',
         'damageMultiplier',
+        'damageCap',
         'damageReductionMultiplier',
         'damageReductionFlat',
         'minHpAfterDamage',
@@ -25,9 +29,12 @@
         'healingMultiplier',
         'healingFlatBonus',
         'forceCoinZero',
+        'forcedCoinOutcome',
+        'rerollTailsRemaining',
     ]);
     const COIN_MAP_FIELDS = new Set([
         'criticalBonusByCoin',
+        'critChanceBonusByCoin',
         'staticDamageBonusByCoin',
         'dynamicDamageBonusByCoin',
         'clashRoundBonusByCoin',
@@ -35,6 +42,7 @@
         'additiveDamageByCoin',
         'extraCritDamageByCoin',
         'critFinalPowerBonusByCoin',
+        'damageCapByCoin',
     ]);
     const ENEMY_AI_SKILLS = new Set(['cycle', 'random', 'first']);
     const ENEMY_AI_TARGETS = new Set(['mirror', 'firstLiving', 'lowestHp', 'random']);
@@ -47,7 +55,18 @@
         'mirrorOpponent',
     ]);
     const HOOK_BLOCK_ONCE_PER = new Set(['battle', 'turn', 'skill', 'coin']);
-    const EFFECT_TARGETS = new Set(['self', 'opponent', 'allAllies', 'allOpponents']);
+    const EFFECT_TARGETS = new Set([
+        'self',
+        'opponent',
+        'allAllies',
+        'allOpponents',
+        'randomAlly',
+        'randomOpponent',
+        'highestHpAlly',
+        'lowestHpAlly',
+        'highestHpOpponent',
+        'lowestHpOpponent',
+    ]);
     const HOOK_CONDITION_TYPES = new Set([
         'always',
         'damageAtLeast',
@@ -60,14 +79,24 @@
         'statusCountGreaterThanStatus',
         'encounterResourceAtLeast',
         'encounterResourceAtOrBelow',
+        'unitResourceAtLeast',
+        'unitResourceAtOrBelow',
+        'hasFlag',
+        'counterAtLeast',
+        'counterAtOrBelow',
+        'randomChance',
         'skillIdIs',
         'skillHasTag',
         'skillType',
         'skillSinType',
         'skillDamageType',
+        'skillCoinPowerSign',
         'coinIndex',
         'criticalHit',
         'targetStaggered',
+        'speedAtLeast',
+        'speedAtOrBelow',
+        'speedGreaterThan',
         'hpAtOrBelow',
         'hpAtOrAbove',
         'hpPercentAtOrBelow',
@@ -75,6 +104,8 @@
         'spAtOrBelow',
         'spAtOrAbove',
         'eventStatusIdIs',
+        'unitSideIs',
+        'lastEventTypeIs',
     ]);
 
     function cloneDefinition(definition) {
@@ -175,12 +206,184 @@
             return;
         }
 
+        if (amount.sum) {
+            if (!Array.isArray(amount.sum) || amount.sum.length < 2) {
+                pushError(errors, `${path}.sum`, 'must be an array with at least two amount definitions.');
+                return;
+            }
+
+            amount.sum.forEach((entry, index) => {
+                validateAmountDefinition(errors, entry, `${path}.sum[${index}]`);
+            });
+            return;
+        }
+
+        if (amount.min) {
+            if (!Array.isArray(amount.min) || amount.min.length < 2) {
+                pushError(errors, `${path}.min`, 'must be an array with at least two amount definitions.');
+                return;
+            }
+
+            amount.min.forEach((entry, index) => {
+                validateAmountDefinition(errors, entry, `${path}.min[${index}]`);
+            });
+            return;
+        }
+
+        if (amount.max) {
+            if (!Array.isArray(amount.max) || amount.max.length < 2) {
+                pushError(errors, `${path}.max`, 'must be an array with at least two amount definitions.');
+                return;
+            }
+
+            amount.max.forEach((entry, index) => {
+                validateAmountDefinition(errors, entry, `${path}.max[${index}]`);
+            });
+            return;
+        }
+
+        if (amount.clamp) {
+            if (!amount.clamp || typeof amount.clamp !== 'object' || Array.isArray(amount.clamp)) {
+                pushError(errors, `${path}.clamp`, 'must be an object.');
+                return;
+            }
+
+            validateAmountDefinition(errors, amount.clamp.value, `${path}.clamp.value`);
+            if (amount.clamp.min != null) {
+                validateAmountDefinition(errors, amount.clamp.min, `${path}.clamp.min`);
+            }
+            if (amount.clamp.max != null) {
+                validateAmountDefinition(errors, amount.clamp.max, `${path}.clamp.max`);
+            }
+            return;
+        }
+
+        if (amount.floor != null) {
+            validateAmountDefinition(errors, amount.floor, `${path}.floor`);
+            return;
+        }
+
+        if (amount.ceil != null) {
+            validateAmountDefinition(errors, amount.ceil, `${path}.ceil`);
+            return;
+        }
+
+        if (amount.abs != null) {
+            validateAmountDefinition(errors, amount.abs, `${path}.abs`);
+            return;
+        }
+
         if (amount.skillCoinCount) {
             if (amount.skillCoinCount !== true) {
                 pushError(errors, `${path}.skillCoinCount`, 'must be true when provided.');
             }
             if (amount.inverse != null && typeof amount.inverse !== 'boolean') {
                 pushError(errors, `${path}.inverse`, 'must be a boolean when provided.');
+            }
+            if (amount.multiplier != null && !isFiniteNumber(amount.multiplier)) {
+                pushError(errors, `${path}.multiplier`, 'must be a number when provided.');
+            }
+            if (amount.offset != null && !isFiniteNumber(amount.offset)) {
+                pushError(errors, `${path}.offset`, 'must be a number when provided.');
+            }
+            return;
+        }
+
+        if (amount.hp || amount.maxHp || amount.hpPercent || amount.sp || amount.speed) {
+            const amountKey = amount.hp
+                ? 'hp'
+                : (amount.maxHp
+                    ? 'maxHp'
+                    : (amount.hpPercent
+                        ? 'hpPercent'
+                        : (amount.sp ? 'sp' : 'speed')));
+            const amountSource = amount[amountKey];
+            if (amountSource != null && (typeof amountSource !== 'object' || Array.isArray(amountSource))) {
+                pushError(errors, `${path}.${amountKey}`, 'must be an object when provided.');
+                return;
+            }
+            if (amountSource?.target != null && !['self', 'opponent'].includes(amountSource.target)) {
+                pushError(errors, `${path}.${amountKey}.target`, 'must be "self" or "opponent" when provided.');
+            }
+            if (amount.multiplier != null && !isFiniteNumber(amount.multiplier)) {
+                pushError(errors, `${path}.multiplier`, 'must be a number when provided.');
+            }
+            if (amount.offset != null && !isFiniteNumber(amount.offset)) {
+                pushError(errors, `${path}.offset`, 'must be a number when provided.');
+            }
+            return;
+        }
+
+        if (amount.encounterResource) {
+            const resource = amount.encounterResource;
+            if (!resource || typeof resource !== 'object' || Array.isArray(resource)) {
+                pushError(errors, `${path}.encounterResource`, 'must be an object.');
+                return;
+            }
+            if (!resource.resourceId || typeof resource.resourceId !== 'string') {
+                pushError(errors, `${path}.encounterResource.resourceId`, 'must be a non-empty string.');
+            }
+            if (resource.target != null && !['self', 'opponent', 'battle'].includes(resource.target)) {
+                pushError(errors, `${path}.encounterResource.target`, 'must be "self", "opponent", or "battle" when provided.');
+            }
+            if (amount.multiplier != null && !isFiniteNumber(amount.multiplier)) {
+                pushError(errors, `${path}.multiplier`, 'must be a number when provided.');
+            }
+            if (amount.offset != null && !isFiniteNumber(amount.offset)) {
+                pushError(errors, `${path}.offset`, 'must be a number when provided.');
+            }
+            return;
+        }
+
+        if (amount.unitResource) {
+            const resource = amount.unitResource;
+            if (!resource || typeof resource !== 'object' || Array.isArray(resource)) {
+                pushError(errors, `${path}.unitResource`, 'must be an object.');
+                return;
+            }
+            if (!resource.resourceId || typeof resource.resourceId !== 'string') {
+                pushError(errors, `${path}.unitResource.resourceId`, 'must be a non-empty string.');
+            }
+            if (resource.target != null && !['self', 'opponent'].includes(resource.target)) {
+                pushError(errors, `${path}.unitResource.target`, 'must be "self" or "opponent" when provided.');
+            }
+            if (amount.multiplier != null && !isFiniteNumber(amount.multiplier)) {
+                pushError(errors, `${path}.multiplier`, 'must be a number when provided.');
+            }
+            if (amount.offset != null && !isFiniteNumber(amount.offset)) {
+                pushError(errors, `${path}.offset`, 'must be a number when provided.');
+            }
+            return;
+        }
+
+        if (amount.eventField) {
+            if (typeof amount.eventField === 'string') {
+                if (!amount.eventField) {
+                    pushError(errors, `${path}.eventField`, 'must be a non-empty string.');
+                }
+            } else if (typeof amount.eventField === 'object' && !Array.isArray(amount.eventField)) {
+                if (!amount.eventField.path || typeof amount.eventField.path !== 'string') {
+                    pushError(errors, `${path}.eventField.path`, 'must be a non-empty string.');
+                }
+                if (amount.eventField.default != null && !isFiniteNumber(amount.eventField.default)) {
+                    pushError(errors, `${path}.eventField.default`, 'must be a number when provided.');
+                }
+            } else {
+                pushError(errors, `${path}.eventField`, 'must be a string or object.');
+                return;
+            }
+            if (amount.multiplier != null && !isFiniteNumber(amount.multiplier)) {
+                pushError(errors, `${path}.multiplier`, 'must be a number when provided.');
+            }
+            if (amount.offset != null && !isFiniteNumber(amount.offset)) {
+                pushError(errors, `${path}.offset`, 'must be a number when provided.');
+            }
+            return;
+        }
+
+        if (amount.damage) {
+            if (amount.damage !== true) {
+                pushError(errors, `${path}.damage`, 'must be true when provided.');
             }
             if (amount.multiplier != null && !isFiniteNumber(amount.multiplier)) {
                 pushError(errors, `${path}.multiplier`, 'must be a number when provided.');
@@ -260,6 +463,37 @@
             if (!condition.resourceId || typeof condition.resourceId !== 'string') {
                 pushError(errors, `${path}.resourceId`, 'must be a non-empty string.');
             }
+            if (!isFiniteNumber(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'unitResourceAtLeast':
+        case 'unitResourceAtOrBelow':
+            if (!condition.resourceId || typeof condition.resourceId !== 'string') {
+                pushError(errors, `${path}.resourceId`, 'must be a non-empty string.');
+            }
+            if (!isFiniteNumber(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'hasFlag':
+            if (!condition.flagId || typeof condition.flagId !== 'string') {
+                pushError(errors, `${path}.flagId`, 'must be a non-empty string.');
+            }
+            if (condition.value != null && typeof condition.value !== 'boolean') {
+                pushError(errors, `${path}.value`, 'must be a boolean when provided.');
+            }
+            break;
+        case 'counterAtLeast':
+        case 'counterAtOrBelow':
+            if (!condition.counterId || typeof condition.counterId !== 'string') {
+                pushError(errors, `${path}.counterId`, 'must be a non-empty string.');
+            }
+            if (!isFiniteNumber(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'randomChance':
             if (!isFiniteNumber(condition.value)) {
                 pushError(errors, `${path}.value`, 'must be a number.');
             }
@@ -350,6 +584,11 @@
                 pushError(errors, `${path}.value`, 'must be a skill type string or array of skill type strings.');
             }
             break;
+        case 'skillCoinPowerSign':
+            if (!condition.value || typeof condition.value !== 'string' || !['plus', 'minus'].includes(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be "plus" or "minus".');
+            }
+            break;
         case 'eventStatusIdIs':
             if (!condition.value || typeof condition.value !== 'string') {
                 pushError(errors, `${path}.value`, 'must be a supported status id.');
@@ -357,9 +596,25 @@
                 pushError(errors, `${path}.value`, 'must be a supported status id.');
             }
             break;
+        case 'unitSideIs':
+            if (!condition.value || typeof condition.value !== 'string' || !['player', 'enemy'].includes(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be "player" or "enemy".');
+            }
+            break;
+        case 'lastEventTypeIs':
+            if (
+                !condition.value
+                || !(
+                    typeof condition.value === 'string'
+                    || (Array.isArray(condition.value) && condition.value.every((entry) => typeof entry === 'string' && entry))
+                )
+            ) {
+                pushError(errors, `${path}.value`, 'must be an event type string or array of event type strings.');
+            }
+            break;
         case 'damageSourceIs':
-            if (condition.value != null && !['skill', 'status'].includes(condition.value)) {
-                pushError(errors, `${path}.value`, 'must be "skill" or "status" when provided.');
+            if (condition.value != null && !['skill', 'status', 'burst'].includes(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be "skill", "status", or "burst" when provided.');
             }
             break;
         case 'coinIndex':
@@ -374,8 +629,18 @@
         case 'hpPercentAtOrAbove':
         case 'spAtOrBelow':
         case 'spAtOrAbove':
+        case 'speedAtLeast':
+        case 'speedAtOrBelow':
             if (!isFiniteNumber(condition.value)) {
                 pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'speedGreaterThan':
+            if (condition.otherTarget != null && !['self', 'opponent'].includes(condition.otherTarget)) {
+                pushError(errors, `${path}.otherTarget`, 'must be "self" or "opponent" when provided.');
+            }
+            if (condition.offset != null && !isFiniteNumber(condition.offset)) {
+                pushError(errors, `${path}.offset`, 'must be a number when provided.');
             }
             break;
         case 'targetStaggered':
@@ -535,6 +800,14 @@
                 pushError(errors, `${path}.statusId`, 'must reference a supported status id when provided.');
             }
             break;
+        case 'dealHpPercentDamage':
+            validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            if (effect.statusId != null && typeof effect.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a string when provided.');
+            } else if (typeof effect.statusId === 'string' && typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id when provided.');
+            }
+            break;
         case 'adjustSanity':
             if (effect.amount != null) {
                 validateAmountDefinition(errors, effect.amount, `${path}.amount`);
@@ -570,6 +843,13 @@
             }
             if (effect.reason != null && typeof effect.reason !== 'string') {
                 pushError(errors, `${path}.reason`, 'must be a string when provided.');
+            }
+            if (effect.type === 'burstTremor') {
+                if (effect.statusId != null && typeof effect.statusId !== 'string') {
+                    pushError(errors, `${path}.statusId`, 'must be a string when provided.');
+                } else if (typeof effect.statusId === 'string' && typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
+                    pushError(errors, `${path}.statusId`, 'must reference a supported status id when provided.');
+                }
             }
             if (effect.type === 'modifySpeed' && effect.operation != null && !['add', 'set'].includes(effect.operation)) {
                 pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
@@ -646,6 +926,204 @@
             ) {
                 pushError(errors, `${path}`, 'must provide potencyDelta, countDelta, potencyAmount, countAmount, or a combination.');
             }
+            break;
+        case 'clearStatus':
+            if (!effect.statusId || typeof effect.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id.');
+            }
+            break;
+        case 'clearStatusesByTag':
+        case 'consumeStatusesByTag':
+            if (!Array.isArray(effect.tags) || effect.tags.some((entry) => typeof entry !== 'string' || !entry)) {
+                pushError(errors, `${path}.tags`, 'must be an array of non-empty strings.');
+            }
+            if (effect.match != null && !['any', 'all'].includes(effect.match)) {
+                pushError(errors, `${path}.match`, 'must be "any" or "all" when provided.');
+            }
+            break;
+        case 'copyStatus':
+        case 'transferStatus':
+            if (!effect.statusId || typeof effect.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id.');
+            }
+            if (effect.sourceTarget != null && !['self', 'opponent'].includes(effect.sourceTarget)) {
+                pushError(errors, `${path}.sourceTarget`, 'must be "self" or "opponent" when provided.');
+            }
+            if (effect.asStatusId != null) {
+                if (typeof effect.asStatusId !== 'string' || !effect.asStatusId) {
+                    pushError(errors, `${path}.asStatusId`, 'must be a non-empty string when provided.');
+                } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.asStatusId)) {
+                    pushError(errors, `${path}.asStatusId`, 'must reference a supported status id when provided.');
+                }
+            }
+            if (effect.operation != null && !['add', 'set'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'must be "add" or "set" when provided.');
+            }
+            break;
+        case 'convertStatus':
+            if (!effect.fromStatusId || typeof effect.fromStatusId !== 'string') {
+                pushError(errors, `${path}.fromStatusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.fromStatusId)) {
+                pushError(errors, `${path}.fromStatusId`, 'must reference a supported status id.');
+            }
+            if (!effect.toStatusId || typeof effect.toStatusId !== 'string') {
+                pushError(errors, `${path}.toStatusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.toStatusId)) {
+                pushError(errors, `${path}.toStatusId`, 'must reference a supported status id.');
+            }
+            break;
+        case 'multiplyStatus':
+            if (!effect.statusId || typeof effect.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id.');
+            }
+            if (effect.potencyMultiplier != null && !isFiniteNumber(effect.potencyMultiplier)) {
+                pushError(errors, `${path}.potencyMultiplier`, 'must be a number when provided.');
+            }
+            if (effect.countMultiplier != null && !isFiniteNumber(effect.countMultiplier)) {
+                pushError(errors, `${path}.countMultiplier`, 'must be a number when provided.');
+            }
+            if (effect.rounding != null && !['floor', 'round', 'ceil'].includes(effect.rounding)) {
+                pushError(errors, `${path}.rounding`, 'must be "floor", "round", or "ceil" when provided.');
+            }
+            if (effect.potencyMultiplier == null && effect.countMultiplier == null) {
+                pushError(errors, `${path}`, 'must provide potencyMultiplier, countMultiplier, or both.');
+            }
+            break;
+        case 'splitStatus':
+            if (!effect.statusId || typeof effect.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a non-empty string.');
+            } else if (typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(effect.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id.');
+            }
+            if (effect.sourceTarget != null && !['self', 'opponent'].includes(effect.sourceTarget)) {
+                pushError(errors, `${path}.sourceTarget`, 'must be "self" or "opponent" when provided.');
+            }
+            if (effect.mode != null && !['even'].includes(effect.mode)) {
+                pushError(errors, `${path}.mode`, 'must be "even" when provided.');
+            }
+            break;
+        case 'adjustUnitResource':
+            if (!effect.resourceId || typeof effect.resourceId !== 'string') {
+                pushError(errors, `${path}.resourceId`, 'must be a non-empty string.');
+            }
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (effect.operation != null && !['add', 'set'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
+            }
+            if (effect.min != null && !isFiniteNumber(effect.min)) {
+                pushError(errors, `${path}.min`, 'must be a number when provided.');
+            }
+            if (effect.max != null && !isFiniteNumber(effect.max)) {
+                pushError(errors, `${path}.max`, 'must be a number when provided.');
+            }
+            if (effect.reason != null && typeof effect.reason !== 'string') {
+                pushError(errors, `${path}.reason`, 'must be a string when provided.');
+            }
+            break;
+        case 'setFlag':
+            if (!effect.flagId || typeof effect.flagId !== 'string') {
+                pushError(errors, `${path}.flagId`, 'must be a non-empty string.');
+            }
+            if (effect.value != null && typeof effect.value !== 'boolean') {
+                pushError(errors, `${path}.value`, 'must be a boolean when provided.');
+            }
+            break;
+        case 'clearFlag':
+            if (!effect.flagId || typeof effect.flagId !== 'string') {
+                pushError(errors, `${path}.flagId`, 'must be a non-empty string.');
+            }
+            break;
+        case 'adjustCounter':
+            if (!effect.counterId || typeof effect.counterId !== 'string') {
+                pushError(errors, `${path}.counterId`, 'must be a non-empty string.');
+            }
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (effect.operation != null && !['add', 'set'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
+            }
+            if (effect.min != null && !isFiniteNumber(effect.min)) {
+                pushError(errors, `${path}.min`, 'must be a number when provided.');
+            }
+            if (effect.max != null && !isFiniteNumber(effect.max)) {
+                pushError(errors, `${path}.max`, 'must be a number when provided.');
+            }
+            break;
+        case 'adjustCoinCount':
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (effect.operation != null && !['add', 'set'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
+            }
+            break;
+        case 'forceCoinOutcome':
+            if (!effect.coinOutcome || typeof effect.coinOutcome !== 'string' || !['heads', 'tails', 'zero'].includes(effect.coinOutcome)) {
+                pushError(errors, `${path}.coinOutcome`, 'must be "heads", "tails", or "zero".');
+            }
+            if (effect.coinIndex != null && (!Number.isInteger(effect.coinIndex) || effect.coinIndex <= 0)) {
+                pushError(errors, `${path}.coinIndex`, 'must be a positive integer when provided.');
+            }
+            if (effect.operation != null && !['set', 'clear'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'must be omitted, "set", or "clear" when provided.');
+            }
+            break;
+        case 'grantCoinReroll':
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'setDamageCap':
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (effect.value != null && !isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number when provided.');
+            }
+            if (effect.operation != null && !['set', 'clear'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'must be omitted, "set", or "clear" when provided.');
+            }
+            break;
+        case 'chooseRandomActions':
+        case 'chooseWeightedActions':
+            if (!Array.isArray(effect.branches) || effect.branches.length < 1) {
+                pushError(errors, `${path}.branches`, 'must be an array with at least one branch.');
+                break;
+            }
+            effect.branches.forEach((branch, branchIndex) => {
+                if (!branch || typeof branch !== 'object' || Array.isArray(branch)) {
+                    pushError(errors, `${path}.branches[${branchIndex}]`, 'must be an object.');
+                    return;
+                }
+                if (effect.type === 'chooseWeightedActions' && (!isFiniteNumber(branch.weight) || branch.weight <= 0)) {
+                    pushError(errors, `${path}.branches[${branchIndex}].weight`, 'must be a positive number.');
+                }
+                if (!Array.isArray(branch.actions)) {
+                    pushError(errors, `${path}.branches[${branchIndex}].actions`, 'must be an array of effects.');
+                    return;
+                }
+                branch.actions.forEach((action, actionIndex) => {
+                    validateEffect(errors, unitSkillIds, action, `${path}.branches[${branchIndex}].actions[${actionIndex}]`, { requireTrigger: false });
+                });
+            });
+            break;
+        case 'abortEffects':
             break;
         case 'modifyContext':
             if (!CONTEXT_FIELDS.has(effect.field)) {
@@ -752,6 +1230,11 @@
             }
             if (effect.lockTarget != null && typeof effect.lockTarget !== 'boolean') {
                 pushError(errors, `${path}.lockTarget`, 'must be a boolean when provided.');
+            }
+            break;
+        case 'redirectDamage':
+            if (!effect.selector || !RETARGET_SELECTORS.has(effect.selector)) {
+                pushError(errors, `${path}.selector`, 'must be a supported redirect selector.');
             }
             break;
         default:
@@ -953,6 +1436,11 @@
         }
         if (normalizedDefinition.countOnly != null && typeof normalizedDefinition.countOnly !== 'boolean') {
             pushError(errors, `${path}.countOnly`, 'must be a boolean when provided.');
+        }
+        if (normalizedDefinition.tags != null) {
+            if (!Array.isArray(normalizedDefinition.tags) || normalizedDefinition.tags.some((entry) => typeof entry !== 'string' || !entry)) {
+                pushError(errors, `${path}.tags`, 'must be an array of non-empty strings when provided.');
+            }
         }
 
         const stackModel = normalizedDefinition.stackModel;

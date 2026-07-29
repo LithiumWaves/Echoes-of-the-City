@@ -17,6 +17,25 @@
             expireWhen: { countLte: 0 },
         },
         hooks: {
+            beforeDamage: [
+                {
+                    actions: [
+                        {
+                            type: 'modifyContext',
+                            target: 'self',
+                            field: 'damageReductionMultiplier',
+                            operation: 'add',
+                            amount: {
+                                statusCount: {
+                                    target: 'self',
+                                    statusId: 'protection',
+                                },
+                                multiplier: -0.1,
+                            },
+                        },
+                    ],
+                },
+            ],
             turnEnd: [
                 {
                     type: 'consumeStatus',

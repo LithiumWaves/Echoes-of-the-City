@@ -10,13 +10,31 @@
     registerStatusDefinition({
         id: 'minus_coin_drop',
         label: 'Minus Coin Drop',
-        description: 'Worsens minus-coin values this turn. Expires at turn end.',
+        description: 'Improves minus-coin values this turn. Expires at turn end.',
         countOnly: true,
         stackModel: {
             count: { enabled: true, min: 0, max: 99, application: 'add' },
             expireWhen: { countLte: 0 },
         },
         hooks: {
+            skillSelected: [
+                {
+                    conditions: [
+                        { type: 'skillCoinPowerSign', value: 'minus' },
+                        { type: 'statusCountAtLeast', target: 'self', statusId: 'minus_coin_drop', value: 1 },
+                    ],
+                    actions: [
+                        {
+                            type: 'modifyContext',
+                            target: 'self',
+                            field: 'coinPowerBonus',
+                            operation: 'addStatusCountScaled',
+                            statusId: 'minus_coin_drop',
+                            multiplier: 1,
+                        },
+                    ],
+                },
+            ],
             turnEnd: [
                 {
                     type: 'consumeStatus',

@@ -32,6 +32,25 @@
             burstTremor,
         } = deps || {};
 
+        function getStatusDefinition(statusId) {
+            const registry = battleModules.registry || {};
+            return typeof registry.getStatusDefinition === 'function'
+                ? registry.getStatusDefinition(statusId)
+                : null;
+        }
+
+        function statusMatchesTags(statusId, tags, matchMode = 'any') {
+            const definition = getStatusDefinition(statusId);
+            const definitionTags = Array.isArray(definition?.tags) ? definition.tags : [];
+            if (!Array.isArray(tags) || !tags.length) {
+                return false;
+            }
+            const mode = matchMode === 'all' ? 'all' : 'any';
+            return mode === 'all'
+                ? tags.every((tag) => definitionTags.includes(tag))
+                : tags.some((tag) => definitionTags.includes(tag));
+        }
+
         function getRuntimeSourceUnit(runtime) {
             return runtime?.sourceUnit || runtime?.unit || null;
         }
@@ -72,6 +91,33 @@
             const sourceUnit = getRuntimeSourceUnit(runtime);
             const sourceSlot = sourceUnit ? getSlotForUnit(targetBattle, sourceUnit) : null;
             const sourceSide = sourceSlot?.side || sourceUnit?.side || null;
+            const pickRandom = (slots) => {
+                if (!slots.length) {
+                    return null;
+                }
+                const index = Math.floor(Math.random() * slots.length);
+                return slots[Math.max(0, Math.min(slots.length - 1, index))] || null;
+            };
+            const pickByHp = (slots, mode) => {
+                const sorted = [...slots].sort((a, b) => {
+                    const unitA = typeof getUnitById === 'function' ? getUnitById(targetBattle, a.unitId) : null;
+                    const unitB = typeof getUnitById === 'function' ? getUnitById(targetBattle, b.unitId) : null;
+                    const hpA = unitA?.hp || 0;
+                    const hpB = unitB?.hp || 0;
+                    if (hpA === hpB) {
+                        return a.index - b.index;
+                    }
+                    return mode === 'highest' ? hpB - hpA : hpA - hpB;
+                });
+                return sorted[0] || null;
+            };
+            const getLivingSlots = (side) => {
+                if (!side || typeof getSlotsForSide !== 'function') {
+                    return [];
+                }
+                return getSlotsForSide(targetBattle, side)
+                    .filter((slot) => (typeof isSlotAlive === 'function' ? isSlotAlive(targetBattle, slot) : true));
+            };
 
             if (target === 'allAllies') {
                 if (!sourceSide || typeof getSlotsForSide !== 'function' || typeof getUnitById !== 'function') {
@@ -92,6 +138,29 @@
                     .filter((slot) => (typeof isSlotAlive === 'function' ? isSlotAlive(targetBattle, slot) : true))
                     .map((slot) => getUnitById(targetBattle, slot.unitId))
                     .filter(Boolean);
+            }
+
+            if (target === 'randomAlly') {
+                const selectedSlot = pickRandom(getLivingSlots(sourceSide));
+                const unit = selectedSlot && typeof getUnitById === 'function' ? getUnitById(targetBattle, selectedSlot.unitId) : null;
+                return unit ? [unit] : [];
+            }
+            if (target === 'randomOpponent') {
+                const opposingSide = sourceSide && typeof getOpposingSide === 'function' ? getOpposingSide(sourceSide) : null;
+                const selectedSlot = pickRandom(getLivingSlots(opposingSide));
+                const unit = selectedSlot && typeof getUnitById === 'function' ? getUnitById(targetBattle, selectedSlot.unitId) : null;
+                return unit ? [unit] : [];
+            }
+            if (target === 'highestHpAlly' || target === 'lowestHpAlly') {
+                const selectedSlot = pickByHp(getLivingSlots(sourceSide), target === 'highestHpAlly' ? 'highest' : 'lowest');
+                const unit = selectedSlot && typeof getUnitById === 'function' ? getUnitById(targetBattle, selectedSlot.unitId) : null;
+                return unit ? [unit] : [];
+            }
+            if (target === 'highestHpOpponent' || target === 'lowestHpOpponent') {
+                const opposingSide = sourceSide && typeof getOpposingSide === 'function' ? getOpposingSide(sourceSide) : null;
+                const selectedSlot = pickByHp(getLivingSlots(opposingSide), target === 'highestHpOpponent' ? 'highest' : 'lowest');
+                const unit = selectedSlot && typeof getUnitById === 'function' ? getUnitById(targetBattle, selectedSlot.unitId) : null;
+                return unit ? [unit] : [];
             }
 
             const targetUnit = getEffectTargetUnit(runtime, target);
@@ -152,6 +221,50 @@
 
                 return productTerms.reduce((product, term) => product * resolveEffectAmount(runtime, { amount: term }), 1);
             }
+            if (amountDefinition?.sum) {
+                const terms = Array.isArray(amountDefinition.sum)
+                    ? amountDefinition.sum
+                    : [];
+                if (!terms.length) {
+                    return 0;
+                }
+                return terms.reduce((sum, term) => sum + resolveEffectAmount(runtime, { amount: term }), 0);
+            }
+            if (amountDefinition?.min) {
+                const terms = Array.isArray(amountDefinition.min)
+                    ? amountDefinition.min
+                    : [];
+                if (!terms.length) {
+                    return 0;
+                }
+                return terms.reduce((current, term) => Math.min(current, resolveEffectAmount(runtime, { amount: term })), resolveEffectAmount(runtime, { amount: terms[0] }));
+            }
+            if (amountDefinition?.max) {
+                const terms = Array.isArray(amountDefinition.max)
+                    ? amountDefinition.max
+                    : [];
+                if (!terms.length) {
+                    return 0;
+                }
+                return terms.reduce((current, term) => Math.max(current, resolveEffectAmount(runtime, { amount: term })), resolveEffectAmount(runtime, { amount: terms[0] }));
+            }
+            if (amountDefinition?.clamp) {
+                const clampDefinition = amountDefinition.clamp;
+                const value = resolveEffectAmount(runtime, { amount: clampDefinition?.value });
+                const minValue = clampDefinition?.min != null ? resolveEffectAmount(runtime, { amount: clampDefinition.min }) : null;
+                const maxValue = clampDefinition?.max != null ? resolveEffectAmount(runtime, { amount: clampDefinition.max }) : null;
+                const clampedMin = minValue != null ? Math.max(minValue, value) : value;
+                return maxValue != null ? Math.min(maxValue, clampedMin) : clampedMin;
+            }
+            if (amountDefinition?.floor != null) {
+                return Math.floor(resolveEffectAmount(runtime, { amount: amountDefinition.floor }));
+            }
+            if (amountDefinition?.ceil != null) {
+                return Math.ceil(resolveEffectAmount(runtime, { amount: amountDefinition.ceil }));
+            }
+            if (amountDefinition?.abs != null) {
+                return Math.abs(resolveEffectAmount(runtime, { amount: amountDefinition.abs }));
+            }
             if (amountDefinition?.statusPotency) {
                 const statusSource = amountDefinition.statusPotency;
                 const targetUnit = getEffectTargetUnit(runtime, statusSource.target || 'self');
@@ -176,11 +289,112 @@
                 return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
             }
 
+            if (amountDefinition?.hp || amountDefinition?.maxHp || amountDefinition?.hpPercent || amountDefinition?.sp || amountDefinition?.speed) {
+                const amountKey = amountDefinition.hp
+                    ? 'hp'
+                    : (amountDefinition.maxHp
+                        ? 'maxHp'
+                        : (amountDefinition.hpPercent
+                            ? 'hpPercent'
+                            : (amountDefinition.sp ? 'sp' : 'speed')));
+                const source = amountDefinition[amountKey] || {};
+                const targetUnit = getEffectTargetUnit(runtime, source.target || 'self');
+                if (!targetUnit) {
+                    return 0;
+                }
+                const baseAmount = (() => {
+                    if (amountKey === 'hp') {
+                        return targetUnit.hp || 0;
+                    }
+                    if (amountKey === 'maxHp') {
+                        return targetUnit.maxHp || 0;
+                    }
+                    if (amountKey === 'hpPercent') {
+                        const maxHp = targetUnit.maxHp || 0;
+                        return maxHp > 0 ? (targetUnit.hp || 0) / maxHp : 0;
+                    }
+                    if (amountKey === 'sp') {
+                        return targetUnit.sp || 0;
+                    }
+                    return targetUnit.speed || 0;
+                })();
+                const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
+            }
+
+            if (amountDefinition?.encounterResource) {
+                if (!runtime?.battle || !amountDefinition.encounterResource.resourceId || typeof getEncounterResource !== 'function') {
+                    return 0;
+                }
+
+                const resourceId = amountDefinition.encounterResource.resourceId;
+                const target = amountDefinition.encounterResource.target || 'self';
+                if (target === 'battle') {
+                    const baseAmount = getEncounterResource(runtime.battle, resourceId);
+                    const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                    return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
+                }
+
+                const unit = getEffectTargetUnit(runtime, target);
+                if (unit?.id) {
+                    const scopedResourceId = `${unit.id}:${resourceId}`;
+                    const scopedValue = getEncounterResource(runtime.battle, scopedResourceId);
+                    if (scopedValue > 0) {
+                        const scaledAmount = scopedValue * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                        return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
+                    }
+                }
+                const baseAmount = getEncounterResource(runtime.battle, resourceId);
+                const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
+            }
+
             if (amountDefinition?.skillCoinCount) {
                 const skillCoinCount = Math.max(0, runtime?.skill?.coinCount || 0);
                 const baseAmount = amountDefinition.inverse
                     ? (skillCoinCount > 0 ? 1 / skillCoinCount : 0)
                     : skillCoinCount;
+                const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
+            }
+
+            if (amountDefinition?.damage) {
+                const baseAmount = typeof runtime?.damage === 'number' && Number.isFinite(runtime.damage)
+                    ? runtime.damage
+                    : 0;
+                const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
+            }
+
+            if (amountDefinition?.unitResource) {
+                const resourceSource = amountDefinition.unitResource || {};
+                const targetUnit = getEffectTargetUnit(runtime, resourceSource.target || 'self');
+                const resourceId = resourceSource.resourceId;
+                if (!targetUnit || !resourceId || typeof resourceId !== 'string') {
+                    return 0;
+                }
+                const resources = targetUnit.resources && typeof targetUnit.resources === 'object' && !Array.isArray(targetUnit.resources)
+                    ? targetUnit.resources
+                    : {};
+                const baseAmount = typeof resources[resourceId] === 'number' && Number.isFinite(resources[resourceId])
+                    ? resources[resourceId]
+                    : 0;
+                const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
+            }
+
+            if (amountDefinition?.eventField) {
+                const definition = amountDefinition.eventField || {};
+                const rawPath = typeof definition === 'string' ? definition : definition.path;
+                const defaultValue = typeof definition === 'object' && typeof definition.default === 'number'
+                    ? definition.default
+                    : 0;
+                if (!rawPath || typeof rawPath !== 'string') {
+                    return defaultValue;
+                }
+                const pathParts = rawPath.split('.').filter((part) => part.length);
+                const resolved = pathParts.reduce((current, key) => (current && typeof current === 'object' ? current[key] : undefined), runtime);
+                const baseAmount = typeof resolved === 'number' && Number.isFinite(resolved) ? resolved : defaultValue;
                 const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
                 return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
             }
@@ -208,6 +422,57 @@
             return typeof isCountOnlyStatus === 'function' && isCountOnlyStatus(statusId)
                 ? (status.count || 0) <= 0
                 : (status.count || 0) <= 0 && (status.potency || 0) <= 0;
+        }
+
+        function clearUnitStatus(targetBattle, unit, statusId, options = {}) {
+            if (!unit || !statusId || typeof getStatus !== 'function' || typeof removeStatus !== 'function') {
+                return null;
+            }
+
+            const mode = options.mode === 'consumed' ? 'consumed' : 'cleared';
+            const status = getStatus(unit, statusId);
+            if (!status) {
+                return null;
+            }
+
+            removeStatus(unit, statusId);
+            if (typeof emitEvent === 'function') {
+                emitEvent(targetBattle, mode === 'consumed' ? 'status_consumed' : 'status_expired', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    statusId,
+                });
+            }
+            triggerStatusLifecycleHook(targetBattle, unit, mode === 'consumed' ? 'statusConsumed' : 'statusExpired', statusId, {
+                status: { ...status },
+            });
+            return status;
+        }
+
+        function ensureUnitRuntimeState(unit) {
+            if (!unit || typeof unit !== 'object') {
+                return null;
+            }
+            if (!unit.runtimeState || typeof unit.runtimeState !== 'object' || Array.isArray(unit.runtimeState)) {
+                unit.runtimeState = {};
+            }
+            if (!unit.runtimeState.flags || typeof unit.runtimeState.flags !== 'object' || Array.isArray(unit.runtimeState.flags)) {
+                unit.runtimeState.flags = {};
+            }
+            if (!unit.runtimeState.counters || typeof unit.runtimeState.counters !== 'object' || Array.isArray(unit.runtimeState.counters)) {
+                unit.runtimeState.counters = {};
+            }
+            return unit.runtimeState;
+        }
+
+        function ensureUnitResources(unit) {
+            if (!unit || typeof unit !== 'object') {
+                return null;
+            }
+            if (!unit.resources || typeof unit.resources !== 'object' || Array.isArray(unit.resources)) {
+                unit.resources = {};
+            }
+            return unit.resources;
         }
 
         function triggerStatusLifecycleHook(targetBattle, unit, hookName, statusId, payload = {}) {
@@ -318,7 +583,7 @@
             const nextCount = typeof clampStatusValue === 'function'
                 ? clampStatusValue(
                     Math.floor(countOperation === 'set' ? countDelta : previousCount + countDelta),
-                    existing?.stackModel?.count?.max ?? (effect.statusId === 'protection' ? 10 : 99),
+                    existing?.stackModel?.count?.max ?? 99,
                 )
                 : Math.max(0, previousCount + countDelta);
             const clampedValues = clampCombinedStatusValues(existing, nextPotency, nextCount, {
@@ -485,8 +750,14 @@
             if (effect.selector === 'firstLivingOpponent' && opposingSide && typeof getFirstLivingSlotId === 'function') {
                 return getFirstLivingSlotId(targetBattle, opposingSide);
             }
-            if (effect.selector === 'firstLivingAlly' && typeof getFirstLivingSlotId === 'function') {
-                return getFirstLivingSlotId(targetBattle, actingSlot.side);
+            if (effect.selector === 'firstLivingAlly' && typeof getSlotsForSide === 'function') {
+                const slots = getSlotsForSide(targetBattle, actingSlot.side)
+                    .filter((slot) => slot && slot.id !== actingSlot.id)
+                    .filter((slot) => (typeof isSlotAlive === 'function' ? isSlotAlive(targetBattle, slot) : true));
+                if (slots.length) {
+                    return slots[0].id;
+                }
+                return actingSlot.id;
             }
             if (effect.selector === 'mirrorOpponent' && opposingSide && typeof getSlotsForSide === 'function') {
                 const opposingSlots = getSlotsForSide(targetBattle, opposingSide);
@@ -541,18 +812,25 @@
         }
 
         function applyEffects(targetBattle, effects, runtime) {
-            (Array.isArray(effects) ? effects : []).forEach((effect) => {
+            const runtimeState = runtime && typeof runtime === 'object' ? runtime : {};
+            const effectList = Array.isArray(effects) ? effects : [];
+            effectList.forEach((effect) => {
+                if (runtimeState.abortEffects) {
+                    return;
+                }
                 const sourceUnit = getRuntimeSourceUnit(runtime);
                 const targetUnits = getEffectTargetUnits(targetBattle, runtime, effect.target || 'opponent');
                 const targetUnit = targetUnits[0] || null;
                 const context = runtime?.healContext
                     ? runtime.healContext
-                    : (runtime.defendContext
-                        && runtime?.unit
-                        && runtime?.targetUnit
-                        && runtime.unit.id === runtime.targetUnit.id
-                        ? runtime.defendContext
-                        : (runtime.attackContext || runtime.defendContext || null));
+                    : (runtime?.damageContext
+                        ? runtime.damageContext
+                        : (runtime.defendContext
+                            && runtime?.unit
+                            && runtime?.targetUnit
+                            && runtime.unit.id === runtime.targetUnit.id
+                            ? runtime.defendContext
+                            : (runtime.attackContext || runtime.defendContext || null)));
                 const skill = runtime?.skill || null;
 
                 switch (effect.type) {
@@ -657,6 +935,19 @@
                         return;
                     }
                     applyFixedDamage(targetBattle, targetUnit, effect.statusId || 'effect', resolveEffectAmount(runtime, effect));
+                    return;
+                case 'dealHpPercentDamage':
+                    if (!targetUnit || typeof applyFixedDamage !== 'function') {
+                        return;
+                    }
+                    {
+                        const percent = normalizePercentConditionValue(resolveEffectAmount(runtime, effect));
+                        const resolvedPercent = typeof percent === 'number' && Number.isFinite(percent)
+                            ? Math.max(0, percent)
+                            : 0;
+                        const damageAmount = Math.max(0, Math.round((targetUnit.maxHp || 0) * resolvedPercent));
+                        applyFixedDamage(targetBattle, targetUnit, effect.statusId || 'effect', damageAmount);
+                    }
                     return;
                 case 'adjustSanity':
                     if (!targetUnit || typeof adjustSanity !== 'function') {
@@ -974,6 +1265,433 @@
                     }
                     adjustUnitStatus(targetBattle, targetUnit, effect, runtime);
                     return;
+                case 'clearStatus':
+                    if (!effect.statusId) {
+                        return;
+                    }
+                    targetUnits.forEach((unit) => {
+                        if (!unit) {
+                            return;
+                        }
+                        clearUnitStatus(targetBattle, unit, effect.statusId, { mode: 'cleared' });
+                    });
+                    return;
+                case 'clearStatusesByTag':
+                case 'consumeStatusesByTag':
+                    if (!Array.isArray(effect.tags) || !effect.tags.length) {
+                        return;
+                    }
+                    targetUnits.forEach((unit) => {
+                        if (!unit) {
+                            return;
+                        }
+                        const statuses = Array.isArray(unit.statuses) ? [...unit.statuses] : [];
+                        statuses.forEach((status) => {
+                            if (!status?.id) {
+                                return;
+                            }
+                            if (!statusMatchesTags(status.id, effect.tags, effect.match)) {
+                                return;
+                            }
+                            clearUnitStatus(targetBattle, unit, status.id, { mode: effect.type === 'consumeStatusesByTag' ? 'consumed' : 'cleared' });
+                        });
+                    });
+                    return;
+                case 'copyStatus':
+                case 'transferStatus':
+                    if (!effect.statusId) {
+                        return;
+                    }
+                    {
+                        const sourceTarget = effect.sourceTarget || 'self';
+                        const sourceUnitForCopy = getEffectTargetUnit(runtime, sourceTarget);
+                        if (!sourceUnitForCopy || typeof getStatus !== 'function' || typeof applyStatus !== 'function') {
+                            return;
+                        }
+                        const sourceStatus = getStatus(sourceUnitForCopy, effect.statusId);
+                        if (!sourceStatus) {
+                            return;
+                        }
+                        const destinationStatusId = effect.asStatusId || effect.statusId;
+                        targetUnits.forEach((unit) => {
+                            if (!unit) {
+                                return;
+                            }
+                            if (effect.operation === 'set') {
+                                clearUnitStatus(targetBattle, unit, destinationStatusId, { mode: 'cleared' });
+                            }
+                            applyStatus(targetBattle, unit, destinationStatusId, {
+                                potency: typeof isCountOnlyStatus === 'function' && isCountOnlyStatus(destinationStatusId)
+                                    ? 0
+                                    : (sourceStatus.potency || 0),
+                                count: sourceStatus.count || 0,
+                            });
+                        });
+                        if (effect.type === 'transferStatus') {
+                            clearUnitStatus(targetBattle, sourceUnitForCopy, effect.statusId, { mode: 'cleared' });
+                        }
+                    }
+                    return;
+                case 'convertStatus':
+                    if (!targetUnits.length || !effect.fromStatusId || !effect.toStatusId || typeof getStatus !== 'function' || typeof applyStatus !== 'function') {
+                        return;
+                    }
+                    targetUnits.forEach((unit) => {
+                        if (!unit) {
+                            return;
+                        }
+                        const fromStatus = getStatus(unit, effect.fromStatusId);
+                        if (!fromStatus) {
+                            return;
+                        }
+                        clearUnitStatus(targetBattle, unit, effect.fromStatusId, { mode: 'cleared' });
+                        applyStatus(targetBattle, unit, effect.toStatusId, {
+                            potency: typeof isCountOnlyStatus === 'function' && isCountOnlyStatus(effect.toStatusId)
+                                ? 0
+                                : (fromStatus.potency || 0),
+                            count: fromStatus.count || 0,
+                        });
+                    });
+                    return;
+                case 'multiplyStatus':
+                    if (!targetUnits.length || !effect.statusId || typeof getStatus !== 'function') {
+                        return;
+                    }
+                    {
+                        const rounding = effect.rounding === 'floor'
+                            ? 'floor'
+                            : (effect.rounding === 'ceil' ? 'ceil' : 'round');
+                        const applyRounding = (value) => {
+                            if (rounding === 'floor') {
+                                return Math.floor(value);
+                            }
+                            if (rounding === 'ceil') {
+                                return Math.ceil(value);
+                            }
+                            return Math.round(value);
+                        };
+                        targetUnits.forEach((unit) => {
+                            if (!unit) {
+                                return;
+                            }
+                            const status = getStatus(unit, effect.statusId);
+                            if (!status) {
+                                return;
+                            }
+                            const previousPotency = status.potency || 0;
+                            const previousCount = status.count || 0;
+                            const potencyMultiplier = typeof effect.potencyMultiplier === 'number' ? effect.potencyMultiplier : 1;
+                            const countMultiplier = typeof effect.countMultiplier === 'number' ? effect.countMultiplier : 1;
+                            const nextPotency = typeof isCountOnlyStatus === 'function' && isCountOnlyStatus(effect.statusId)
+                                ? 0
+                                : (typeof clampStatusValue === 'function'
+                                    ? clampStatusValue(applyRounding(previousPotency * potencyMultiplier), status?.stackModel?.potency?.max ?? 99)
+                                    : Math.max(0, applyRounding(previousPotency * potencyMultiplier)));
+                            const nextCount = typeof clampStatusValue === 'function'
+                                ? clampStatusValue(applyRounding(previousCount * countMultiplier), status?.stackModel?.count?.max ?? 99)
+                                : Math.max(0, applyRounding(previousCount * countMultiplier));
+                            const clampedValues = clampCombinedStatusValues(status, nextPotency, nextCount);
+                            status.potency = clampedValues.potency;
+                            status.count = clampedValues.count;
+                            if (typeof emitEvent === 'function') {
+                                emitEvent(targetBattle, 'status_changed', {
+                                    unitId: unit.id,
+                                    unitName: unit.name,
+                                    statusId: effect.statusId,
+                                    previousPotency,
+                                    previousCount,
+                                    nextPotency: status.potency,
+                                    nextCount: status.count,
+                                });
+                            }
+                            triggerStatusLifecycleHook(targetBattle, unit, 'statusChanged', effect.statusId, {
+                                status,
+                                previousPotency,
+                                previousCount,
+                                nextPotency: status.potency,
+                                nextCount: status.count,
+                            });
+                            if (shouldExpireStatus(status, effect.statusId)) {
+                                clearUnitStatus(targetBattle, unit, effect.statusId, { mode: 'cleared' });
+                            }
+                        });
+                    }
+                    return;
+                case 'splitStatus':
+                    if (!effect.statusId || typeof getStatus !== 'function' || typeof applyStatus !== 'function') {
+                        return;
+                    }
+                    {
+                        const sourceTarget = effect.sourceTarget || 'self';
+                        const sourceUnitForSplit = getEffectTargetUnit(runtime, sourceTarget);
+                        if (!sourceUnitForSplit) {
+                            return;
+                        }
+                        if (!targetUnits.length) {
+                            return;
+                        }
+                        const sourceStatus = getStatus(sourceUnitForSplit, effect.statusId);
+                        if (!sourceStatus) {
+                            return;
+                        }
+                        const recipients = [...targetUnits];
+                        const totalPotency = sourceStatus.potency || 0;
+                        const totalCount = sourceStatus.count || 0;
+                        const recipientCount = recipients.length;
+                        const basePotency = recipientCount > 0 ? Math.floor(totalPotency / recipientCount) : 0;
+                        const potencyRemainder = recipientCount > 0 ? (totalPotency % recipientCount) : 0;
+                        const baseCount = recipientCount > 0 ? Math.floor(totalCount / recipientCount) : 0;
+                        const countRemainder = recipientCount > 0 ? (totalCount % recipientCount) : 0;
+                        clearUnitStatus(targetBattle, sourceUnitForSplit, effect.statusId, { mode: 'cleared' });
+                        recipients.forEach((unit, index) => {
+                            if (!unit) {
+                                return;
+                            }
+                            const potency = basePotency + (index < potencyRemainder ? 1 : 0);
+                            const count = baseCount + (index < countRemainder ? 1 : 0);
+                            if (potency <= 0 && count <= 0) {
+                                return;
+                            }
+                            applyStatus(targetBattle, unit, effect.statusId, {
+                                potency: typeof isCountOnlyStatus === 'function' && isCountOnlyStatus(effect.statusId)
+                                    ? 0
+                                    : potency,
+                                count,
+                            });
+                        });
+                    }
+                    return;
+                case 'adjustUnitResource':
+                    if (!effect.resourceId) {
+                        return;
+                    }
+                    targetUnits.forEach((unit) => {
+                        if (!unit) {
+                            return;
+                        }
+                        const resources = ensureUnitResources(unit);
+                        if (!resources) {
+                            return;
+                        }
+                        const previousValue = typeof resources[effect.resourceId] === 'number' && Number.isFinite(resources[effect.resourceId])
+                            ? resources[effect.resourceId]
+                            : 0;
+                        const delta = resolveEffectAmount(runtime, effect);
+                        const nextRaw = effect.operation === 'set'
+                            ? delta
+                            : previousValue + delta;
+                        const min = typeof effect.min === 'number' && Number.isFinite(effect.min) ? effect.min : null;
+                        const max = typeof effect.max === 'number' && Number.isFinite(effect.max) ? effect.max : null;
+                        const nextClamped = max != null
+                            ? Math.min(max, min != null ? Math.max(min, nextRaw) : nextRaw)
+                            : (min != null ? Math.max(min, nextRaw) : nextRaw);
+                        resources[effect.resourceId] = nextClamped;
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'unit_resource_changed', {
+                                unitId: unit.id,
+                                unitName: unit.name,
+                                resourceId: effect.resourceId,
+                                previousValue,
+                                nextValue: nextClamped,
+                                reason: effect.reason || skill?.name || effect.resourceId,
+                            });
+                        }
+                    });
+                    return;
+                case 'setFlag':
+                    if (!effect.flagId) {
+                        return;
+                    }
+                    targetUnits.forEach((unit) => {
+                        if (!unit) {
+                            return;
+                        }
+                        const runtimeState = ensureUnitRuntimeState(unit);
+                        if (!runtimeState) {
+                            return;
+                        }
+                        const nextValue = effect.value ?? true;
+                        runtimeState.flags[effect.flagId] = Boolean(nextValue);
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'unit_flag_changed', {
+                                unitId: unit.id,
+                                unitName: unit.name,
+                                flagId: effect.flagId,
+                                value: runtimeState.flags[effect.flagId],
+                            });
+                        }
+                    });
+                    return;
+                case 'clearFlag':
+                    if (!effect.flagId) {
+                        return;
+                    }
+                    targetUnits.forEach((unit) => {
+                        if (!unit) {
+                            return;
+                        }
+                        const runtimeState = ensureUnitRuntimeState(unit);
+                        if (!runtimeState) {
+                            return;
+                        }
+                        delete runtimeState.flags[effect.flagId];
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'unit_flag_changed', {
+                                unitId: unit.id,
+                                unitName: unit.name,
+                                flagId: effect.flagId,
+                                value: false,
+                            });
+                        }
+                    });
+                    return;
+                case 'adjustCounter':
+                    if (!effect.counterId) {
+                        return;
+                    }
+                    targetUnits.forEach((unit) => {
+                        if (!unit) {
+                            return;
+                        }
+                        const runtimeState = ensureUnitRuntimeState(unit);
+                        if (!runtimeState) {
+                            return;
+                        }
+                        const counters = runtimeState.counters;
+                        const previousValue = typeof counters[effect.counterId] === 'number' && Number.isFinite(counters[effect.counterId])
+                            ? counters[effect.counterId]
+                            : 0;
+                        const delta = resolveEffectAmount(runtime, effect);
+                        const nextRaw = effect.operation === 'set'
+                            ? delta
+                            : previousValue + delta;
+                        const min = typeof effect.min === 'number' && Number.isFinite(effect.min) ? effect.min : null;
+                        const max = typeof effect.max === 'number' && Number.isFinite(effect.max) ? effect.max : null;
+                        const nextClamped = max != null
+                            ? Math.min(max, min != null ? Math.max(min, nextRaw) : nextRaw)
+                            : (min != null ? Math.max(min, nextRaw) : nextRaw);
+                        counters[effect.counterId] = nextClamped;
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'unit_counter_changed', {
+                                unitId: unit.id,
+                                unitName: unit.name,
+                                counterId: effect.counterId,
+                                previousValue,
+                                nextValue: nextClamped,
+                            });
+                        }
+                    });
+                    return;
+                case 'adjustCoinCount':
+                    if (!context) {
+                        return;
+                    }
+                    {
+                        const delta = resolveEffectAmount(runtime, effect);
+                        const previousValue = typeof context.coinCountBonus === 'number' && Number.isFinite(context.coinCountBonus)
+                            ? context.coinCountBonus
+                            : 0;
+                        context.coinCountBonus = effect.operation === 'set'
+                            ? Math.round(delta)
+                            : previousValue + Math.round(delta);
+                    }
+                    return;
+                case 'forceCoinOutcome':
+                    if (!context || !effect.coinOutcome) {
+                        return;
+                    }
+                    {
+                        if (!context.forcedCoinOutcomeByCoin || typeof context.forcedCoinOutcomeByCoin !== 'object' || Array.isArray(context.forcedCoinOutcomeByCoin)) {
+                            context.forcedCoinOutcomeByCoin = {};
+                        }
+                        const operation = effect.operation || 'set';
+                        if (typeof effect.coinIndex === 'number') {
+                            if (operation === 'clear') {
+                                delete context.forcedCoinOutcomeByCoin[effect.coinIndex];
+                            } else {
+                                context.forcedCoinOutcomeByCoin[effect.coinIndex] = effect.coinOutcome;
+                            }
+                        } else if (operation === 'clear') {
+                            context.forcedCoinOutcome = null;
+                        } else {
+                            context.forcedCoinOutcome = effect.coinOutcome;
+                        }
+                    }
+                    return;
+                case 'grantCoinReroll':
+                    if (!context) {
+                        return;
+                    }
+                    {
+                        const delta = Math.max(0, Math.round(resolveEffectAmount(runtime, effect)));
+                        const previousValue = typeof context.rerollTailsRemaining === 'number' && Number.isFinite(context.rerollTailsRemaining)
+                            ? context.rerollTailsRemaining
+                            : 0;
+                        context.rerollTailsRemaining = previousValue + delta;
+                    }
+                    return;
+                case 'setDamageCap':
+                    if (!context) {
+                        return;
+                    }
+                    {
+                        const operation = effect.operation === 'clear' ? 'clear' : 'set';
+                        const resolvedAmount = effect.amount != null ? resolveEffectAmount(runtime, effect) : effect.value;
+                        const capValue = typeof resolvedAmount === 'number' && Number.isFinite(resolvedAmount)
+                            ? Math.max(0, Math.round(resolvedAmount))
+                            : 0;
+                        if (typeof effect.coinIndex === 'number') {
+                            if (!context.damageCapByCoin || typeof context.damageCapByCoin !== 'object' || Array.isArray(context.damageCapByCoin)) {
+                                context.damageCapByCoin = {};
+                            }
+                            if (operation === 'clear') {
+                                delete context.damageCapByCoin[effect.coinIndex];
+                            } else {
+                                context.damageCapByCoin[effect.coinIndex] = capValue;
+                            }
+                        } else {
+                            context.damageCap = operation === 'clear' ? null : capValue;
+                        }
+                    }
+                    return;
+                case 'chooseRandomActions':
+                case 'chooseWeightedActions':
+                    if (!Array.isArray(effect.branches) || !effect.branches.length) {
+                        return;
+                    }
+                    {
+                        const branches = effect.branches.filter((branch) => branch && typeof branch === 'object' && !Array.isArray(branch));
+                        if (!branches.length) {
+                            return;
+                        }
+                        const selectedBranch = effect.type === 'chooseWeightedActions'
+                            ? (() => {
+                                const totalWeight = branches.reduce((sum, branch) => sum + (typeof branch.weight === 'number' && Number.isFinite(branch.weight) ? Math.max(0, branch.weight) : 0), 0);
+                                if (totalWeight <= 0) {
+                                    return branches[0];
+                                }
+                                const roll = (Math.random() || 0) * totalWeight;
+                                let running = 0;
+                                for (const branch of branches) {
+                                    running += typeof branch.weight === 'number' && Number.isFinite(branch.weight) ? Math.max(0, branch.weight) : 0;
+                                    if (roll <= running) {
+                                        return branch;
+                                    }
+                                }
+                                return branches[branches.length - 1];
+                            })()
+                            : (() => {
+                                const index = Math.floor((Math.random() || 0) * branches.length);
+                                return branches[Math.max(0, Math.min(branches.length - 1, index))];
+                            })();
+                        if (selectedBranch && Array.isArray(selectedBranch.actions) && selectedBranch.actions.length) {
+                            applyEffects(targetBattle, selectedBranch.actions, runtimeState);
+                        }
+                    }
+                    return;
+                case 'abortEffects':
+                    runtimeState.abortEffects = true;
+                    return;
                 case 'modifySpeed':
                     if (!targetUnit) {
                         return;
@@ -1025,6 +1743,19 @@
                         return;
                     }
                     retargetSlot(targetBattle, runtime, effect);
+                    return;
+                case 'redirectDamage':
+                    if (!context || !effect.selector) {
+                        return;
+                    }
+                    {
+                        const actingUnit = runtime?.unit || runtime?.targetUnit || targetUnit || null;
+                        const actingSlot = actingUnit ? getSlotForUnit(targetBattle, actingUnit) : null;
+                        const resolvedSlotId = resolveRetargetSlotId(targetBattle, actingSlot, runtime, effect);
+                        if (resolvedSlotId) {
+                            context.redirectDamageToSlotId = resolvedSlotId;
+                        }
+                    }
                     return;
                 case 'burstTremor':
                     if (!targetUnit || typeof burstTremor !== 'function') {
@@ -1358,6 +2089,60 @@
             return getEncounterResourceValue() >= conditionValue;
         case 'encounterResourceAtOrBelow':
             return getEncounterResourceValue() <= conditionValue;
+        case 'unitResourceAtLeast':
+        case 'unitResourceAtOrBelow':
+        {
+            const resourceId = condition?.resourceId;
+            if (!resourceId || typeof resourceId !== 'string') {
+                return false;
+            }
+            const resources = conditionUnit?.resources && typeof conditionUnit.resources === 'object' && !Array.isArray(conditionUnit.resources)
+                ? conditionUnit.resources
+                : {};
+            const value = typeof resources[resourceId] === 'number' && Number.isFinite(resources[resourceId])
+                ? resources[resourceId]
+                : 0;
+            return conditionType === 'unitResourceAtLeast'
+                ? value >= conditionValue
+                : value <= conditionValue;
+        }
+        case 'hasFlag':
+        {
+            const flagId = condition?.flagId;
+            if (!flagId || typeof flagId !== 'string') {
+                return false;
+            }
+            const flags = conditionUnit?.runtimeState?.flags && typeof conditionUnit.runtimeState.flags === 'object'
+                ? conditionUnit.runtimeState.flags
+                : {};
+            const actual = Boolean(flags[flagId]);
+            return actual === (conditionValue ?? true);
+        }
+        case 'counterAtLeast':
+        case 'counterAtOrBelow':
+        {
+            const counterId = condition?.counterId;
+            if (!counterId || typeof counterId !== 'string') {
+                return false;
+            }
+            const counters = conditionUnit?.runtimeState?.counters && typeof conditionUnit.runtimeState.counters === 'object'
+                ? conditionUnit.runtimeState.counters
+                : {};
+            const actual = typeof counters[counterId] === 'number' && Number.isFinite(counters[counterId])
+                ? counters[counterId]
+                : 0;
+            return conditionType === 'counterAtLeast'
+                ? actual >= conditionValue
+                : actual <= conditionValue;
+        }
+        case 'randomChance':
+        {
+            const normalized = normalizePercentConditionValue(conditionValue);
+            const chance = typeof normalized === 'number' && Number.isFinite(normalized)
+                ? Math.max(0, Math.min(1, normalized))
+                : 0;
+            return (Math.random() || 0) < chance;
+        }
         case 'skillIdIs':
             return matchesExpectedValue(runtime?.skill?.id || null, conditionValue);
         case 'skillHasTag':
@@ -1368,6 +2153,12 @@
             return matchesExpectedValue(runtime?.skill?.sinType || null, conditionValue);
         case 'skillDamageType':
             return matchesExpectedValue(runtime?.skill?.damageType || null, conditionValue);
+        case 'skillCoinPowerSign':
+        {
+            const coinPower = typeof runtime?.skill?.coinPower === 'number' ? runtime.skill.coinPower : 0;
+            const sign = coinPower >= 0 ? 'plus' : 'minus';
+            return matchesExpectedValue(sign, conditionValue);
+        }
         case 'coinIndex':
             return getRuntimeCoinIndex(runtime) === conditionValue;
         case 'criticalHit':
@@ -1386,8 +2177,28 @@
             return typeof conditionUnit?.sp === 'number' && conditionUnit.sp <= conditionValue;
         case 'spAtOrAbove':
             return typeof conditionUnit?.sp === 'number' && conditionUnit.sp >= conditionValue;
+        case 'speedAtLeast':
+            return typeof conditionUnit?.speed === 'number' && conditionUnit.speed >= conditionValue;
+        case 'speedAtOrBelow':
+            return typeof conditionUnit?.speed === 'number' && conditionUnit.speed <= conditionValue;
+        case 'speedGreaterThan':
+        {
+            const leftUnit = getHookConditionUnit(runtime, condition?.target || 'self');
+            const rightUnit = getHookConditionUnit(runtime, condition?.otherTarget || 'opponent');
+            const leftSpeed = leftUnit?.speed || 0;
+            const rightSpeed = rightUnit?.speed || 0;
+            return leftSpeed > (rightSpeed + (condition.offset || 0));
+        }
         case 'eventStatusIdIs':
             return runtime?.statusId === conditionValue;
+        case 'unitSideIs':
+            return (conditionUnit?.side || null) === conditionValue;
+        case 'lastEventTypeIs':
+        {
+            const events = Array.isArray(runtime?.battle?.events) ? runtime.battle.events : [];
+            const lastType = events.length ? events[events.length - 1]?.type : null;
+            return matchesExpectedValue(lastType, conditionValue);
+        }
         default:
             return false;
         }

@@ -468,7 +468,7 @@
                 return maxCount;
             }
 
-            return statusId === 'protection' ? 10 : 99;
+            return 99;
         }
 
         function shouldExpireStatus(status) {
@@ -558,8 +558,25 @@
                 return false;
             }
 
-            const tremor = getStatus(unit, 'tremor');
-            if (!tremor || (tremor.count || 0) <= 0) {
+            const getBurstMultiplier = (targetUnit, targetStatusId) => {
+                const statuses = Array.isArray(targetUnit?.statuses) ? targetUnit.statuses : [];
+                return statuses.reduce((multiplier, statusEntry) => {
+                    const definition = getStatusDefinition(statusEntry?.id);
+                    const map = definition?.burstMultiplierByStatusId;
+                    if (!map || typeof map !== 'object') {
+                        return multiplier;
+                    }
+
+                    const modifier = map[targetStatusId];
+                    return typeof modifier === 'number' && Number.isFinite(modifier) && modifier > 0
+                        ? multiplier * modifier
+                        : multiplier;
+                }, 1);
+            };
+
+            const statusId = effect?.statusId || 'tremor';
+            const status = getStatus(unit, statusId);
+            if (!status || (status.count || 0) <= 0) {
                 return false;
             }
 
@@ -568,7 +585,7 @@
                 return false;
             }
 
-            const burstAmount = Math.max(
+            const baseBurstAmount = Math.max(
                 0,
                 Math.round(
                     (
@@ -579,18 +596,53 @@
                                 ? effect.amount
                                 : (
                                     effect?.amount?.statusPotency
-                                        ? getStatusPotency(unit, effect.amount.statusPotency.statusId || 'tremor') * (effect.amount.multiplier || 1)
+                                        ? getStatusPotency(unit, effect.amount.statusPotency.statusId || statusId) * (effect.amount.multiplier || 1)
                                         : (
                                             typeof effect?.value === 'number'
                                                 ? effect.value
-                                                : getStatusPotency(unit, 'tremor')
+                                                : getStatusPotency(unit, statusId)
                                         )
                                 )
                         )
-                    ) * getConcussionMultiplier(unit),
+                    ),
                 ),
             );
 
+            if (baseBurstAmount <= 0) {
+                return false;
+            }
+
+            const definitionMultiplier = getBurstMultiplier(unit, statusId);
+            const scaledBurstAmount = Math.round(baseBurstAmount * definitionMultiplier);
+            if (scaledBurstAmount <= 0) {
+                return false;
+            }
+
+            const damageContext = {
+                damage: scaledBurstAmount,
+            };
+            const defendContext = {
+                damageReductionMultiplier: 1,
+                damageReductionFlat: 0,
+                minHpAfterDamage: 0,
+            };
+            invokeHooks(unit, 'beforeDamage', {
+                battle: targetBattle,
+                unit,
+                sourceUnit: sourceUnit || runtime?.sourceUnit || null,
+                targetUnit: unit,
+                opponent: null,
+                damageSource: 'burst',
+                statusId,
+                damageContext,
+                defendContext,
+                damage: scaledBurstAmount,
+                previousHp: unit.hp,
+                nextHp: unit.hp,
+            });
+            const burstAmount = typeof damageContext.damage === 'number' && Number.isFinite(damageContext.damage)
+                ? Math.max(0, Math.round(damageContext.damage))
+                : baseBurstAmount;
             if (burstAmount <= 0) {
                 return false;
             }
@@ -605,56 +657,74 @@
             emitEvent(targetBattle, 'status_triggered', {
                 unitId: unit.id,
                 unitName: unit.name,
-                statusId: 'tremor',
+                statusId,
                 damage: burstAmount,
                 hp: unit.hp,
             });
-            emitEvent(targetBattle, 'tremor_burst', {
-                unitId: unit.id,
-                unitName: unit.name,
-                sourceUnitId: sourceUnit?.id || null,
-                sourceUnitName: sourceUnit?.name || null,
-                previousThreshold: currentThreshold,
-                nextThreshold,
-                burstAmount,
-            });
+            if (statusId === 'tremor') {
+                emitEvent(targetBattle, 'tremor_burst', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    sourceUnitId: sourceUnit?.id || null,
+                    sourceUnitName: sourceUnit?.name || null,
+                    previousThreshold: currentThreshold,
+                    nextThreshold,
+                    burstAmount,
+                });
+            }
 
             if (unit.hp <= nextThreshold) {
                 applyStaggerFromDamage(targetBattle, unit, sourceUnit || runtime?.sourceUnit || null, nextThreshold + 1, unit.hp);
             }
 
-            const previousCount = tremor.count || 0;
-            tremor.count = clampStatusValue(previousCount - 1, getStatusCountCap('tremor'));
+            const previousCount = status.count || 0;
+            status.count = clampStatusValue(previousCount - 1, getStatusCountCap(statusId));
             emitEvent(targetBattle, 'status_changed', {
                 unitId: unit.id,
                 unitName: unit.name,
-                statusId: 'tremor',
-                previousPotency: tremor.potency || 0,
+                statusId,
+                previousPotency: status.potency || 0,
                 previousCount,
-                nextPotency: tremor.potency || 0,
-                nextCount: tremor.count,
+                nextPotency: status.potency || 0,
+                nextCount: status.count,
             });
-            triggerStatusLifecycleHook(targetBattle, unit, 'statusChanged', 'tremor', {
-                status: tremor,
-                previousPotency: tremor.potency || 0,
+            triggerStatusLifecycleHook(targetBattle, unit, 'statusChanged', statusId, {
+                status,
+                previousPotency: status.potency || 0,
                 previousCount,
-                nextPotency: tremor.potency || 0,
-                nextCount: tremor.count,
+                nextPotency: status.potency || 0,
+                nextCount: status.count,
             });
 
-            if (shouldExpireStatus(tremor)) {
-                const expiredStatus = { ...tremor };
-                removeStatus(unit, 'tremor');
+            if (shouldExpireStatus(status)) {
+                const expiredStatus = { ...status };
+                removeStatus(unit, statusId);
                 emitEvent(targetBattle, 'status_expired', {
                     unitId: unit.id,
                     unitName: unit.name,
-                    statusId: 'tremor',
+                    statusId,
                 });
-                triggerStatusLifecycleHook(targetBattle, unit, 'statusExpired', 'tremor', {
+                triggerStatusLifecycleHook(targetBattle, unit, 'statusExpired', statusId, {
                     status: expiredStatus,
                 });
             }
 
+            invokeHooks(unit, 'afterDamage', {
+                battle: targetBattle,
+                unit,
+                sourceUnit: sourceUnit || runtime?.sourceUnit || null,
+                targetUnit: unit,
+                opponent: null,
+                damageSource: 'burst',
+                statusId,
+                damageContext: {
+                    damage: burstAmount,
+                },
+                defendContext,
+                damage: burstAmount,
+                previousHp: unit.hp,
+                nextHp: unit.hp,
+            });
             return true;
         }
 
@@ -1211,14 +1281,14 @@
         }
 
         function applyFixedDamage(targetBattle, unit, statusId, damage) {
-            const scaledDamage = statusId === 'rupture'
-                ? Math.floor((damage || 0) * getConcussionMultiplier(unit))
-                : damage;
-            const appliedDamage = clampStatusValue(scaledDamage, 9999);
-            if (appliedDamage <= 0) {
+            const baseDamage = clampStatusValue(damage, 9999);
+            if (baseDamage <= 0) {
                 return 0;
             }
 
+            const damageContext = {
+                damage: baseDamage,
+            };
             const defendContext = {
                 damageReductionMultiplier: 1,
                 damageReductionFlat: 0,
@@ -1232,25 +1302,29 @@
                 ...unit,
                 shields: (unit.shields || []).map((shield) => ({ ...shield })),
                 statuses: (unit.statuses || []).map((status) => ({ ...status })),
-            }, appliedDamage);
+            }, baseDamage);
             invokeHooks(unit, 'beforeDamage', {
                 battle: targetBattle,
                 unit,
                 sourceUnit: null,
                 damageSource: 'status',
                 statusId,
+                damageContext,
                 defendContext,
-                damage: appliedDamage,
+                damage: baseDamage,
                 previousHp,
                 nextHp: Math.max(0, unit.hp - previewShieldState.remainingDamage),
             });
+            const resolvedBaseDamage = typeof damageContext.damage === 'number' && Number.isFinite(damageContext.damage)
+                ? clampStatusValue(Math.floor(damageContext.damage), 9999)
+                : baseDamage;
             const reducedFlat = typeof defendContext.damageReductionFlat === 'number' && Number.isFinite(defendContext.damageReductionFlat)
                 ? Math.round(defendContext.damageReductionFlat)
                 : 0;
             const reducedMultiplier = typeof defendContext.damageReductionMultiplier === 'number' && Number.isFinite(defendContext.damageReductionMultiplier)
                 ? defendContext.damageReductionMultiplier
                 : 1;
-            const reducedDamage = Math.max(0, Math.round((appliedDamage * reducedMultiplier) - reducedFlat));
+            const reducedDamage = Math.max(0, Math.round((resolvedBaseDamage * reducedMultiplier) - reducedFlat));
             const shieldState = absorbDamageWithShields(targetBattle, unit, reducedDamage);
             const minimumHp = typeof defendContext.minHpAfterDamage === 'number' && Number.isFinite(defendContext.minHpAfterDamage)
                 ? Math.max(0, Math.round(defendContext.minHpAfterDamage))
@@ -1263,13 +1337,6 @@
                 damage: shieldState.remainingDamage,
                 hp: unit.hp,
             });
-            if (statusId === 'bleed') {
-                adjustEncounterResource(targetBattle, 'bloodfeast', shieldState.remainingDamage, {
-                    max: 999,
-                    reason: 'bleed damage',
-                    unit,
-                });
-            }
             applyStaggerFromDamage(targetBattle, unit, null, previousHp, unit.hp);
             invokeHooks(unit, 'afterDamage', {
                 battle: targetBattle,
@@ -1277,6 +1344,7 @@
                 sourceUnit: null,
                 damageSource: 'status',
                 statusId,
+                damageContext,
                 defendContext,
                 damage: shieldState.remainingDamage,
                 previousHp,
@@ -1316,18 +1384,7 @@
         function getEffectiveCoinPower(unit, skill, attackContext) {
             const basePower = typeof skill.coinPower === 'number' ? skill.coinPower : 0;
             const directModifier = attackContext.coinPowerBonus || 0;
-
-            if (isPlusCoinSkill(skill)) {
-                return basePower
-                    + directModifier
-                    + getStatusCount(unit, 'plus_coin_boost')
-                    - getStatusCount(unit, 'plus_coin_drop');
-            }
-
-            return basePower
-                + directModifier
-                - getStatusCount(unit, 'minus_coin_boost')
-                + getStatusCount(unit, 'minus_coin_drop');
+            return basePower + directModifier;
         }
 
         function rollSingleCoin(targetBattle, unit, skill, attackContext, forcedIsHeads = null) {
@@ -1348,17 +1405,35 @@
                 return null;
             }
 
-            const forcedZero = Boolean(attackContext.forceCoinZero);
+            const coinIndex = attackContext?.currentCoinIndex || 0;
+            const forcedOutcome = (coinIndex > 0 ? attackContext?.forcedCoinOutcomeByCoin?.[coinIndex] : null)
+                ?? attackContext?.forcedCoinOutcome
+                ?? null;
+            const forcedOutcomeZero = forcedOutcome === 'zero';
+            const forcedOutcomeHeads = forcedOutcome === 'heads';
+            const forcedOutcomeTails = forcedOutcome === 'tails';
+
+            const forcedZero = Boolean(attackContext.forceCoinZero) || forcedOutcomeZero;
             let isHeads = false;
             if (!forcedZero) {
                 if (typeof forcedIsHeads === 'boolean') {
                     isHeads = forcedIsHeads;
+                } else if (forcedOutcomeHeads || forcedOutcomeTails) {
+                    isHeads = forcedOutcomeHeads;
                 } else {
                     const token = peekForcedRollToken(attackContext.slotId);
                     if (typeof token === 'boolean') {
                         isHeads = consumeForcedRollToken(attackContext.slotId);
                     } else {
+                        let rerollsRemaining = typeof attackContext?.rerollTailsRemaining === 'number' && Number.isFinite(attackContext.rerollTailsRemaining)
+                            ? Math.max(0, Math.floor(attackContext.rerollTailsRemaining))
+                            : 0;
                         isHeads = Math.random() * 100 < getCoinHeadChance(unit);
+                        while (!isHeads && rerollsRemaining > 0) {
+                            rerollsRemaining -= 1;
+                            isHeads = Math.random() * 100 < getCoinHeadChance(unit);
+                        }
+                        attackContext.rerollTailsRemaining = rerollsRemaining;
                     }
                 }
             }
@@ -1411,6 +1486,7 @@
             }
 
             for (let index = 0; index < coinCount; index += 1) {
+                attackContext.currentCoinIndex = index + 1;
                 const roll = rollSingleCoin(targetBattle, unit, skill, attackContext, forcedFlips ? forcedFlips[index] : null);
                 if (!roll) {
                     break;
@@ -1502,13 +1578,18 @@
             const damageContext = buildDamageContext(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
 
             if (damageFormula?.calculateDamage) {
-                return damageFormula.calculateDamage(damageContext).damage;
+                const calculated = damageFormula.calculateDamage(damageContext).damage;
+                const cap = attackContext?.damageCapByCoin?.[damageContext.modifiers.attack.currentCoinIndex]
+                    ?? attackContext?.damageCap
+                    ?? null;
+                if (typeof cap === 'number' && Number.isFinite(cap) && cap >= 0) {
+                    return Math.min(calculated, cap);
+                }
+                return calculated;
             }
 
             const levelDifference = damageContext.offenseLevel - damageContext.defenseLevel;
             const levelModifier = 1 + (levelDifference / (Math.abs(levelDifference) + 25));
-            const protection = getStatusCount(defender, 'protection');
-            const protectionModifier = protection > 0 ? Math.max(0, 1 - (Math.min(protection, 10) * 0.1)) : 1;
             const critDamageMultiplier = isCritical
                 ? 1.2 * (1 + damageContext.modifiers.attack.criticalBonus)
                 : 1;
@@ -1538,7 +1619,6 @@
                     * physicalResistance
                     * sinResistance
                     * levelModifier
-                    * protectionModifier
                     * damageContext.modifiers.attack.damageMultiplier
                     * weakBonus
                     * critDamageMultiplier
@@ -1549,7 +1629,14 @@
             const reducedFlat = typeof damageContext.modifiers.defense.damageReductionFlat === 'number'
                 ? Math.round(damageContext.modifiers.defense.damageReductionFlat)
                 : 0;
-            return Math.max(1, Math.max(0, rawDamage - reducedFlat));
+            const uncapped = Math.max(1, Math.max(0, rawDamage - reducedFlat));
+            const cap = attackContext?.damageCapByCoin?.[damageContext.modifiers.attack.currentCoinIndex]
+                ?? attackContext?.damageCap
+                ?? null;
+            if (typeof cap === 'number' && Number.isFinite(cap) && cap >= 0) {
+                return Math.min(uncapped, cap);
+            }
+            return uncapped;
         }
         const applySkillEffects = typeof battleModules.createSkillEffectRunner === 'function'
             ? battleModules.createSkillEffectRunner({
@@ -1797,9 +1884,12 @@
                 skillId: skill.id,
                 skillName: skill.name,
                 coinPowerBonus: 0,
+                coinCountBonus: 0,
                 flatPowerBonus: 0,
                 clashPowerBonus: 0,
+                critChanceBonus: 0,
                 damageMultiplier: 1,
+                damageCap: null,
                 damageReductionMultiplier: 1,
                 damageReductionFlat: 0,
                 minHpAfterDamage: 0,
@@ -1810,7 +1900,9 @@
                 clashRoundBonus: 0,
                 observationBonus: 0,
                 additiveDamage: 0,
+                damageCapByCoin: {},
                 criticalBonusByCoin: {},
+                critChanceBonusByCoin: {},
                 staticDamageBonusByCoin: {},
                 dynamicDamageBonusByCoin: {},
                 clashRoundBonusByCoin: {},
@@ -1818,6 +1910,9 @@
                 additiveDamageByCoin: {},
                 extraCritDamageByCoin: {},
                 critFinalPowerBonusByCoin: {},
+                forcedCoinOutcome: null,
+                forcedCoinOutcomeByCoin: {},
+                rerollTailsRemaining: 0,
                 followUpSkillIdOnClashLose: null,
                 currentCoinIndex: 0,
                 ammoSpentEntries: ammoResult.spentEntries || [],
@@ -1854,18 +1949,20 @@
             return context;
         }
 
-        function rollCritical(targetBattle, attacker) {
-            const poise = getStatus(attacker, 'poise');
-            if (!poise || poise.potency <= 0 || poise.count <= 0) {
+        function rollCritical(targetBattle, attacker, attackContext) {
+            if (!attacker) {
                 return false;
             }
 
-            const critChance = Math.min(100, poise.potency * 5);
-            const isCritical = Math.random() * 100 < critChance;
-            if (isCritical) {
-                setStatusCount(targetBattle, attacker, 'poise', poise.count - 1);
+            const coinIndex = attackContext?.currentCoinIndex || 0;
+            const chanceBonus = (attackContext?.critChanceBonus || 0)
+                + (attackContext?.critChanceBonusByCoin?.[coinIndex] || 0);
+            const critChance = clamp(typeof chanceBonus === 'number' ? chanceBonus : 0, 0, 100);
+            if (critChance <= 0) {
+                return false;
             }
-            return isCritical;
+
+            return (Math.random() * 100) < critChance;
         }
 
         function applyAttackEndEffects(targetBattle, attacker, skill, attackContext) {
@@ -2080,25 +2177,26 @@
                     break;
                 }
 
-                const isCritical = rollCritical(targetBattle, attacker);
+                const isCritical = rollCritical(targetBattle, attacker, attackContext);
                 const finalPower = roll.power + (isCritical ? (attackContext.critFinalPowerBonusByCoin[coinIndex + 1] || 0) : 0);
-                const previousHp = defender.hp;
-                const previewDamage = calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
+                const originalDefender = defender;
+                const previousHp = originalDefender.hp;
+                const previewDamage = calculateHitDamage(attacker, skill, originalDefender, finalPower, attackContext, defendContext, isCritical);
                 const previewShieldState = absorbDamageWithShields({
                     ...targetBattle,
                     events: [],
                 }, {
-                    ...defender,
-                    shields: (defender.shields || []).map((shield) => ({ ...shield })),
-                    statuses: (defender.statuses || []).map((status) => ({ ...status })),
+                    ...originalDefender,
+                    shields: (originalDefender.shields || []).map((shield) => ({ ...shield })),
+                    statuses: (originalDefender.statuses || []).map((status) => ({ ...status })),
                 }, previewDamage);
 
-                invokeHooks(defender, 'beforeDamage', {
+                invokeHooks(originalDefender, 'beforeDamage', {
                     battle: targetBattle,
-                    unit: defender,
+                    unit: originalDefender,
                     sourceUnit: attacker,
                     opponent: attacker,
-                    targetUnit: defender,
+                    targetUnit: originalDefender,
                     skill,
                     attackContext,
                     defendContext,
@@ -2107,22 +2205,58 @@
                     finalPower,
                     damage: previewDamage,
                     previousHp,
-                    nextHp: Math.max(0, defender.hp - previewShieldState.remainingDamage),
+                    nextHp: Math.max(0, originalDefender.hp - previewShieldState.remainingDamage),
                     isCritical,
                 });
-                const damage = calculateHitDamage(attacker, skill, defender, finalPower, attackContext, defendContext, isCritical);
-                const shieldState = absorbDamageWithShields(targetBattle, defender, damage);
+                const redirectSlotId = defendContext?.redirectDamageToSlotId || null;
+                const redirectedSlot = redirectSlotId ? getSlotById(targetBattle, redirectSlotId) : null;
+                const redirectedUnit = redirectedSlot ? getUnitById(targetBattle, redirectedSlot.unitId) : null;
+                const shouldRedirect = redirectedUnit && redirectedUnit.hp > 0 && redirectedUnit.id !== originalDefender.id;
+                const resolvedDefender = shouldRedirect ? redirectedUnit : originalDefender;
+                if (shouldRedirect) {
+                    const redirectedPreviewDamage = calculateHitDamage(attacker, skill, resolvedDefender, finalPower, attackContext, defendContext, isCritical);
+                    const redirectedPreviousHp = resolvedDefender.hp;
+                    const redirectedPreviewShieldState = absorbDamageWithShields({
+                        ...targetBattle,
+                        events: [],
+                    }, {
+                        ...resolvedDefender,
+                        shields: (resolvedDefender.shields || []).map((shield) => ({ ...shield })),
+                        statuses: (resolvedDefender.statuses || []).map((status) => ({ ...status })),
+                    }, redirectedPreviewDamage);
+                    invokeHooks(resolvedDefender, 'beforeDamage', {
+                        battle: targetBattle,
+                        unit: resolvedDefender,
+                        sourceUnit: attacker,
+                        opponent: attacker,
+                        targetUnit: resolvedDefender,
+                        skill,
+                        attackContext,
+                        defendContext,
+                        statusId: 'skill',
+                        damageSource: 'skill',
+                        finalPower,
+                        damage: redirectedPreviewDamage,
+                        previousHp: redirectedPreviousHp,
+                        nextHp: Math.max(0, resolvedDefender.hp - redirectedPreviewShieldState.remainingDamage),
+                        isCritical,
+                    });
+                }
+
+                const damage = calculateHitDamage(attacker, skill, resolvedDefender, finalPower, attackContext, defendContext, isCritical);
+                const shieldState = absorbDamageWithShields(targetBattle, resolvedDefender, damage);
                 const minimumHp = typeof defendContext.minHpAfterDamage === 'number' && Number.isFinite(defendContext.minHpAfterDamage)
                     ? Math.max(0, Math.round(defendContext.minHpAfterDamage))
                     : 0;
-                defender.hp = clamp(Math.max(minimumHp, defender.hp - shieldState.remainingDamage), 0, defender.maxHp);
-                applyStaggerFromDamage(targetBattle, defender, attacker, previousHp, defender.hp);
-                invokeHooks(defender, 'afterDamage', {
+                const resolvedPreviousHp = resolvedDefender.hp;
+                resolvedDefender.hp = clamp(Math.max(minimumHp, resolvedDefender.hp - shieldState.remainingDamage), 0, resolvedDefender.maxHp);
+                applyStaggerFromDamage(targetBattle, resolvedDefender, attacker, resolvedPreviousHp, resolvedDefender.hp);
+                invokeHooks(resolvedDefender, 'afterDamage', {
                     battle: targetBattle,
-                    unit: defender,
+                    unit: resolvedDefender,
                     sourceUnit: attacker,
                     opponent: attacker,
-                    targetUnit: defender,
+                    targetUnit: resolvedDefender,
                     skill,
                     attackContext,
                     defendContext,
@@ -2130,8 +2264,8 @@
                     damageSource: 'skill',
                     finalPower,
                     damage: shieldState.remainingDamage,
-                    previousHp,
-                    nextHp: defender.hp,
+                    previousHp: resolvedPreviousHp,
+                    nextHp: resolvedDefender.hp,
                     isCritical,
                 });
 
@@ -2140,43 +2274,43 @@
                     damage: shieldState.remainingDamage,
                     isHeads: roll.isHeads,
                     isCritical,
-                    targetHp: defender.hp,
+                    targetHp: resolvedDefender.hp,
                 });
 
                 emitEvent(targetBattle, 'hit_resolved', {
                     index: coinIndex + 1,
                     attackerId: attacker.id,
                     attackerName: attacker.name,
-                    defenderId: defender.id,
-                    defenderName: defender.name,
+                    defenderId: resolvedDefender.id,
+                    defenderName: resolvedDefender.name,
                     skillId: skill.id,
                     skillName: skill.name,
                     coinFace: roll.isHeads ? 'Heads' : 'Tails',
                     finalPower,
                     damage: shieldState.remainingDamage,
                     damageType: skill.damageType,
-                    previousHp,
-                    nextHp: defender.hp,
+                    previousHp: resolvedPreviousHp,
+                    nextHp: resolvedDefender.hp,
                     isCritical,
                 });
 
-                invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, attackContext, defendContext, coinIndex: coinIndex + 1, finalPower, damage: shieldState.remainingDamage, isCritical });
-                invokeHooks(defender, 'hitTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, attackContext, defendContext, coinIndex: coinIndex + 1, finalPower, damage: shieldState.remainingDamage, isCritical });
-                invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: defender, skill, attackContext, defendContext, coinIndex: coinIndex + 1, damage: shieldState.remainingDamage });
-                invokeHooks(defender, 'damageTaken', { battle: targetBattle, unit: defender, opponent: attacker, skill, attackContext, defendContext, coinIndex: coinIndex + 1, damage: shieldState.remainingDamage });
+                invokeHooks(attacker, 'hitDealt', { battle: targetBattle, unit: attacker, opponent: resolvedDefender, skill, attackContext, defendContext, coinIndex: coinIndex + 1, finalPower, damage: shieldState.remainingDamage, isCritical });
+                invokeHooks(resolvedDefender, 'hitTaken', { battle: targetBattle, unit: resolvedDefender, opponent: attacker, skill, attackContext, defendContext, coinIndex: coinIndex + 1, finalPower, damage: shieldState.remainingDamage, isCritical });
+                invokeHooks(attacker, 'damageDealt', { battle: targetBattle, unit: attacker, opponent: resolvedDefender, skill, attackContext, defendContext, coinIndex: coinIndex + 1, damage: shieldState.remainingDamage });
+                invokeHooks(resolvedDefender, 'damageTaken', { battle: targetBattle, unit: resolvedDefender, opponent: attacker, skill, attackContext, defendContext, coinIndex: coinIndex + 1, damage: shieldState.remainingDamage });
 
                 applySkillEffects(targetBattle, 'onHit', {
                     sourceUnit: attacker,
-                    targetUnit: defender,
+                    targetUnit: resolvedDefender,
                     skill,
                     attackContext,
                     defendContext,
                     coinIndex: coinIndex + 1,
                     isCritical,
                 });
-                applyPendingAmmoOnHitEffects(targetBattle, attacker, defender, skill, attackContext);
+                applyPendingAmmoOnHitEffects(targetBattle, attacker, resolvedDefender, skill, attackContext);
 
-                if (defender.hp <= 0) {
+                if (resolvedDefender.hp <= 0) {
                     break;
                 }
             }
@@ -2206,8 +2340,8 @@
         }
 
         function resolveClash(targetBattle, leftSlot, rightSlot, leftUnit, leftSkill, rightUnit, rightSkill, leftContext, rightContext) {
-            let leftCoins = leftSkill.coinCount;
-            let rightCoins = rightSkill.coinCount;
+            let leftCoins = Math.max(0, (leftSkill.coinCount || 0) + (leftContext?.coinCountBonus || 0));
+            let rightCoins = Math.max(0, (rightSkill.coinCount || 0) + (rightContext?.coinCountBonus || 0));
             let repeatedTieCount = 0;
             let roundIndex = 0;
             const rounds = [];
@@ -2412,7 +2546,7 @@
                 damageReductionMultiplier: 1,
                 damageReductionFlat: 0,
             };
-            const hits = resolveOneSidedAttack(targetBattle, attacker, followUpSkill, defender, context, defenderContext, followUpSkill.coinCount);
+            const hits = resolveOneSidedAttack(targetBattle, attacker, followUpSkill, defender, context, defenderContext, Math.max(0, (followUpSkill.coinCount || 0) + (context?.coinCountBonus || 0)));
             applyAttackEndEffects(targetBattle, attacker, followUpSkill, context);
             return hits;
         }
@@ -2446,14 +2580,15 @@
                 };
             }
 
-            for (let coinIndex = 0; coinIndex < attackSkill.coinCount; coinIndex += 1) {
+            const attackCoinCount = Math.max(0, (attackSkill.coinCount || 0) + (attackContext?.coinCountBonus || 0));
+            for (let coinIndex = 0; coinIndex < attackCoinCount; coinIndex += 1) {
                 attackContext.currentCoinIndex = coinIndex + 1;
                 const roll = rollSingleCoin(targetBattle, attacker, attackSkill, attackContext);
                 if (!roll || attacker.hp <= 0 || defender.hp <= 0) {
                     break;
                 }
 
-                const isCritical = rollCritical(targetBattle, attacker);
+                const isCritical = rollCritical(targetBattle, attacker, attackContext);
                 const finalPower = roll.power + (isCritical ? (attackContext.critFinalPowerBonusByCoin[coinIndex + 1] || 0) : 0);
 
                 if (!evadeBroken) {
@@ -2624,7 +2759,7 @@
                 attacker,
                 defenseState.context,
                 { damageReductionMultiplier: 1, damageReductionFlat: 0 },
-                counterSkill.coinCount,
+                Math.max(0, (counterSkill.coinCount || 0) + (defenseState.context?.coinCountBonus || 0)),
             );
             applyAttackEndEffects(targetBattle, defender, counterSkill, defenseState.context);
             const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
@@ -2657,7 +2792,7 @@
             defenseState.activated = true;
             defenseState.used = true;
 
-            const guardRoll = flipCoins(targetBattle, defender, guardSkill, guardSkill.coinCount, defenseState.context);
+            const guardRoll = flipCoins(targetBattle, defender, guardSkill, Math.max(0, (guardSkill.coinCount || 0) + (defenseState.context?.coinCountBonus || 0)), defenseState.context);
             const guardPower = Math.max(0, (guardRoll?.power || guardSkill.basePower) + getDefenseSkillFinalPowerBonus(defender, guardSkill, attacker, attackSkill));
 
             gainShield(targetBattle, defender, {
@@ -2916,13 +3051,13 @@
                     }
                 } else {
                     defenseState.used = true;
-                    hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, actingSkill.coinCount);
+                    hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, Math.max(0, (actingSkill.coinCount || 0) + (attackContext?.coinCountBonus || 0)));
                 }
             } else {
                 if (isGuardSkill(defendingSkill) && isUnitAlive(targetUnit)) {
                     guardResult = activateGuardDefense(targetBattle, targetSlot, targetUnit, actingSlot, actingUnit, actingSkill);
                 }
-                hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, actingSkill.coinCount);
+                hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, Math.max(0, (actingSkill.coinCount || 0) + (attackContext?.coinCountBonus || 0)));
             }
 
             if (!attackContext.cancelled) {
@@ -3075,24 +3210,49 @@
         }
 
         function pickAggroTargetSlotId(currentBattle) {
+            const getAiTargetWeightBonus = (unit) => {
+                const statuses = Array.isArray(unit?.statuses) ? unit.statuses : [];
+                return statuses.reduce((sum, status) => {
+                    const definition = getStatusDefinition(status?.id);
+                    const ai = definition?.ai;
+                    if (!ai || typeof ai !== 'object') {
+                        return sum;
+                    }
+
+                    const flat = typeof ai.targetWeightBonusFlat === 'number' && Number.isFinite(ai.targetWeightBonusFlat)
+                        ? ai.targetWeightBonusFlat
+                        : 0;
+                    const perCount = typeof ai.targetWeightBonusPerCount === 'number' && Number.isFinite(ai.targetWeightBonusPerCount)
+                        ? ai.targetWeightBonusPerCount
+                        : 0;
+                    const perPotency = typeof ai.targetWeightBonusPerPotency === 'number' && Number.isFinite(ai.targetWeightBonusPerPotency)
+                        ? ai.targetWeightBonusPerPotency
+                        : 0;
+
+                    const count = Math.max(0, status?.count || 0);
+                    const potency = Math.max(0, status?.potency || 0);
+                    return sum + flat + (count * perCount) + (potency * perPotency);
+                }, 0);
+            };
+
             const livingPlayerSlots = currentBattle.playerSlots
                 .filter((candidate) => isSlotAlive(currentBattle, candidate))
                 .map((candidate) => {
                     const unit = getUnitById(currentBattle, candidate.unitId);
                     return {
                         slot: candidate,
-                        aggro: Math.max(0, getStatusCount(unit, 'aggro')),
+                        weightBonus: Math.max(0, getAiTargetWeightBonus(unit)),
                     };
                 });
 
-            const totalAggro = livingPlayerSlots.reduce((sum, candidate) => sum + candidate.aggro, 0);
-            if (!totalAggro) {
+            const totalWeightBonus = livingPlayerSlots.reduce((sum, candidate) => sum + candidate.weightBonus, 0);
+            if (!totalWeightBonus) {
                 return null;
             }
 
             const weightedCandidates = livingPlayerSlots.map((candidate) => ({
                 ...candidate,
-                weight: 1 + candidate.aggro,
+                weight: 1 + candidate.weightBonus,
             }));
             const totalWeight = weightedCandidates.reduce((sum, candidate) => sum + candidate.weight, 0);
             let roll = Math.random() * totalWeight;

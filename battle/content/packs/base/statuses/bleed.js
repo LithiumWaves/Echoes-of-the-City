@@ -37,6 +37,24 @@
                     countDelta: -1,
                 },
             ],
+            afterDamage: [
+                {
+                    conditions: [
+                        { type: 'damageSourceIs', value: 'status' },
+                        { type: 'eventStatusIdIs', value: 'bleed' },
+                        { type: 'damageAtLeast', value: 1 },
+                    ],
+                    actions: [
+                        {
+                            type: 'adjustEncounterResource',
+                            resourceId: 'bloodfeast',
+                            amount: { damage: true },
+                            max: 999,
+                            reason: 'bleed damage',
+                        },
+                    ],
+                },
+            ],
         },
     });
 })();

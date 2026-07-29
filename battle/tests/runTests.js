@@ -68,6 +68,7 @@ function createBattleEnvironment(options = {}) {
     }
 
     require(path.resolve(battleRoot, 'registry', 'battleRegistry.js'));
+    require(path.resolve(battleRoot, 'ai', 'enemyAi.js'));
     require(path.resolve(battleRoot, 'schema', 'battleSchema.js'));
     require(path.resolve(battleRoot, 'validation', 'battleValidation.js'));
     require(path.resolve(battleRoot, 'content', 'battleContentRegistry.js'));
@@ -263,12 +264,6 @@ function runSuite() {
             isCritical: true,
         });
         assert(critical.damage === 24, `Expected critical damage 24, got ${critical.damage}`);
-
-        const protection = formula.calculateDamage({
-            ...baseContext,
-            defender: createUnit({ statuses: [{ id: 'protection', count: 5 }] }),
-        });
-        assert(protection.damage === 10, `Expected protection 5 to halve damage (10), got ${protection.damage}`);
 
         const additive = formula.calculateDamage({
             ...baseContext,
@@ -694,6 +689,651 @@ function runSuite() {
         const hasA = ally.statuses.some((status) => status.id === 'test_applied_a');
         const hasB = ally.statuses.some((status) => status.id === 'test_applied_b');
         assert(hasA && hasB, `Expected statusApplied hook to chain apply B; got A=${hasA} B=${hasB}`);
+    });
+
+    test('Effect runner: status action effects (clear/copy/transfer/convert/multiply/split/tags)', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        const registerCountOnly = (definition) => {
+            registerStatusDefinition({ id: definition.id, label: definition.label });
+            registerStatusDefinition({
+                id: definition.id,
+                label: definition.label,
+                tags: definition.tags || [],
+                countOnly: true,
+                stackModel: {
+                    count: { enabled: true, min: 0, max: 99, application: 'add' },
+                    expireWhen: { countLte: 0 },
+                },
+                hooks: {},
+            });
+        };
+
+        registerCountOnly({ id: 'test_tag_a', label: 'Tag A', tags: ['a'] });
+        registerCountOnly({ id: 'test_tag_ab', label: 'Tag AB', tags: ['a', 'b'] });
+        registerCountOnly({ id: 'test_copy_source', label: 'Copy Source', tags: ['copy'] });
+        registerCountOnly({ id: 'test_convert_from', label: 'Convert From', tags: ['from'] });
+        registerCountOnly({ id: 'test_convert_to', label: 'Convert To', tags: ['to'] });
+
+        registerStatusDefinition({ id: 'test_mult', label: 'Multiply Status' });
+        registerStatusDefinition({
+            id: 'test_mult',
+            label: 'Multiply Status',
+            stackModel: {
+                potency: { enabled: true, min: 0, max: 99, application: 'add' },
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        registerCountOnly({ id: 'test_split', label: 'Split Status', tags: ['split'] });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const skill = {
+            id: 'dsl_status_actions',
+            name: 'DSL Status Actions',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [
+                { trigger: 'onSelect', type: 'clearStatus', target: 'opponent', statusId: 'test_tag_a' },
+                { trigger: 'onSelect', type: 'clearStatusesByTag', target: 'opponent', tags: ['a', 'b'], match: 'all' },
+                { trigger: 'onSelect', type: 'consumeStatusesByTag', target: 'opponent', tags: ['copy'], match: 'any' },
+                { trigger: 'onSelect', type: 'copyStatus', target: 'opponent', sourceTarget: 'self', statusId: 'test_copy_source', operation: 'set' },
+                { trigger: 'onSelect', type: 'transferStatus', target: 'opponent', sourceTarget: 'self', statusId: 'test_tag_ab', operation: 'set' },
+                { trigger: 'onSelect', type: 'convertStatus', target: 'opponent', fromStatusId: 'test_convert_from', toStatusId: 'test_convert_to' },
+                { trigger: 'onSelect', type: 'multiplyStatus', target: 'opponent', statusId: 'test_mult', potencyMultiplier: 2, countMultiplier: 3, rounding: 'floor' },
+                { trigger: 'onSelect', type: 'splitStatus', target: 'allOpponents', sourceTarget: 'self', statusId: 'test_split', mode: 'even' },
+            ],
+        };
+        const enemySkill = {
+            id: 'enemy_poke',
+            name: 'Enemy Poke',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const battleDefinition = {
+            id: 'dsl-status-actions-smoke',
+            name: 'DSL Status Actions Smoke',
+            playerUnits: [createUnit('ally', 'Ally', [skill])],
+            enemyUnits: [
+                createUnit('enemy1', 'Enemy 1', [enemySkill]),
+                createUnit('enemy2', 'Enemy 2', [enemySkill]),
+            ],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [{ type: 'heads', value: 0 }],
+            'enemy-slot-1': [{ type: 'heads', value: 0 }],
+            'enemy-slot-2': [{ type: 'heads', value: 0 }],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+        engine.addStatus('enemy', { id: 'test_tag_a', count: 1 }, 0);
+        engine.addStatus('enemy', { id: 'test_tag_ab', count: 1 }, 0);
+        engine.addStatus('enemy', { id: 'test_copy_source', count: 2 }, 0);
+        engine.addStatus('enemy', { id: 'test_convert_from', count: 4 }, 0);
+        engine.addStatus('enemy', { id: 'test_mult', potency: 3, count: 2 }, 0);
+
+        engine.addStatus('player', { id: 'test_copy_source', count: 5 }, 0);
+        engine.addStatus('player', { id: 'test_tag_ab', count: 3 }, 0);
+        engine.addStatus('player', { id: 'test_split', count: 5 }, 0);
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('dsl_status_actions');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const state = engine.getState();
+        const enemy1 = state.enemyUnits.find((unit) => unit.id === 'enemy1');
+        const enemy2 = state.enemyUnits.find((unit) => unit.id === 'enemy2');
+        const ally = state.playerUnits[0];
+
+        assert(!enemy1.statuses.some((status) => status.id === 'test_tag_a'), 'Expected clearStatus to remove test_tag_a.');
+        assert(enemy1.statuses.find((status) => status.id === 'test_tag_ab')?.count === 3, 'Expected transferStatus to set opponent test_tag_ab to 3.');
+        assert(!ally.statuses.some((status) => status.id === 'test_tag_ab'), 'Expected transferStatus to remove test_tag_ab from source.');
+        assert(enemy1.statuses.find((status) => status.id === 'test_copy_source')?.count === 5, 'Expected copyStatus to set opponent copy count to 5.');
+        assert(!enemy1.statuses.some((status) => status.id === 'test_convert_from') && enemy1.statuses.find((status) => status.id === 'test_convert_to')?.count === 4, 'Expected convertStatus to swap statuses.');
+        assert(enemy1.statuses.find((status) => status.id === 'test_mult')?.potency === 6 && enemy1.statuses.find((status) => status.id === 'test_mult')?.count === 6, 'Expected multiplyStatus to scale potency/count.');
+        assert(enemy1.statuses.find((status) => status.id === 'test_split')?.count === 3, 'Expected splitStatus remainder to go to first opponent.');
+        assert(enemy2.statuses.find((status) => status.id === 'test_split')?.count === 2, 'Expected splitStatus to distribute evenly across opponents.');
+        assert(!ally.statuses.some((status) => status.id === 'test_split'), 'Expected splitStatus to remove from source.');
+
+        const consumedEvents = state.events.filter((event) => event.type === 'status_consumed' && event.data?.statusId === 'test_copy_source');
+        assert(consumedEvents.length >= 1, 'Expected consumeStatusesByTag to emit status_consumed event.');
+    });
+
+    test('Effect runner: coin actions (adjustCoinCount + forceCoinOutcome + grantCoinReroll)', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const skill = {
+            id: 'coin_actions',
+            name: 'Coin Actions',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 2,
+            coinCount: 2,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [
+                { trigger: 'onSelect', type: 'adjustCoinCount', value: 1, operation: 'add' },
+                { trigger: 'onSelect', type: 'grantCoinReroll', value: 1 },
+                { trigger: 'onSelect', type: 'forceCoinOutcome', coinIndex: 2, coinOutcome: 'tails' },
+            ],
+        };
+
+        const enemySkill = {
+            id: 'enemy_poke',
+            name: 'Enemy Poke',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 80,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const battleDefinition = {
+            id: 'coin-actions-smoke',
+            name: 'Coin Actions Smoke',
+            playerUnits: [createUnit('ally', 'Ally', [skill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const previousRandom = Math.random;
+        try {
+            const rolls = [0.99, 0.01, 0.01, 0.01];
+            Math.random = () => (rolls.length ? rolls.shift() : 0.01);
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp });
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('coin_actions');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const state = engine.getState();
+            const presentation = state.resolutionHistory[0];
+            assert(presentation?.hits?.length === 3, `Expected 3 hits after adjustCoinCount, got ${presentation?.hits?.length || 0}`);
+            const faces = presentation.hits.map((hit) => Boolean(hit.isHeads));
+            assert(String(faces) === String([true, false, true]), `Expected heads/tails/heads after reroll + forced tail, got ${JSON.stringify(faces)}`);
+        } finally {
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Effect runner: unit resources + flags/counters + randomChance + eventField amounts', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        registerStatusDefinition({ id: 'test_resource_mark', label: 'Resource Mark' });
+        registerStatusDefinition({
+            id: 'test_resource_mark',
+            label: 'Resource Mark',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const passive = {
+            id: 'resource_passive',
+            label: 'Resource Passive',
+            hooks: {
+                battleStart: [
+                    {
+                        actions: [
+                            { type: 'adjustUnitResource', target: 'self', resourceId: 'wrath', value: 0, operation: 'set' },
+                            { type: 'adjustUnitResource', target: 'self', resourceId: 'wrath', amount: { sum: [{ eventField: { path: 'battle.turn', default: 0 } }, 2] }, operation: 'add' },
+                            { type: 'setFlag', target: 'self', flagId: 'ready', value: true },
+                            { type: 'adjustCounter', target: 'self', counterId: 'charge', value: 2, operation: 'set' },
+                        ],
+                    },
+                    {
+                        conditions: [
+                            { type: 'unitResourceAtLeast', target: 'self', resourceId: 'wrath', value: 2 },
+                            { type: 'hasFlag', target: 'self', flagId: 'ready', value: true },
+                            { type: 'counterAtLeast', target: 'self', counterId: 'charge', value: 2 },
+                            { type: 'randomChance', value: 1 },
+                        ],
+                        actions: [
+                            { type: 'applyStatus', target: 'self', statusId: 'test_resource_mark', countAmount: { unitResource: { target: 'self', resourceId: 'wrath' } } },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const basicSkill = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const createUnit = (id, name, passives = []) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills: [basicSkill],
+            passives,
+        });
+
+        const previousRandom = Math.random;
+        try {
+            Math.random = () => 0;
+            const engine = battleModules.createBattleEngine({
+                battleDefinition: {
+                    id: 'resource-actions-smoke',
+                    name: 'Resource Actions Smoke',
+                    playerUnits: [createUnit('ally', 'Ally', [passive])],
+                    enemyUnits: [createUnit('enemy', 'Enemy')],
+                    rules: {
+                        encounterType: 'focused',
+                        maxTurns: 1,
+                        victoryCondition: 'defeat-all-enemies',
+                        failureCondition: 'all-allies-defeated',
+                        enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    },
+                },
+                clamp,
+            });
+            const state = engine.getState();
+            const ally = state.playerUnits[0];
+            const wrath = ally.resources?.wrath || 0;
+            const mark = ally.statuses.find((status) => status.id === 'test_resource_mark')?.count || 0;
+            assert(wrath === 2, `Expected wrath unit resource to be 2 at battleStart, got ${wrath}`);
+            assert(mark === 2, `Expected mark count to equal unitResource(wrath)=2, got ${mark}`);
+        } finally {
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Effect runner: dealHpPercentDamage + setDamageCap', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const skill = {
+            id: 'percent_damage',
+            name: 'Percent Damage',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [
+                { trigger: 'onSelect', type: 'dealHpPercentDamage', target: 'opponent', amount: 0.5, statusId: 'hp_percent_effect' },
+                { trigger: 'onSelect', type: 'setDamageCap', value: 0, operation: 'set' },
+            ],
+        };
+
+        const enemySkill = {
+            id: 'enemy_guard',
+            name: 'Enemy Guard',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 100,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'percent-damage-smoke',
+                name: 'Percent Damage Smoke',
+                playerUnits: [createUnit('ally', 'Ally', [skill])],
+                enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+        });
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('percent_damage');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const state = engine.getState();
+        const enemy = state.enemyUnits[0];
+        assert(enemy.hp === 50, `Expected enemy HP to be 50 after 50% max HP fixed damage, got ${enemy.hp}`);
+    });
+
+    test('Effect runner: redirectDamage + lastEventTypeIs', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        registerStatusDefinition({ id: 'redirect_mark', label: 'Redirect Mark' });
+        registerStatusDefinition({
+            id: 'redirect_mark',
+            label: 'Redirect Mark',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const attackerSkill = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 12,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const enemyGuard = {
+            id: 'enemy_guard',
+            name: 'Guard',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const redirectPassive = {
+            id: 'redirect_passive',
+            name: 'Redirect Passive',
+            hooks: {
+                beforeDamage: [
+                    {
+                        actions: [
+                            { type: 'redirectDamage', selector: 'firstLivingAlly' },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        const markOnHitPassive = {
+            id: 'mark_on_hit',
+            name: 'Mark On Hit',
+            hooks: {
+                hitTaken: [
+                    {
+                        conditions: [
+                            { type: 'lastEventTypeIs', value: 'hit_resolved' },
+                        ],
+                        actions: [
+                            { type: 'applyStatus', target: 'self', statusId: 'redirect_mark', count: 1 },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        const createUnit = (id, name, skills, passives = []) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 60,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives,
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'redirect-smoke',
+                name: 'Redirect Smoke',
+                playerUnits: [createUnit('ally', 'Ally', [attackerSkill])],
+                enemyUnits: [
+                    createUnit('enemy1', 'Enemy 1', [enemyGuard], [redirectPassive]),
+                    createUnit('enemy2', 'Enemy 2', [enemyGuard], [markOnHitPassive]),
+                ],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+        });
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('poke');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const state = engine.getState();
+        const enemy1 = state.enemyUnits.find((unit) => unit.id === 'enemy1');
+        const enemy2 = state.enemyUnits.find((unit) => unit.id === 'enemy2');
+        assert(enemy1.hp === enemy1.maxHp, `Expected redirectDamage to prevent damage on enemy1, got ${enemy1.hp}/${enemy1.maxHp}`);
+        assert(enemy2.hp < enemy2.maxHp, `Expected redirectDamage to apply damage to enemy2, got ${enemy2.hp}/${enemy2.maxHp}`);
+        const mark = enemy2.statuses.find((status) => status.id === 'redirect_mark')?.count || 0;
+        assert(mark === 1, `Expected lastEventTypeIs to gate redirect_mark application, got ${mark}`);
+    });
+
+    test('Effect runner: chooseWeightedActions + abortEffects', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        const registerCountOnly = (id) => {
+            registerStatusDefinition({ id, label: id });
+            registerStatusDefinition({
+                id,
+                label: id,
+                countOnly: true,
+                stackModel: {
+                    count: { enabled: true, min: 0, max: 99, application: 'add' },
+                    expireWhen: { countLte: 0 },
+                },
+                hooks: {},
+            });
+        };
+        registerCountOnly('branch_a');
+        registerCountOnly('branch_b');
+        registerCountOnly('should_not_apply');
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const skill = {
+            id: 'branching',
+            name: 'Branching',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [
+                {
+                    trigger: 'onSelect',
+                    type: 'chooseWeightedActions',
+                    branches: [
+                        { weight: 1, actions: [{ type: 'applyStatus', target: 'self', statusId: 'branch_a', count: 1 }] },
+                        { weight: 3, actions: [{ type: 'applyStatus', target: 'self', statusId: 'branch_b', count: 1 }] },
+                    ],
+                },
+                { trigger: 'onSelect', type: 'abortEffects' },
+                { trigger: 'onSelect', type: 'applyStatus', target: 'self', statusId: 'should_not_apply', count: 1 },
+            ],
+        };
+        const enemySkill = {
+            id: 'enemy_guard',
+            name: 'Guard',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const previousRandom = Math.random;
+        try {
+            Math.random = () => 0.8;
+            const engine = battleModules.createBattleEngine({
+                battleDefinition: {
+                    id: 'branching-smoke',
+                    name: 'Branching Smoke',
+                    playerUnits: [createUnit('ally', 'Ally', [skill])],
+                    enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+                    rules: {
+                        encounterType: 'focused',
+                        maxTurns: 1,
+                        victoryCondition: 'defeat-all-enemies',
+                        failureCondition: 'all-allies-defeated',
+                        enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    },
+                },
+                clamp,
+            });
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('branching');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const state = engine.getState();
+            const ally = state.playerUnits[0];
+            const hasA = ally.statuses.some((status) => status.id === 'branch_a');
+            const hasB = ally.statuses.some((status) => status.id === 'branch_b');
+            const hasNo = ally.statuses.some((status) => status.id === 'should_not_apply');
+            assert(!hasA && hasB, `Expected weighted branch to apply only branch_b, got A=${hasA} B=${hasB}`);
+            assert(!hasNo, 'Expected abortEffects to stop further effects.');
+        } finally {
+            Math.random = previousRandom;
+        }
     });
 
     test('Golden fixture: coinRoll status triggers before hit resolution', () => {
@@ -1875,7 +2515,7 @@ function runSuite() {
                 { type: 'slot_speed_rolled', unitName: 'Enemy 1', slotLabel: 'Slot 1', speed: 4 },
                 { type: 'slot_speed_rolled', unitName: 'Enemy 2', slotLabel: 'Slot 2', speed: 2 },
                 { type: 'enemy_intent_set', unitName: 'Enemy 1', slotLabel: 'Slot 1', skillName: 'Strike', targetLabel: 'Ally 1 Slot 1' },
-                { type: 'enemy_intent_set', unitName: 'Enemy 2', slotLabel: 'Slot 2', skillName: 'Stab', targetLabel: 'Ally 2 Slot 2' },
+                { type: 'enemy_intent_set', unitName: 'Enemy 2', slotLabel: 'Slot 2', skillName: 'Stab', targetLabel: 'Ally 1 Slot 1' },
                 { type: 'skill_selected', unitName: 'Ally 1', slotLabel: 'Slot 1', skillName: 'Taunt Slash' },
                 { type: 'target_selected', unitName: 'Ally 1', slotLabel: 'Slot 1', targetLabel: 'Enemy 2 Slot 2' },
                 { type: 'skill_selected', unitName: 'Ally 2', slotLabel: 'Slot 2', skillName: 'Evade' },
@@ -2453,7 +3093,6 @@ function runSuite() {
     test('Golden snapshot: enemy AI random target selection is deterministic', () => {
         const runScenario = (randomValue, expectedTarget) => {
             const battleModules = createBattleEnvironment();
-            require(path.resolve(battleRoot, 'ai', 'enemyAi.js'));
             const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
             const createUnit = (id, name, skills) => ({
                 id,
@@ -2705,6 +3344,646 @@ function runSuite() {
 
             const bloodfeastEvent = events[bloodfeastIndex]?.data || null;
             assert(bloodfeastEvent?.previousValue === 0 && bloodfeastEvent?.nextValue === 2, `Expected bloodfeast 0→2, got ${bloodfeastEvent?.previousValue}→${bloodfeastEvent?.nextValue}`);
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Regression: Burn triggers at turn end', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'burn.js'));
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 50,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const poke = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'guard',
+            basePower: 0,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'regression-burn-turn-end',
+            name: 'Regression Burn Turn End',
+            playerUnits: [createUnit('ally', 'Ally', [poke])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [poke])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [false],
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.addStatus('player', { id: 'burn', potency: 3, count: 1 }, 0);
+
+            const startHp = engine.getState().playerUnits[0].hp;
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('poke');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const state = engine.getState();
+            const burnTrigger = state.events.find((event) => event.type === 'status_triggered' && event.data?.statusId === 'burn')?.data || null;
+            assert(burnTrigger, 'Expected burn status_triggered event.');
+            assert(burnTrigger.damage === 3, `Expected burn damage 3, got ${burnTrigger.damage}`);
+            assert(state.playerUnits[0].hp === startHp - 3, `Expected Ally hp ${startHp}→${startHp - 3}, got ${state.playerUnits[0].hp}`);
+            assert(!state.playerUnits[0].statuses.some((status) => status.id === 'burn'), 'Expected burn to expire after losing its last count.');
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Regression: Protection reduces incoming damage via beforeDamage hook', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'protection.js'));
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'lcaFractureRound.js'));
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 50,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const cancelledSkill = {
+            id: 'ammo_strike',
+            name: 'Ammo Strike',
+            skillType: 'attack',
+            basePower: 6,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            ammo: {
+                statusId: 'lca_fracture_round',
+                countCost: 1,
+                cancelIfInsufficient: true,
+            },
+            effects: [],
+        };
+        const enemySkill = {
+            id: 'heavy_hit',
+            name: 'Heavy Hit',
+            skillType: 'attack',
+            basePower: 10,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'regression-protection-before-damage',
+            name: 'Regression Protection BeforeDamage',
+            playerUnits: [createUnit('ally', 'Ally', [cancelledSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.addStatus('player', { id: 'protection', count: 5 }, 0);
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('ammo_strike');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const hit = engine.getState().events.find((event) => event.type === 'hit_resolved' && event.data?.attackerName === 'Enemy')?.data || null;
+            assert(hit, 'Expected Enemy hit_resolved event.');
+            assert(hit.damage === 5, `Expected Heavy Hit damage 5 under Protection 5, got ${hit.damage}`);
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Regression: Rupture triggers on hitTaken', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'rupture.js'));
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'lcaFractureRound.js'));
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 60,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const cancelledSkill = {
+            id: 'ammo_strike',
+            name: 'Ammo Strike',
+            skillType: 'attack',
+            basePower: 6,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            ammo: {
+                statusId: 'lca_fracture_round',
+                countCost: 1,
+                cancelIfInsufficient: true,
+            },
+            effects: [],
+        };
+        const enemySkill = {
+            id: 'heavy_hit',
+            name: 'Heavy Hit',
+            skillType: 'attack',
+            basePower: 10,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'regression-rupture-hit-taken',
+            name: 'Regression Rupture HitTaken',
+            playerUnits: [createUnit('ally', 'Ally', [cancelledSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.addStatus('player', { id: 'rupture', potency: 4, count: 1 }, 0);
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('ammo_strike');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const state = engine.getState();
+            const hitIndex = state.events.findIndex((event) => event.type === 'hit_resolved' && event.data?.attackerName === 'Enemy');
+            const ruptureIndex = state.events.findIndex((event) => event.type === 'status_triggered' && event.data?.statusId === 'rupture');
+            assert(hitIndex >= 0, 'Expected Enemy hit_resolved event.');
+            assert(ruptureIndex > hitIndex, `Expected rupture to trigger after hit. hit=${hitIndex}, rupture=${ruptureIndex}`);
+
+            const ruptureTrigger = state.events[ruptureIndex]?.data || null;
+            assert(ruptureTrigger?.damage === 4, `Expected rupture damage 4, got ${ruptureTrigger?.damage}`);
+            assert(!state.playerUnits[0].statuses.some((status) => status.id === 'rupture'), 'Expected rupture to expire after losing its last count.');
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Regression: Concussion scales rupture fixed damage', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'rupture.js'));
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'concussion.js'));
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'lcaFractureRound.js'));
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 60,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const cancelledSkill = {
+            id: 'ammo_strike',
+            name: 'Ammo Strike',
+            skillType: 'attack',
+            basePower: 6,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            ammo: {
+                statusId: 'lca_fracture_round',
+                countCost: 1,
+                cancelIfInsufficient: true,
+            },
+            effects: [],
+        };
+        const enemySkill = {
+            id: 'heavy_hit',
+            name: 'Heavy Hit',
+            skillType: 'attack',
+            basePower: 10,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'regression-concussion-rupture-scale',
+            name: 'Regression Concussion Rupture Scale',
+            playerUnits: [createUnit('ally', 'Ally', [cancelledSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.addStatus('player', { id: 'rupture', potency: 8, count: 1 }, 0);
+            engine.addStatus('player', { id: 'concussion', count: 1 }, 0);
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('ammo_strike');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const state = engine.getState();
+            const ruptureTrigger = state.events.find((event) => event.type === 'status_triggered' && event.data?.statusId === 'rupture')?.data || null;
+            assert(ruptureTrigger, 'Expected rupture status_triggered event.');
+            assert(ruptureTrigger.damage === 9, `Expected rupture damage 9 under Concussion, got ${ruptureTrigger.damage}`);
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Regression: Sinking triggers sanity loss on hitTaken', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'sinking.js'));
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'lcaFractureRound.js'));
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 60,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const cancelledSkill = {
+            id: 'ammo_strike',
+            name: 'Ammo Strike',
+            skillType: 'attack',
+            basePower: 6,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            ammo: {
+                statusId: 'lca_fracture_round',
+                countCost: 1,
+                cancelIfInsufficient: true,
+            },
+            effects: [],
+        };
+        const enemySkill = {
+            id: 'heavy_hit',
+            name: 'Heavy Hit',
+            skillType: 'attack',
+            basePower: 10,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'regression-sinking-hit-taken',
+            name: 'Regression Sinking HitTaken',
+            playerUnits: [createUnit('ally', 'Ally', [cancelledSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.addStatus('player', { id: 'sinking', potency: 5, count: 1 }, 0);
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('ammo_strike');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const state = engine.getState();
+            const hitIndex = state.events.findIndex((event) => event.type === 'hit_resolved' && event.data?.attackerName === 'Enemy');
+            const sanityIndex = state.events.findIndex((event) => event.type === 'sanity_changed' && event.data?.reason === 'sinking');
+            assert(hitIndex >= 0, 'Expected Enemy hit_resolved event.');
+            assert(sanityIndex > hitIndex, `Expected sinking sanity change after hit. hit=${hitIndex}, sanity=${sanityIndex}`);
+
+            const sanityEvent = state.events[sanityIndex]?.data || null;
+            assert(sanityEvent?.previousSp === 0 && sanityEvent?.nextSp === -5, `Expected SP 0→-5, got ${sanityEvent?.previousSp}→${sanityEvent?.nextSp}`);
+            assert(!state.playerUnits[0].statuses.some((status) => status.id === 'sinking'), 'Expected sinking to expire after losing its last count.');
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Regression: Tremor burst raises stagger threshold and consumes count', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'tremor.js'));
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'concussion.js'));
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills, staggerThresholds = []) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds,
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const burstSkill = {
+            id: 'tremor_burst_strike',
+            name: 'Tremor Burst Strike',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [
+                { trigger: 'onHit', type: 'burstTremor', statusId: 'tremor' },
+            ],
+        };
+        const poke = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'regression-tremor-burst',
+            name: 'Regression Tremor Burst',
+            playerUnits: [createUnit('ally', 'Ally', [burstSkill])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [poke], [0.5])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [false],
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.addStatus('enemy', { id: 'tremor', potency: 5, count: 1 }, 0);
+            engine.addStatus('enemy', { id: 'concussion', count: 1 }, 0);
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('tremor_burst_strike');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const state = engine.getState();
+            const burstEvent = state.events.find((event) => event.type === 'tremor_burst')?.data || null;
+            assert(burstEvent, 'Expected tremor_burst event.');
+            assert(burstEvent.burstAmount === 6, `Expected burstAmount 6 under Concussion, got ${burstEvent.burstAmount}`);
+            assert(burstEvent.previousThreshold === 15 && burstEvent.nextThreshold === 21, `Expected threshold 15→21, got ${burstEvent.previousThreshold}→${burstEvent.nextThreshold}`);
+
+            const enemy = state.enemyUnits[0];
+            assert(enemy.staggerThresholds[0] === 21, `Expected enemy staggerThresholds[0] to be 21, got ${enemy.staggerThresholds[0]}`);
+            assert(!enemy.statuses.some((status) => status.id === 'tremor'), 'Expected tremor to expire after losing its last count.');
+        } finally {
+            Date.now = previousNow;
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Regression: Poise critical consumes count and flags hit', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses', 'poise.js'));
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (id, name, skills) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 60,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const poke = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 4,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const battleDefinition = {
+            id: 'regression-poise-critical',
+            name: 'Regression Poise Critical',
+            playerUnits: [createUnit('ally', 'Ally', [poke])],
+            enemyUnits: [createUnit('enemy', 'Enemy', [poke])],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [false],
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousNow = Date.now;
+        const previousRandom = Math.random;
+        try {
+            Date.now = () => 1700000000000;
+            Math.random = () => 0.49;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            engine.addStatus('player', { id: 'poise', potency: 10, count: 2 }, 0);
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('poke');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const events = engine.getState().events;
+            const poiseChangeIndex = events.findIndex((event) => event.type === 'status_changed' && event.data?.statusId === 'poise');
+            const critHitIndex = events.findIndex((event) => event.type === 'hit_resolved' && event.data?.attackerName === 'Ally' && event.data?.isCritical === true);
+            assert(poiseChangeIndex >= 0, 'Expected poise status_changed event.');
+            assert(critHitIndex >= 0, 'Expected Ally to land a critical hit.');
+            assert(poiseChangeIndex > critHitIndex, `Expected poise to be consumed after hit_resolved via hitDealt hook. poise=${poiseChangeIndex}, hit=${critHitIndex}`);
+            assert(events.some((event) => event.type === 'status_expired' && event.data?.statusId === 'poise'), 'Expected poise to expire by turn end.');
         } finally {
             Date.now = previousNow;
             Math.random = previousRandom;

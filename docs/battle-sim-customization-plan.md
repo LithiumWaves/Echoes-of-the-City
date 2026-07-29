@@ -55,13 +55,13 @@ Make the schema, registry, import/export format, and safety rules the stable fou
 
 ### Tasks
 
-1. Define a versioned content-pack manifest with `id`, `name`, `version`, `engineVersion`, `authors`, `description`, `dependencies`, and feature flags.
-2. Document the canonical JSON shapes for packs, battles, units, skills, passives, statuses, effects, conditions, amount expressions, assets, and encounter resources.
-3. Separate **data-only user content** from **trusted JavaScript packs** in both validation and UI messaging.
-4. Add import conflict handling: overwrite, rename, skip, and dependency-missing errors.
-5. Persist imported packs in SillyTavern extension storage instead of only keeping them in memory.
-6. Add migration hooks for older content-pack versions.
-7. Provide sample minimal and advanced pack files in `battle/content/packs/user/` docs.
+1. [x] Define a versioned content-pack manifest with `id`, `name`, `version`, `engineVersion`, `authors`, `description`, `dependencies`, and feature flags.
+2. [x] Document the canonical JSON shapes for packs, battles, units, skills, passives, statuses, effects, conditions, amount expressions, assets, and encounter resources.
+3. [x] Separate **data-only user content** from **trusted JavaScript packs** in both validation and UI messaging.
+4. [x] Add import conflict handling: overwrite, rename, skip, and dependency-missing errors.
+5. [x] Persist imported packs in SillyTavern extension storage instead of only keeping them in memory.
+6. [x] Add migration hooks for older content-pack versions.
+7. [x] Provide sample minimal and advanced pack files in `battle/content/packs/user/` docs.
 
 ### Completion Criteria
 
@@ -69,6 +69,7 @@ Make the schema, registry, import/export format, and safety rules the stable fou
 - Exported packs can be imported again without data loss.
 - Validation errors point to exact paths in the imported JSON.
 - User-imported content cannot execute arbitrary JavaScript.
+- Phase 1 persistence runs via `loadPersistedContentPacks()` on startup.
 
 ## Phase 2: Build an Automated Verification Harness
 
@@ -78,19 +79,20 @@ Make changes safe before expanding the engine further.
 
 ### Tasks
 
-1. Add a lightweight test runner that can execute engine modules in a browser-like or VM environment.
-2. Add schema validation tests for every shipped battle, unit, skill, passive, status, and effect.
-3. Add import/export round-trip tests for single battles and full packs.
-4. Add damage formula fixtures for neutral, resisted, fatal, staggered, critical, protection, fragile, additive, and minimum-floor cases.
-5. Add effect runner tests for conditions, once-per scopes, action ordering, target selectors, and lifecycle hooks.
-6. Add regression tests for converted keyword statuses.
-7. Wire tests into an obvious command documented in the README.
+1. [x] Add a lightweight test runner that can execute engine modules in a browser-like or VM environment.
+2. [x] Add schema validation tests for every shipped battle, unit, skill, passive, status, and effect.
+3. [x] Add import/export round-trip tests for single battles and full packs.
+4. [x] Add damage formula fixtures for neutral, resisted, fatal, staggered, critical, protection, fragile, additive, and minimum-floor cases.
+5. [x] Add effect runner tests for conditions, once-per scopes, action ordering, target selectors, and lifecycle hooks.
+6. [x] Add regression tests for converted keyword statuses.
+7. [x] Wire tests into an obvious command documented in the README.
 
 ### Completion Criteria
 
 - A single command verifies shipped content and core formula/effect behavior.
 - New status/effect work can be covered by fixtures.
 - The project has a clear pass/fail signal before releases.
+- Phase 2 verification runs via `node battle/tests/runTests.js`.
 
 ## Phase 3: Finish Data-Driven Statuses
 

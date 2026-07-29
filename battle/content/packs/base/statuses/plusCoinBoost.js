@@ -17,6 +17,24 @@
             expireWhen: { countLte: 0 },
         },
         hooks: {
+            skillSelected: [
+                {
+                    conditions: [
+                        { type: 'skillCoinPowerSign', value: 'plus' },
+                        { type: 'statusCountAtLeast', target: 'self', statusId: 'plus_coin_boost', value: 1 },
+                    ],
+                    actions: [
+                        {
+                            type: 'modifyContext',
+                            target: 'self',
+                            field: 'coinPowerBonus',
+                            operation: 'addStatusCountScaled',
+                            statusId: 'plus_coin_boost',
+                            multiplier: 1,
+                        },
+                    ],
+                },
+            ],
             turnEnd: [
                 {
                     type: 'consumeStatus',

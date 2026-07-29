@@ -18,6 +18,42 @@
             expireWhen: { countLte: 0 },
         },
         hooks: {
+            skillSelected: [
+                {
+                    conditions: [
+                        { type: 'skillType', value: ['attack', 'counter'] },
+                        { type: 'statusCountAtLeast', target: 'self', statusId: 'poise', value: 1 },
+                        { type: 'statusPotencyAtLeast', target: 'self', statusId: 'poise', value: 1 },
+                    ],
+                    actions: [
+                        {
+                            type: 'modifyContext',
+                            target: 'self',
+                            field: 'critChanceBonus',
+                            operation: 'addStatusPotencyScaled',
+                            statusId: 'poise',
+                            multiplier: 5,
+                            cap: 100,
+                        },
+                    ],
+                },
+            ],
+            hitDealt: [
+                {
+                    conditions: [
+                        { type: 'criticalHit', value: true },
+                        { type: 'statusCountAtLeast', target: 'self', statusId: 'poise', value: 1 },
+                    ],
+                    actions: [
+                        {
+                            type: 'adjustStatus',
+                            target: 'self',
+                            statusId: 'poise',
+                            countDelta: -1,
+                        },
+                    ],
+                },
+            ],
             turnEnd: [
                 {
                     conditions: [

@@ -242,6 +242,7 @@
         applyStatus: { id: 'applyStatus', label: 'Apply Status' },
         queueStatus: { id: 'queueStatus', label: 'Queue Status' },
         dealFixedDamage: { id: 'dealFixedDamage', label: 'Deal Fixed Damage' },
+        dealHpPercentDamage: { id: 'dealHpPercentDamage', label: 'Deal HP Percent Damage' },
         adjustSanity: { id: 'adjustSanity', label: 'Adjust Sanity' },
         setSanity: { id: 'setSanity', label: 'Set Sanity' },
         healHp: { id: 'healHp', label: 'Heal HP' },
@@ -250,6 +251,14 @@
         recoverStagger: { id: 'recoverStagger', label: 'Recover Stagger' },
         staggerUnit: { id: 'staggerUnit', label: 'Stagger Unit' },
         adjustStatus: { id: 'adjustStatus', label: 'Adjust Status' },
+        clearStatus: { id: 'clearStatus', label: 'Clear Status' },
+        clearStatusesByTag: { id: 'clearStatusesByTag', label: 'Clear Statuses By Tag' },
+        consumeStatusesByTag: { id: 'consumeStatusesByTag', label: 'Consume Statuses By Tag' },
+        copyStatus: { id: 'copyStatus', label: 'Copy Status' },
+        transferStatus: { id: 'transferStatus', label: 'Transfer Status' },
+        convertStatus: { id: 'convertStatus', label: 'Convert Status' },
+        multiplyStatus: { id: 'multiplyStatus', label: 'Multiply Status' },
+        splitStatus: { id: 'splitStatus', label: 'Split Status' },
         modifyContext: { id: 'modifyContext', label: 'Modify Context' },
         modifyCoinMap: { id: 'modifyCoinMap', label: 'Modify Coin Map' },
         setFollowUpSkill: { id: 'setFollowUpSkill', label: 'Set Follow-up Skill' },
@@ -261,9 +270,21 @@
         gainShield: { id: 'gainShield', label: 'Gain Shield' },
         clearShield: { id: 'clearShield', label: 'Clear Shield' },
         retargetSlot: { id: 'retargetSlot', label: 'Retarget Slot' },
+        redirectDamage: { id: 'redirectDamage', label: 'Redirect Damage' },
         burstTremor: { id: 'burstTremor', label: 'Burst Tremor' },
         consumeStatus: { id: 'consumeStatus', label: 'Consume Status' },
         adjustEncounterResource: { id: 'adjustEncounterResource', label: 'Adjust Encounter Resource' },
+        adjustUnitResource: { id: 'adjustUnitResource', label: 'Adjust Unit Resource' },
+        setFlag: { id: 'setFlag', label: 'Set Flag' },
+        clearFlag: { id: 'clearFlag', label: 'Clear Flag' },
+        adjustCounter: { id: 'adjustCounter', label: 'Adjust Counter' },
+        adjustCoinCount: { id: 'adjustCoinCount', label: 'Adjust Coin Count' },
+        forceCoinOutcome: { id: 'forceCoinOutcome', label: 'Force Coin Outcome' },
+        grantCoinReroll: { id: 'grantCoinReroll', label: 'Grant Coin Reroll' },
+        setDamageCap: { id: 'setDamageCap', label: 'Set Damage Cap' },
+        chooseRandomActions: { id: 'chooseRandomActions', label: 'Choose Random Actions' },
+        chooseWeightedActions: { id: 'chooseWeightedActions', label: 'Choose Weighted Actions' },
+        abortEffects: { id: 'abortEffects', label: 'Abort Effects' },
     };
 
     function getStatusDefinitionValidator() {
@@ -430,6 +451,8 @@
                 return `Deal fixed damage to ${effect.target || 'opponent'} equal to ${getStatusLabel(effect.amount.statusPotency.statusId)} potency.`;
             }
             return `Deal fixed damage to ${effect.target || 'opponent'}.`;
+        case 'dealHpPercentDamage':
+            return `Deal ${effect.value ?? effect.amount ?? 0} max HP damage to ${effect.target || 'opponent'}.`;
         case 'adjustSanity':
             if (typeof effect.amount === 'number') {
                 return `Adjust ${effect.target || 'opponent'} SP by ${formatSignedNumber(effect.amount)}.`;
@@ -480,15 +503,58 @@
             return `Clear ${effect.shieldId || 'shield'} from ${effect.target || 'opponent'}.`;
         case 'retargetSlot':
             return `Retarget ${effect.target || 'opponent'} to ${retargetSelectorLabels[effect.selector] || effect.selector}.`;
+        case 'redirectDamage':
+            return `Redirect damage to ${retargetSelectorLabels[effect.selector] || effect.selector}.`;
         case 'burstTremor':
             return `Burst Tremor on ${effect.target || 'opponent'}.`;
         case 'consumeStatus':
             return `Consume ${getStatusLabel(effect.statusId)} from ${effect.target || 'opponent'}.`;
+        case 'clearStatus':
+            return `Clear ${getStatusLabel(effect.statusId)} from ${effect.target || 'opponent'}.`;
+        case 'clearStatusesByTag':
+            return `Clear statuses with tags [${(effect.tags || []).join(', ')}] from ${effect.target || 'opponent'}.`;
+        case 'consumeStatusesByTag':
+            return `Consume statuses with tags [${(effect.tags || []).join(', ')}] from ${effect.target || 'opponent'}.`;
+        case 'copyStatus':
+            return `Copy ${getStatusLabel(effect.statusId)} from ${effect.sourceTarget || 'self'} to ${effect.target || 'opponent'}.`;
+        case 'transferStatus':
+            return `Transfer ${getStatusLabel(effect.statusId)} from ${effect.sourceTarget || 'self'} to ${effect.target || 'opponent'}.`;
+        case 'convertStatus':
+            return `Convert ${getStatusLabel(effect.fromStatusId)} into ${getStatusLabel(effect.toStatusId)} on ${effect.target || 'opponent'}.`;
+        case 'multiplyStatus':
+            return `Multiply ${getStatusLabel(effect.statusId)} on ${effect.target || 'opponent'}.`;
+        case 'splitStatus':
+            return `Split ${getStatusLabel(effect.statusId)} from ${effect.sourceTarget || 'self'} across ${effect.target || 'opponent'}.`;
         case 'adjustEncounterResource':
             if (typeof effect.value === 'number') {
                 return `Adjust ${effect.resourceId} by ${formatSignedNumber(effect.value)}.`;
             }
             return `Adjust ${effect.resourceId}.`;
+        case 'adjustUnitResource':
+            if (typeof effect.value === 'number') {
+                return `Adjust ${effect.resourceId} on ${effect.target || 'opponent'} by ${formatSignedNumber(effect.value)}.`;
+            }
+            return `Adjust ${effect.resourceId} on ${effect.target || 'opponent'}.`;
+        case 'setFlag':
+            return `Set flag "${effect.flagId}" on ${effect.target || 'opponent'}.`;
+        case 'clearFlag':
+            return `Clear flag "${effect.flagId}" on ${effect.target || 'opponent'}.`;
+        case 'adjustCounter':
+            return `Adjust counter "${effect.counterId}" on ${effect.target || 'opponent'}.`;
+        case 'adjustCoinCount':
+            return 'Adjust coin count.';
+        case 'forceCoinOutcome':
+            return `Force coin ${effect.coinIndex || 'all'} to ${effect.coinOutcome}.`;
+        case 'grantCoinReroll':
+            return 'Grant coin reroll.';
+        case 'setDamageCap':
+            return `Set damage cap ${effect.coinIndex ? `for coin ${effect.coinIndex}` : ''}.`;
+        case 'chooseRandomActions':
+            return 'Choose random actions.';
+        case 'chooseWeightedActions':
+            return 'Choose weighted actions.';
+        case 'abortEffects':
+            return 'Abort further effects.';
         default:
             return getEffectDefinition(effect?.type)?.label || effect?.type || 'Unknown Effect';
         }
@@ -501,6 +567,146 @@
                 ? `${getTriggerLabel(effect.trigger)}: `
                 : '';
         return `${prefix}${getEffectBodyDescription(effect)}`;
+    }
+
+    function isHookBlockDefinition(definition) {
+        return Boolean(definition)
+            && typeof definition === 'object'
+            && !Array.isArray(definition)
+            && Array.isArray(definition.actions);
+    }
+
+    function normalizeHookBlocks(hookDefinition) {
+        if (isHookBlockDefinition(hookDefinition)) {
+            return [hookDefinition];
+        }
+        if (!Array.isArray(hookDefinition) || !hookDefinition.length) {
+            return null;
+        }
+        return hookDefinition.every((entry) => isHookBlockDefinition(entry))
+            ? hookDefinition
+            : null;
+    }
+
+    function describeHookCondition(condition) {
+        if (!condition || typeof condition !== 'object') {
+            return 'Invalid condition';
+        }
+        const target = condition.target === 'opponent' ? 'Opponent' : 'Self';
+        switch (condition.type) {
+        case 'always':
+            return 'Always';
+        case 'damageAtLeast':
+            return `Damage >= ${condition.value ?? 0}`;
+        case 'damageSourceIs':
+            return `Damage source is ${condition.value || 'skill'}`;
+        case 'hasStatus':
+            return `${target} has ${getStatusLabel(condition.statusId)}`;
+        case 'statusPotencyAtLeast':
+            return `${target} ${getStatusLabel(condition.statusId)} Potency >= ${condition.value ?? 0}`;
+        case 'statusPotencyAtOrBelow':
+            return `${target} ${getStatusLabel(condition.statusId)} Potency <= ${condition.value ?? 0}`;
+        case 'statusCountAtLeast':
+            return `${target} ${getStatusLabel(condition.statusId)} Count >= ${condition.value ?? 0}`;
+        case 'statusCountAtOrBelow':
+            return `${target} ${getStatusLabel(condition.statusId)} Count <= ${condition.value ?? 0}`;
+        case 'encounterResourceAtLeast':
+            return `${condition.resourceId} >= ${condition.value ?? 0}`;
+        case 'encounterResourceAtOrBelow':
+            return `${condition.resourceId} <= ${condition.value ?? 0}`;
+        case 'unitResourceAtLeast':
+            return `${target} ${condition.resourceId} >= ${condition.value ?? 0}`;
+        case 'unitResourceAtOrBelow':
+            return `${target} ${condition.resourceId} <= ${condition.value ?? 0}`;
+        case 'hasFlag':
+            return `${target} flag "${condition.flagId}" is ${condition.value ?? true}`;
+        case 'counterAtLeast':
+            return `${target} counter "${condition.counterId}" >= ${condition.value ?? 0}`;
+        case 'counterAtOrBelow':
+            return `${target} counter "${condition.counterId}" <= ${condition.value ?? 0}`;
+        case 'randomChance':
+            return `Chance ${condition.value}`;
+        case 'skillIdIs':
+            return `Skill id is ${condition.value}`;
+        case 'skillHasTag':
+            return `Skill has tag ${condition.value}`;
+        case 'skillType':
+            return `Skill type is ${condition.value}`;
+        case 'skillSinType':
+            return `Skill sin is ${condition.value}`;
+        case 'skillDamageType':
+            return `Skill damage type is ${condition.value}`;
+        case 'skillCoinPowerSign':
+            return `Skill coin sign is ${condition.value}`;
+        case 'coinIndex':
+            return `Coin index is ${condition.value}`;
+        case 'criticalHit':
+            return `Critical hit is ${condition.value ?? true}`;
+        case 'targetStaggered':
+            return `Target staggered is ${condition.value ?? true}`;
+        case 'speedAtLeast':
+            return `${target} Speed >= ${condition.value ?? 0}`;
+        case 'speedAtOrBelow':
+            return `${target} Speed <= ${condition.value ?? 0}`;
+        case 'speedGreaterThan':
+            return `Speed comparison`;
+        case 'hpAtOrBelow':
+            return `${target} HP <= ${condition.value ?? 0}`;
+        case 'hpAtOrAbove':
+            return `${target} HP >= ${condition.value ?? 0}`;
+        case 'hpPercentAtOrBelow':
+            return `${target} HP% <= ${condition.value ?? 0}`;
+        case 'hpPercentAtOrAbove':
+            return `${target} HP% >= ${condition.value ?? 0}`;
+        case 'spAtOrBelow':
+            return `${target} SP <= ${condition.value ?? 0}`;
+        case 'spAtOrAbove':
+            return `${target} SP >= ${condition.value ?? 0}`;
+        case 'eventStatusIdIs':
+            return `Event status is ${getStatusLabel(condition.value)}`;
+        case 'unitSideIs':
+            return `${target} side is ${condition.value}`;
+        case 'lastEventTypeIs':
+            return `Last event is ${condition.value}`;
+        default:
+            return condition.type;
+        }
+    }
+
+    function describeHookBlock(hookName, block) {
+        if (!block || typeof block !== 'object') {
+            return `${getTriggerLabel(hookName)}: Invalid hook block.`;
+        }
+        const conditionText = Array.isArray(block.conditions) && block.conditions.length
+            ? `IF ${block.conditions.map((condition) => describeHookCondition(condition)).join(' & ')} `
+            : '';
+        const actionText = Array.isArray(block.actions) && block.actions.length
+            ? `DO ${block.actions.map((effect) => getEffectBodyDescription(effect)).join(' ')}`
+            : 'DO nothing';
+        const limitText = block.oncePer ? ` (Once per ${block.oncePer})` : '';
+        return `${getTriggerLabel(hookName)}: ${conditionText}${actionText}${limitText}`.trim();
+    }
+
+    function describeHookDefinition(hooks) {
+        if (!hooks || typeof hooks !== 'object' || Array.isArray(hooks)) {
+            return [];
+        }
+        const lines = [];
+        Object.entries(hooks).forEach(([hookName, hookDefinition]) => {
+            const blocks = normalizeHookBlocks(hookDefinition);
+            if (blocks) {
+                blocks.forEach((block) => {
+                    lines.push(describeHookBlock(hookName, block));
+                });
+                return;
+            }
+            if (Array.isArray(hookDefinition)) {
+                hookDefinition.forEach((effect) => {
+                    lines.push(describeEffect(effect, { hookName }));
+                });
+            }
+        });
+        return lines;
     }
 
     const registry = {
@@ -519,6 +725,8 @@
         isSupportedEffectType,
         getTriggerLabel,
         describeEffect,
+        describeHookBlock,
+        describeHookDefinition,
     };
 
     battleModules.registry = registry;

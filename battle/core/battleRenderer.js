@@ -1129,9 +1129,21 @@
                         <strong>${passive.name}</strong>
                         <span>${passive.description || 'Passive'}</span>
                         ${passive.hooks && typeof passive.hooks === 'object'
-                            ? Object.entries(passive.hooks).map(([hookName, hookDefinition]) => Array.isArray(hookDefinition)
-                                ? renderEffectDescriptions(hookDefinition, { hookName })
-                                : '').join('')
+                            ? (() => {
+                                const lines = typeof registry.describeHookDefinition === 'function'
+                                    ? registry.describeHookDefinition(passive.hooks)
+                                    : [];
+                                if (Array.isArray(lines) && lines.length) {
+                                    return `
+                                        <div class="echoes-battle-panel__inspect-effects">
+                                            ${lines.map((line) => `<span>${escapeAttribute(line)}</span>`).join('')}
+                                        </div>
+                                    `;
+                                }
+                                return Object.entries(passive.hooks).map(([hookName, hookDefinition]) => Array.isArray(hookDefinition)
+                                    ? renderEffectDescriptions(hookDefinition, { hookName })
+                                    : '').join('');
+                            })()
                             : ''}
                     </div>
                 `).join('')
