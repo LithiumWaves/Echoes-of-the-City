@@ -137,6 +137,13 @@
 
     function normalizeBattleDefinition(definition) {
         const source = cloneDefinition(definition || {});
+        const sourceRules = source.rules && typeof source.rules === 'object' && !Array.isArray(source.rules)
+            ? source.rules
+            : {};
+        const sourceWaves = Array.isArray(sourceRules.waves)
+            ? sourceRules.waves
+            : (Array.isArray(source.waves) ? source.waves : null);
+        const firstWaveEnemyUnits = Array.isArray(sourceWaves?.[0]?.enemyUnits) ? sourceWaves[0].enemyUnits : null;
         const normalized = {
             id: source.id || 'custom-battle',
             name: source.name || 'Custom Battle',
@@ -145,18 +152,23 @@
                 : (source.hero ? [source.hero] : []),
             enemyUnits: Array.isArray(source.enemyUnits)
                 ? source.enemyUnits
-                : (source.enemy ? [source.enemy] : []),
+                : (firstWaveEnemyUnits || (source.enemy ? [source.enemy] : [])),
             rules: {
-                encounterType: source.rules?.encounterType || 'focused',
-                maxTurns: source.rules?.maxTurns || 100,
-                victoryCondition: source.rules?.victoryCondition || 'defeat-all-enemies',
-                failureCondition: source.rules?.failureCondition || 'all-allies-defeated',
-                enemyAiProfile: source.rules?.enemyAiProfile || source.enemyAiProfile || null,
+                ...sourceRules,
+                encounterType: sourceRules.encounterType || 'focused',
+                maxTurns: sourceRules.maxTurns || 100,
+                victoryCondition: sourceRules.victoryCondition || 'defeat-all-enemies',
+                failureCondition: sourceRules.failureCondition || 'all-allies-defeated',
+                enemyAiProfile: sourceRules.enemyAiProfile || source.enemyAiProfile || null,
             },
         };
 
         if (source.description) {
             normalized.description = source.description;
+        }
+
+        if (sourceWaves) {
+            normalized.rules.waves = sourceWaves;
         }
 
         return normalized;
@@ -1823,6 +1835,26 @@
                             pushError(errors, 'battle.rules.sanityModel.lowMorale.chance.perSpBelowThreshold', 'must be a number when provided.');
                         }
                     }
+                });
+            }
+        }
+
+        const waves = normalizedDefinition.rules?.waves;
+        if (waves != null) {
+            if (!Array.isArray(waves) || !waves.length) {
+                pushError(errors, 'battle.rules.waves', 'must be a non-empty array when provided.');
+            } else {
+                waves.forEach((wave, waveIndex) => {
+                    const wavePath = `battle.rules.waves[${waveIndex}]`;
+                    if (!wave || typeof wave !== 'object' || Array.isArray(wave)) {
+                        pushError(errors, wavePath, 'must be an object.');
+                        return;
+                    }
+                    if (!Array.isArray(wave.enemyUnits) || !wave.enemyUnits.length) {
+                        pushError(errors, `${wavePath}.enemyUnits`, 'must contain at least one unit.');
+                        return;
+                    }
+                    wave.enemyUnits.forEach((unit, unitIndex) => validateUnit(errors, unit, `${wavePath}.enemyUnits[${unitIndex}]`));
                 });
             }
         }

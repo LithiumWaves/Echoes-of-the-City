@@ -1355,7 +1355,7 @@
                         <div class="echoes-battle-panel__combat-counter-stack">
                             <div class="echoes-battle-panel__combat-counter">
                                 <span>Wave</span>
-                                <strong>1 / 1</strong>
+                                <strong>${battle.wave || 1} / ${battle.totalWaves || 1}</strong>
                             </div>
                             <div class="echoes-battle-panel__combat-counter">
                                 <span>Turn</span>

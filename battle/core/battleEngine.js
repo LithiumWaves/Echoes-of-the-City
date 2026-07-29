@@ -2262,6 +2262,69 @@
             });
         }
 
+        function endBattleWithOutcome(targetBattle, winner, options = {}) {
+            if (!targetBattle || targetBattle.winner) {
+                return;
+            }
+            targetBattle.phase = 'ended';
+            targetBattle.winner = winner;
+            const winnerName = winner === 'player' ? 'Player' : (winner === 'enemy' ? 'Enemy' : 'Draw');
+            const winnerUnits = winner === 'enemy' ? targetBattle.enemyUnits : targetBattle.playerUnits;
+            const winnerUnit = Array.isArray(winnerUnits) ? (winnerUnits.find((unit) => isUnitAlive(unit)) || winnerUnits[0]) : null;
+
+            emitEvent(targetBattle, 'battle_ended', {
+                winner,
+                winnerId: winnerUnit?.id || null,
+                winnerName: winnerUnit?.name || winnerName,
+                reason: options.reason || null,
+            });
+
+            getAllUnits(targetBattle).forEach((unit) => {
+                invokeHooks(unit, 'battleEnd', {
+                    battle: targetBattle,
+                    unit,
+                    winner,
+                    winnerUnit,
+                    outcome: winner === 'draw' ? 'draw' : (unit.side === winner ? 'win' : 'lose'),
+                    reason: options.reason || null,
+                });
+            });
+        }
+
+        function finalizeBattleAfterTurn(targetBattle) {
+            const totalWaves = targetBattle.totalWaves || getTotalWaves();
+            const rules = battleDefinition?.rules || {};
+            const maxTurns = Number.isInteger(rules.maxTurns) ? rules.maxTurns : Number.parseInt(rules.maxTurns, 10);
+            const victoryCondition = rules.victoryCondition || 'defeat-all-enemies';
+            const failureCondition = rules.failureCondition || 'all-allies-defeated';
+
+            getAllUnits(targetBattle)
+                .filter((unit) => !isUnitAlive(unit))
+                .forEach((unit) => markUnitDefeated(targetBattle, unit, null));
+
+            const livingPlayer = targetBattle.playerUnits.some((unit) => isUnitAlive(unit));
+            const livingEnemy = targetBattle.enemyUnits.some((unit) => isUnitAlive(unit));
+
+            if (!livingPlayer && failureCondition === 'all-allies-defeated') {
+                finalizeBattleOnDeaths(targetBattle);
+                return;
+            }
+
+            if (!livingEnemy && victoryCondition === 'defeat-all-enemies') {
+                if (targetBattle.wave < totalWaves) {
+                    targetBattle.wave += 1;
+                    spawnEnemyWave(targetBattle, targetBattle.wave);
+                    return;
+                }
+                finalizeBattleOnDeaths(targetBattle);
+                return;
+            }
+
+            if (Number.isInteger(maxTurns) && maxTurns > 0 && targetBattle.turn >= maxTurns) {
+                endBattleWithOutcome(targetBattle, 'enemy', { reason: 'turn_limit' });
+            }
+        }
+
         function resolveOneSidedAttack(targetBattle, attacker, skill, defender, attackContext, defendContext, remainingCoins) {
             const hits = [];
             if (attackContext?.cancelled) {
@@ -3535,15 +3598,70 @@
             return battleDefinition.enemy ? [battleDefinition.enemy] : [];
         }
 
+        function getWaveDefinitions() {
+            const rules = battleDefinition?.rules;
+            if (rules?.waves && Array.isArray(rules.waves)) {
+                return rules.waves;
+            }
+            if (battleDefinition?.waves && Array.isArray(battleDefinition.waves)) {
+                return battleDefinition.waves;
+            }
+            return null;
+        }
+
+        function getTotalWaves() {
+            const waves = getWaveDefinitions();
+            return waves && waves.length ? waves.length : 1;
+        }
+
+        function getEnemyTemplatesForWave(waveIndex) {
+            const waves = getWaveDefinitions();
+            if (waves && waves.length) {
+                const waveDefinition = waves[Math.max(0, waveIndex - 1)];
+                if (Array.isArray(waveDefinition?.enemyUnits) && waveDefinition.enemyUnits.length) {
+                    return waveDefinition.enemyUnits;
+                }
+                if (waveIndex > 1) {
+                    return [];
+                }
+            }
+            return waveIndex === 1 ? getEnemyTemplates() : [];
+        }
+
+        function spawnEnemyWave(targetBattle, waveIndex) {
+            if (!targetBattle) {
+                return false;
+            }
+            const templates = getEnemyTemplatesForWave(waveIndex);
+            if (!Array.isArray(templates) || !templates.length) {
+                return false;
+            }
+
+            const enemyUnits = templates.map((template, index) => createBattleUnit(template, 'enemy', index));
+            const enemySlots = enemyUnits.map((unit, index) => createBattleSlot(unit, 'enemy', index));
+            targetBattle.enemyUnits = enemyUnits;
+            targetBattle.enemySlots = enemySlots;
+            targetBattle.activePlayerSlotId = ensureActivePlayerSlot(targetBattle)?.id || targetBattle.activePlayerSlotId || null;
+            refreshRedirectedTargets(targetBattle);
+            refreshSpeedOrder(targetBattle);
+            emitEvent(targetBattle, 'wave_started', {
+                wave: waveIndex,
+                totalWaves: targetBattle.totalWaves || getTotalWaves(),
+                enemyTeamName: enemyUnits.map((unit) => unit.name).join(', '),
+            });
+            return true;
+        }
+
         function createBattleState() {
             const playerUnits = getPlayerTemplates().map((template, index) => createBattleUnit(template, 'player', index));
-            const enemyUnits = getEnemyTemplates().map((template, index) => createBattleUnit(template, 'enemy', index));
+            const enemyUnits = getEnemyTemplatesForWave(1).map((template, index) => createBattleUnit(template, 'enemy', index));
             const playerSlots = playerUnits.map((unit, index) => createBattleSlot(unit, 'player', index));
             const enemySlots = enemyUnits.map((unit, index) => createBattleSlot(unit, 'enemy', index));
 
             const nextBattle = {
                 turn: 0,
                 wave: 1,
+                totalWaves: getTotalWaves(),
                 phase: 'setup',
                 winner: null,
                 log: [],
@@ -4398,7 +4516,7 @@
                 expireShieldsForPhase(battle, unit, 'turnEnd');
             });
 
-            finalizeBattleOnDeaths(battle);
+            finalizeBattleAfterTurn(battle);
             if (!battle.winner) {
                 battle.phase = 'resolved';
             }
