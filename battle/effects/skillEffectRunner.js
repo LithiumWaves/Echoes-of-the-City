@@ -327,19 +327,54 @@
                     return 0;
                 }
 
-                const resourceId = amountDefinition.encounterResource.resourceId;
-                const target = amountDefinition.encounterResource.target || 'self';
+                const resourceDefinition = amountDefinition.encounterResource;
+                const resourceId = resourceDefinition.resourceId;
+                const target = resourceDefinition.target || 'self';
+                const encounterResources = runtime.battle.encounterResources && typeof runtime.battle.encounterResources === 'object'
+                    ? runtime.battle.encounterResources
+                    : null;
+                const hasEncounterResourceKey = (key) => Boolean(encounterResources && Object.prototype.hasOwnProperty.call(encounterResources, key));
+                const resolveSideToken = (sideToken) => {
+                    if (!sideToken) {
+                        return null;
+                    }
+                    if (sideToken === 'player' || sideToken === 'enemy') {
+                        return sideToken;
+                    }
+                    const selfSide = runtime?.unit?.side || 'player';
+                    const opponentSide = selfSide === 'player' ? 'enemy' : 'player';
+                    if (sideToken === 'self') {
+                        return selfSide;
+                    }
+                    if (sideToken === 'opponent') {
+                        return opponentSide;
+                    }
+                    return null;
+                };
+                const isExplicitKey = typeof resourceId === 'string' && resourceId.includes(':');
                 if (target === 'battle') {
-                    const baseAmount = getEncounterResource(runtime.battle, resourceId);
+                    const resolvedResourceId = (() => {
+                        if (isExplicitKey) {
+                            return resourceId;
+                        }
+                        const resolvedSide = resolveSideToken(resourceDefinition.side);
+                        return resolvedSide ? `${resolvedSide}:${resourceId}` : resourceId;
+                    })();
+                    const baseAmount = getEncounterResource(runtime.battle, resolvedResourceId);
                     const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
                     return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
                 }
 
+                if (isExplicitKey) {
+                    const baseAmount = getEncounterResource(runtime.battle, resourceId);
+                    const scaledAmount = baseAmount * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
+                    return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
+                }
                 const unit = getEffectTargetUnit(runtime, target);
                 if (unit?.id) {
                     const scopedResourceId = `${unit.id}:${resourceId}`;
-                    const scopedValue = getEncounterResource(runtime.battle, scopedResourceId);
-                    if (scopedValue > 0) {
+                    if (hasEncounterResourceKey(scopedResourceId)) {
+                        const scopedValue = getEncounterResource(runtime.battle, scopedResourceId);
                         const scaledAmount = scopedValue * (typeof amountDefinition.multiplier === 'number' ? amountDefinition.multiplier : 1);
                         return scaledAmount + (typeof amountDefinition.offset === 'number' ? amountDefinition.offset : 0);
                     }
@@ -2329,11 +2364,18 @@
                 return 0;
             }
 
+            if (typeof condition.resourceId === 'string' && condition.resourceId.includes(':')) {
+                return getEncounterResource(runtime.battle, condition.resourceId);
+            }
+
+            const encounterResources = runtime.battle.encounterResources && typeof runtime.battle.encounterResources === 'object'
+                ? runtime.battle.encounterResources
+                : null;
+            const hasEncounterResourceKey = (key) => Boolean(encounterResources && Object.prototype.hasOwnProperty.call(encounterResources, key));
             if (conditionUnit?.id) {
                 const scopedResourceId = `${conditionUnit.id}:${condition.resourceId}`;
-                const scopedValue = getEncounterResource(runtime.battle, scopedResourceId);
-                if (scopedValue > 0) {
-                    return scopedValue;
+                if (hasEncounterResourceKey(scopedResourceId)) {
+                    return getEncounterResource(runtime.battle, scopedResourceId);
                 }
             }
 

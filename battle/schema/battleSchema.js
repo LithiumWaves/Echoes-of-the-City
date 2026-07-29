@@ -336,6 +336,13 @@
             if (resource.target != null && !['self', 'opponent', 'battle'].includes(resource.target)) {
                 pushError(errors, `${path}.encounterResource.target`, 'must be "self", "opponent", or "battle" when provided.');
             }
+            if (resource.side != null) {
+                if (resource.target !== 'battle') {
+                    pushError(errors, `${path}.encounterResource.side`, 'requires target "battle".');
+                } else if (!['self', 'opponent', 'player', 'enemy'].includes(resource.side)) {
+                    pushError(errors, `${path}.encounterResource.side`, 'must be "self", "opponent", "player", or "enemy" when provided.');
+                }
+            }
             if (amount.multiplier != null && !isFiniteNumber(amount.multiplier)) {
                 pushError(errors, `${path}.multiplier`, 'must be a number when provided.');
             }

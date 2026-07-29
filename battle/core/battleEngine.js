@@ -761,6 +761,13 @@
             return `${unit.id}:${resourceId}`;
         }
 
+        function getSideEncounterResourceId(side, resourceId) {
+            if (!side || !resourceId) {
+                return resourceId;
+            }
+            return `${side}:${resourceId}`;
+        }
+
         function adjustEncounterResource(targetBattle, resourceId, amount, options = {}) {
             if (!targetBattle || !resourceId || typeof amount !== 'number' || !Number.isFinite(amount)) {
                 return 0;
@@ -770,7 +777,9 @@
                 targetBattle.encounterResources = {};
             }
 
-            const scopedResourceId = options.unit ? getUnitEncounterResourceId(options.unit, resourceId) : resourceId;
+            const scopedResourceId = options.unit
+                ? getUnitEncounterResourceId(options.unit, resourceId)
+                : (options.side ? getSideEncounterResourceId(options.side, resourceId) : resourceId);
             const previousValue = getEncounterResource(targetBattle, scopedResourceId);
             const operation = options.operation || 'add';
             const nextUnclampedValue = operation === 'set'
@@ -1516,9 +1525,10 @@
             return flips.map((isHeads) => (isHeads ? 'H' : 'T')).join(' ');
         }
 
-        function getSkillOffenseLevel(unit, skill) {
+        function getSkillOffenseLevel(unit, skill, attackContext) {
             const modifier = unit.turnState?.offenseLevelModifier || 0;
-            return Math.max(1, unit.level + modifier + (skill.offenseLevel || 0));
+            const resonanceBonus = attackContext?.offenseLevelBonus || 0;
+            return Math.max(1, unit.level + modifier + (skill.offenseLevel || 0) + resonanceBonus);
         }
 
         function getDefenseLevel(unit) {
@@ -1526,17 +1536,18 @@
             return Math.max(1, (unit.defenseLevel || unit.level) + modifier);
         }
 
-        function getSkillDefenseLevel(unit, skill) {
-            return Math.max(1, getDefenseLevel(unit) + (skill?.offenseLevel || 0));
+        function getSkillDefenseLevel(unit, skill, defenseContext) {
+            const resonanceBonus = defenseContext?.defenseLevelBonus || 0;
+            return Math.max(1, getDefenseLevel(unit) + (skill?.offenseLevel || 0) + resonanceBonus);
         }
 
-        function getClashLevelBonus(unit, skill, opponent, opponentSkill) {
-            const levelDifference = getSkillOffenseLevel(unit, skill) - getSkillOffenseLevel(opponent, opponentSkill);
+        function getClashLevelBonus(unit, skill, unitContext, opponent, opponentSkill, opponentContext) {
+            const levelDifference = getSkillOffenseLevel(unit, skill, unitContext) - getSkillOffenseLevel(opponent, opponentSkill, opponentContext);
             return levelDifference > 0 ? Math.floor(levelDifference / 3) : 0;
         }
 
-        function getDefenseSkillFinalPowerBonus(defender, defenseSkill, attacker, attackSkill) {
-            const levelDifference = getSkillDefenseLevel(defender, defenseSkill) - getSkillOffenseLevel(attacker, attackSkill);
+        function getDefenseSkillFinalPowerBonus(defender, defenseSkill, defenseContext, attacker, attackSkill, attackContext) {
+            const levelDifference = getSkillDefenseLevel(defender, defenseSkill, defenseContext) - getSkillOffenseLevel(attacker, attackSkill, attackContext);
             return levelDifference > 0 ? Math.floor(levelDifference / 3) : 0;
         }
 
@@ -1557,7 +1568,7 @@
                 finalPower,
                 damageType: skill?.damageType || null,
                 sinType: skill?.sinType || null,
-                offenseLevel: getSkillOffenseLevel(attacker, skill),
+                offenseLevel: getSkillOffenseLevel(attacker, skill, attackContext),
                 defenseLevel: getDefenseLevel(defender),
                 isCritical,
                 modifiers: {
@@ -1896,6 +1907,8 @@
                 flatPowerBonus: 0,
                 clashPowerBonus: 0,
                 remainingCoinBonus: 0,
+                offenseLevelBonus: 0,
+                defenseLevelBonus: 0,
                 critChanceBonus: 0,
                 damageMultiplier: 1,
                 damageCap: null,
@@ -1938,6 +1951,15 @@
             if (context.cancelled) {
                 return context;
             }
+
+            {
+                const resonanceBonus = targetBattle?.runtimeState?.resonanceLevelBonusBySide?.[slot.side]?.[slot.id] || 0;
+                if (isCounterSkill(skill) || !isDefenseSkill(skill)) {
+                    context.offenseLevelBonus = resonanceBonus;
+                } else {
+                    context.defenseLevelBonus = resonanceBonus;
+                }
+            }
             applySkillEffects(targetBattle, 'onSelect', {
                 sourceUnit: unit,
                 targetUnit,
@@ -1957,6 +1979,19 @@
             });
 
             return context;
+        }
+
+        function grantEgoResourceOnUse(targetBattle, unit, skill) {
+            if (!targetBattle || !unit || !skill?.sinType) {
+                return;
+            }
+            adjustEncounterResource(targetBattle, skill.sinType, 1, {
+                operation: 'add',
+                min: 0,
+                max: 999,
+                reason: `${skill.name} [On Use]`,
+                side: unit.side,
+            });
         }
 
         function rollCritical(targetBattle, attacker, attackContext) {
@@ -2360,8 +2395,8 @@
                 roundIndex += 1;
                 const leftRoll = flipCoins(targetBattle, leftUnit, leftSkill, leftCoins, leftContext);
                 const rightRoll = flipCoins(targetBattle, rightUnit, rightSkill, rightCoins, rightContext);
-                const leftPower = leftRoll.power + getClashLevelBonus(leftUnit, leftSkill, rightUnit, rightSkill) + leftContext.clashPowerBonus;
-                const rightPower = rightRoll.power + getClashLevelBonus(rightUnit, rightSkill, leftUnit, leftSkill) + rightContext.clashPowerBonus;
+                const leftPower = leftRoll.power + getClashLevelBonus(leftUnit, leftSkill, leftContext, rightUnit, rightSkill, rightContext) + leftContext.clashPowerBonus;
+                const rightPower = rightRoll.power + getClashLevelBonus(rightUnit, rightSkill, rightContext, leftUnit, leftSkill, leftContext) + rightContext.clashPowerBonus;
 
                 if (leftPower === rightPower) {
                     repeatedTieCount += 1;
@@ -2552,6 +2587,7 @@
             if (context.cancelled) {
                 return [];
             }
+            grantEgoResourceOnUse(targetBattle, attacker, followUpSkill);
             const defenderContext = {
                 damageReductionMultiplier: 1,
                 damageReductionFlat: 0,
@@ -2579,7 +2615,7 @@
             const hits = [];
             let evadedCoinCount = 0;
             let evadeBroken = false;
-            const evadePowerBonus = getDefenseSkillFinalPowerBonus(defender, evadeSkill, attacker, attackSkill);
+            const evadePowerBonus = getDefenseSkillFinalPowerBonus(defender, evadeSkill, evadeContext, attacker, attackSkill, attackContext);
             const rounds = [];
             if (attackContext?.cancelled || evadeContext?.cancelled) {
                 return {
@@ -2754,6 +2790,7 @@
             }
             defenseState.activated = true;
             defenseState.used = true;
+            grantEgoResourceOnUse(targetBattle, defender, counterSkill);
 
             emitEvent(targetBattle, 'engagement_started', {
                 engagementType: 'one-sided',
@@ -2780,7 +2817,7 @@
             };
         }
 
-        function activateGuardDefense(targetBattle, defenderSlot, defender, attackerSlot, attacker, attackSkill) {
+        function activateGuardDefense(targetBattle, defenderSlot, defender, attackerSlot, attacker, attackSkill, attackContext) {
             const guardSkill = getActiveDefenseSkill(targetBattle, defenderSlot, attackerSlot);
             if (!isGuardSkill(guardSkill)) {
                 return null;
@@ -2801,9 +2838,10 @@
 
             defenseState.activated = true;
             defenseState.used = true;
+            grantEgoResourceOnUse(targetBattle, defender, guardSkill);
 
             const guardRoll = flipCoins(targetBattle, defender, guardSkill, Math.max(0, (guardSkill.coinCount || 0) + (defenseState.context?.coinCountBonus || 0)), defenseState.context);
-            const guardPower = Math.max(0, (guardRoll?.power || guardSkill.basePower) + getDefenseSkillFinalPowerBonus(defender, guardSkill, attacker, attackSkill));
+            const guardPower = Math.max(0, (guardRoll?.power || guardSkill.basePower) + getDefenseSkillFinalPowerBonus(defender, guardSkill, defenseState.context, attacker, attackSkill, attackContext));
 
             gainShield(targetBattle, defender, {
                 shieldId: 'guard',
@@ -2872,6 +2910,7 @@
                 const winnerContext = leftContext.cancelled ? rightContext : leftContext;
                 const winnerSlot = leftContext.cancelled ? rightSlot : leftSlot;
                 const loserSlot = leftContext.cancelled ? leftSlot : rightSlot;
+                grantEgoResourceOnUse(targetBattle, clashWinnerUnit, winnerSkill);
                 const coinBonus = typeof winnerContext?.coinCountBonus === 'number' && Number.isFinite(winnerContext.coinCountBonus)
                     ? winnerContext.coinCountBonus
                     : 0;
@@ -2910,6 +2949,9 @@
                 };
                 return;
             }
+
+            grantEgoResourceOnUse(targetBattle, leftUnit, leftSkill);
+            grantEgoResourceOnUse(targetBattle, rightUnit, rightSkill);
 
             const clashResult = resolveClash(targetBattle, leftSlot, rightSlot, leftUnit, leftSkill, rightUnit, rightSkill, leftContext, rightContext);
             const clashWinnerUnit = clashResult.winnerSide === 'left' ? leftUnit : rightUnit;
@@ -3060,12 +3102,14 @@
             if (attackContext.cancelled) {
                 hits = [];
             } else if (isEvadeSkill(defendingSkill) && !defenseState.broken && isUnitAlive(targetUnit)) {
+                grantEgoResourceOnUse(targetBattle, actingUnit, actingSkill);
                 if (!defenseState.context) {
                     defenseState.context = createSkillContext(targetBattle, targetUnit, targetSlot, defendingSkill, actingUnit);
                 }
                 if (!defenseState.context?.cancelled) {
                     defenseState.activated = true;
                     defenseState.used = true;
+                    grantEgoResourceOnUse(targetBattle, targetUnit, defendingSkill);
                     evadeResult = resolveAttackAgainstEvade(targetBattle, actingUnit, actingSkill, targetUnit, defendingSkill, attackContext, defenseState.context);
                     hits = evadeResult.hits;
                     if (evadeResult.evadeBroken) {
@@ -3076,8 +3120,11 @@
                     hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, Math.max(0, (actingSkill.coinCount || 0) + (attackContext?.coinCountBonus || 0)));
                 }
             } else {
+                if (!attackContext.cancelled) {
+                    grantEgoResourceOnUse(targetBattle, actingUnit, actingSkill);
+                }
                 if (isGuardSkill(defendingSkill) && isUnitAlive(targetUnit)) {
-                    guardResult = activateGuardDefense(targetBattle, targetSlot, targetUnit, actingSlot, actingUnit, actingSkill);
+                    guardResult = activateGuardDefense(targetBattle, targetSlot, targetUnit, actingSlot, actingUnit, actingSkill, attackContext);
                 }
                 hits = resolveOneSidedAttack(targetBattle, actingUnit, actingSkill, targetUnit, attackContext, defendContext, Math.max(0, (actingSkill.coinCount || 0) + (attackContext?.coinCountBonus || 0)));
             }
@@ -3415,6 +3462,10 @@
                         player: {},
                         enemy: {},
                     },
+                    resonanceLevelBonusBySide: {
+                        player: {},
+                        enemy: {},
+                    },
                 },
                 speedOrder: [],
                 resolutionQueue: [],
@@ -3655,6 +3706,7 @@
             ensureSideMap('absoluteResonanceBySide');
             ensureSideMap('resonanceBonusBySide');
             ensureSideMap('absoluteResonanceBonusBySide');
+            ensureSideMap('resonanceLevelBonusBySide');
             targetBattle.runtimeState = runtimeState;
 
             const getDashboardChain = (side) => {
@@ -3672,7 +3724,10 @@
                     }
                     return a.slot.index - b.slot.index;
                 });
-                return slots.map((entry) => entry.skill.sinType);
+                return slots.map((entry) => ({
+                    slotId: entry.slot.id,
+                    sinType: entry.skill.sinType,
+                }));
             };
 
             const computeCounts = (chain) => chain.reduce((acc, sinType) => {
@@ -3701,12 +3756,78 @@
                 return maxRuns;
             };
 
+            const getResonanceChainLevelBonus = (position) => {
+                if (position <= 1) {
+                    return 0;
+                }
+                if (position >= 11) {
+                    return 11;
+                }
+                const table = {
+                    2: 1,
+                    3: 3,
+                    4: 3,
+                    5: 5,
+                    6: 5,
+                    7: 7,
+                    8: 7,
+                    9: 9,
+                    10: 9,
+                };
+                return table[position] || 0;
+            };
+
+            const getAbsoluteResonanceChainLevelBonus = (chainLength) => {
+                if (chainLength < 3) {
+                    return 0;
+                }
+                if (chainLength >= 11) {
+                    return 11;
+                }
+                const table = {
+                    3: 3,
+                    4: 5,
+                    5: 5,
+                    6: 7,
+                    7: 7,
+                    8: 9,
+                    9: 9,
+                    10: 11,
+                };
+                return table[chainLength] || 0;
+            };
+
             ['player', 'enemy'].forEach((side) => {
-                const chain = getDashboardChain(side);
+                const chainEntries = getDashboardChain(side);
+                const chain = chainEntries.map((entry) => entry.sinType);
                 const baseCounts = computeCounts(chain);
                 const baseAbsolute = computeAbsoluteRuns(chain);
                 const bonusCounts = runtimeState.resonanceBonusBySide[side] || {};
                 const bonusAbsolute = runtimeState.absoluteResonanceBonusBySide[side] || {};
+
+                const levelBonusBySlotId = {};
+                let runStartIndex = 0;
+                while (runStartIndex < chainEntries.length) {
+                    const sinType = chainEntries[runStartIndex].sinType;
+                    let runEndIndex = runStartIndex;
+                    while (runEndIndex + 1 < chainEntries.length && chainEntries[runEndIndex + 1].sinType === sinType) {
+                        runEndIndex += 1;
+                    }
+                    const runLength = runEndIndex - runStartIndex + 1;
+                    if (runLength >= 3) {
+                        const bonus = getAbsoluteResonanceChainLevelBonus(runLength);
+                        for (let offset = 0; offset < runLength; offset += 1) {
+                            levelBonusBySlotId[chainEntries[runStartIndex + offset].slotId] = bonus;
+                        }
+                    } else if (runLength >= 2) {
+                        for (let offset = 0; offset < runLength; offset += 1) {
+                            levelBonusBySlotId[chainEntries[runStartIndex + offset].slotId] = getResonanceChainLevelBonus(offset + 1);
+                        }
+                    } else {
+                        levelBonusBySlotId[chainEntries[runStartIndex].slotId] = 0;
+                    }
+                    runStartIndex = runEndIndex + 1;
+                }
 
                 const finalCounts = {};
                 Object.keys({ ...baseCounts, ...bonusCounts }).forEach((sinType) => {
@@ -3725,6 +3846,7 @@
 
                 runtimeState.resonanceBySide[side] = finalCounts;
                 runtimeState.absoluteResonanceBySide[side] = finalAbsolute;
+                runtimeState.resonanceLevelBonusBySide[side] = levelBonusBySlotId;
             });
         }
 

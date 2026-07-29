@@ -2027,6 +2027,201 @@ function runSuite() {
         assert(absMark === 1, `Expected absoluteResonanceAtLeast to gate mark application, got ${absMark}`);
     });
 
+    test('Engine: [On Use] grants side-scoped E.G.O resources', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const wrathSkill = {
+            id: 'wrath_skill',
+            name: 'Wrath Skill',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const prideSkill = {
+            id: 'pride_skill',
+            name: 'Pride Skill',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'pride',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 999,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'ego-on-use-side-resources',
+                name: 'EGO On Use Side Resources',
+                playerUnits: [
+                    createUnit('ally1', 'Ally 1', [wrathSkill], 6),
+                    createUnit('ally2', 'Ally 2', [wrathSkill], 5),
+                ],
+                enemyUnits: [
+                    createUnit('enemy', 'Enemy', [prideSkill], 1),
+                ],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+        });
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('wrath_skill');
+        engine.selectTarget('enemy-slot-1');
+        engine.selectSlot('player-slot-2');
+        engine.selectSkill('wrath_skill');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const state = engine.getState();
+        assert(state.encounterResources['player:wrath'] === 2, `Expected player:wrath to be 2, got ${state.encounterResources['player:wrath']}`);
+        assert(state.encounterResources['enemy:pride'] === 1, `Expected enemy:pride to be 1, got ${state.encounterResources['enemy:pride']}`);
+    });
+
+    test('Effect runner: encounterResource amount supports side scoping', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        registerStatusDefinition({ id: 'test_side_amount_mark', label: 'Side Amount Mark' });
+        registerStatusDefinition({
+            id: 'test_side_amount_mark',
+            label: 'Side Amount Mark',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const passive = {
+            id: 'side_amount_passive',
+            name: 'Side Amount Passive',
+            hooks: {
+                turnEnd: [
+                    {
+                        actions: [
+                            {
+                                type: 'applyStatus',
+                                target: 'self',
+                                statusId: 'test_side_amount_mark',
+                                countAmount: {
+                                    encounterResource: {
+                                        target: 'battle',
+                                        resourceId: 'wrath',
+                                        side: 'self',
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        const wrathSkill = {
+            id: 'wrath_skill',
+            name: 'Wrath Skill',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const enemySkill = {
+            id: 'enemy_guard',
+            name: 'Enemy Guard',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'pride',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, passives = []) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 999,
+            sp: 0,
+            speedRange: [2, 2],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives,
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'side-amount-smoke',
+                name: 'Side Amount Smoke',
+                playerUnits: [
+                    createUnit('ally', 'Ally', [wrathSkill], [passive]),
+                ],
+                enemyUnits: [
+                    createUnit('enemy', 'Enemy', [enemySkill]),
+                ],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+        });
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('wrath_skill');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const state = engine.getState();
+        assert(state.encounterResources['player:wrath'] === 1, `Expected player:wrath to be 1, got ${state.encounterResources['player:wrath']}`);
+        const mark = state.playerUnits[0].statuses.find((status) => status.id === 'test_side_amount_mark')?.count || 0;
+        assert(mark === 1, `Expected side-scoped encounterResource amount to apply 1 mark, got ${mark}`);
+    });
+
     test('Golden fixture: coinRoll status triggers before hit resolution', () => {
         const battleModules = createBattleEnvironment();
         const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
