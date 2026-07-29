@@ -1582,6 +1582,93 @@
                         }
                     });
                     return;
+                case 'setPanicState':
+                    if (!effect.stateId) {
+                        return;
+                    }
+                    targetUnits.forEach((unit) => {
+                        if (!unit) {
+                            return;
+                        }
+                        const runtimeState = ensureUnitRuntimeState(unit);
+                        if (!runtimeState) {
+                            return;
+                        }
+                        runtimeState.panicStateId = effect.stateId;
+                        if (effect.amount != null || effect.value != null) {
+                            const nextValue = effect.amount != null
+                                ? resolveEffectAmount(runtime, effect)
+                                : effect.value;
+                            runtimeState.panicValue = typeof nextValue === 'number' && Number.isFinite(nextValue)
+                                ? nextValue
+                                : 0;
+                        } else if (typeof runtimeState.panicValue !== 'number' || !Number.isFinite(runtimeState.panicValue)) {
+                            runtimeState.panicValue = 0;
+                        }
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'unit_panic_changed', {
+                                unitId: unit.id,
+                                unitName: unit.name,
+                                panicStateId: runtimeState.panicStateId,
+                                panicValue: runtimeState.panicValue,
+                            });
+                        }
+                    });
+                    return;
+                case 'clearPanicState':
+                    targetUnits.forEach((unit) => {
+                        if (!unit) {
+                            return;
+                        }
+                        const runtimeState = ensureUnitRuntimeState(unit);
+                        if (!runtimeState) {
+                            return;
+                        }
+                        delete runtimeState.panicStateId;
+                        delete runtimeState.panicValue;
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'unit_panic_changed', {
+                                unitId: unit.id,
+                                unitName: unit.name,
+                                panicStateId: null,
+                                panicValue: 0,
+                            });
+                        }
+                    });
+                    return;
+                case 'adjustPanicValue':
+                    targetUnits.forEach((unit) => {
+                        if (!unit) {
+                            return;
+                        }
+                        const runtimeState = ensureUnitRuntimeState(unit);
+                        if (!runtimeState) {
+                            return;
+                        }
+                        const previousValue = typeof runtimeState.panicValue === 'number' && Number.isFinite(runtimeState.panicValue)
+                            ? runtimeState.panicValue
+                            : 0;
+                        const delta = resolveEffectAmount(runtime, effect);
+                        const nextRaw = effect.operation === 'set'
+                            ? delta
+                            : previousValue + delta;
+                        const min = typeof effect.min === 'number' && Number.isFinite(effect.min) ? effect.min : null;
+                        const max = typeof effect.max === 'number' && Number.isFinite(effect.max) ? effect.max : null;
+                        const nextClamped = max != null
+                            ? Math.min(max, min != null ? Math.max(min, nextRaw) : nextRaw)
+                            : (min != null ? Math.max(min, nextRaw) : nextRaw);
+                        runtimeState.panicValue = nextClamped;
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'unit_panic_changed', {
+                                unitId: unit.id,
+                                unitName: unit.name,
+                                panicStateId: runtimeState.panicStateId || null,
+                                previousValue,
+                                panicValue: nextClamped,
+                            });
+                        }
+                    });
+                    return;
                 case 'adjustCoinCount':
                     if (!context) {
                         return;
@@ -2222,6 +2309,33 @@
             const events = Array.isArray(runtime?.battle?.events) ? runtime.battle.events : [];
             const lastType = events.length ? events[events.length - 1]?.type : null;
             return matchesExpectedValue(lastType, conditionValue);
+        }
+        case 'panicStateIs':
+        {
+            const runtimeState = conditionUnit?.runtimeState && typeof conditionUnit.runtimeState === 'object'
+                ? conditionUnit.runtimeState
+                : null;
+            return Boolean(runtimeState) && runtimeState.panicStateId === conditionValue;
+        }
+        case 'panicValueAtLeast':
+        {
+            const runtimeState = conditionUnit?.runtimeState && typeof conditionUnit.runtimeState === 'object'
+                ? conditionUnit.runtimeState
+                : null;
+            const value = typeof runtimeState?.panicValue === 'number' && Number.isFinite(runtimeState.panicValue)
+                ? runtimeState.panicValue
+                : 0;
+            return value >= conditionValue;
+        }
+        case 'panicValueAtOrBelow':
+        {
+            const runtimeState = conditionUnit?.runtimeState && typeof conditionUnit.runtimeState === 'object'
+                ? conditionUnit.runtimeState
+                : null;
+            const value = typeof runtimeState?.panicValue === 'number' && Number.isFinite(runtimeState.panicValue)
+                ? runtimeState.panicValue
+                : 0;
+            return value <= conditionValue;
         }
         default:
             return false;

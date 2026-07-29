@@ -107,6 +107,9 @@
         'eventStatusIdIs',
         'unitSideIs',
         'lastEventTypeIs',
+        'panicStateIs',
+        'panicValueAtLeast',
+        'panicValueAtOrBelow',
     ]);
 
     function cloneDefinition(definition) {
@@ -613,6 +616,17 @@
                 pushError(errors, `${path}.value`, 'must be an event type string or array of event type strings.');
             }
             break;
+        case 'panicStateIs':
+            if (!condition.value || typeof condition.value !== 'string') {
+                pushError(errors, `${path}.value`, 'must be a non-empty string.');
+            }
+            break;
+        case 'panicValueAtLeast':
+        case 'panicValueAtOrBelow':
+            if (!isFiniteNumber(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
         case 'damageSourceIs':
             if (condition.value != null && !['skill', 'status', 'burst'].includes(condition.value)) {
                 pushError(errors, `${path}.value`, 'must be "skill", "status", or "burst" when provided.');
@@ -1097,6 +1111,34 @@
                 validateAmountDefinition(errors, effect.amount, `${path}.amount`);
             } else if (!isFiniteNumber(effect.value)) {
                 pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'setPanicState':
+            if (!effect.stateId || typeof effect.stateId !== 'string') {
+                pushError(errors, `${path}.stateId`, 'must be a non-empty string.');
+            }
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (effect.value != null && !isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number when provided.');
+            }
+            break;
+        case 'clearPanicState':
+            break;
+        case 'adjustPanicValue':
+            if (effect.amount != null) {
+                validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+            } else if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (effect.operation != null && !['add', 'set'].includes(effect.operation)) {
+                pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
+            }
+            if (effect.min != null && !isFiniteNumber(effect.min)) {
+                pushError(errors, `${path}.min`, 'must be a number when provided.');
+            }
+            if (effect.max != null && !isFiniteNumber(effect.max)) {
+                pushError(errors, `${path}.max`, 'must be a number when provided.');
             }
             break;
         case 'setDamageCap':

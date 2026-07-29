@@ -1570,6 +1570,101 @@ function runSuite() {
         assert(hit.finalPower === 10, `Expected finalPower 10 (5 + (2+3)), got ${hit.finalPower}`);
     });
 
+    test('Effect runner: panic runtime state (set/adjust + conditions)', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        registerStatusDefinition({ id: 'test_panic_mark', label: 'Panic Mark' });
+        registerStatusDefinition({
+            id: 'test_panic_mark',
+            label: 'Panic Mark',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const passive = {
+            id: 'panic_passive',
+            name: 'Panic Passive',
+            hooks: {
+                battleStart: [
+                    {
+                        actions: [
+                            { type: 'setPanicState', target: 'self', stateId: 'meltdown', value: 2 },
+                            { type: 'adjustPanicValue', target: 'self', operation: 'add', value: 1 },
+                        ],
+                    },
+                    {
+                        conditions: [
+                            { type: 'panicStateIs', target: 'self', value: 'meltdown' },
+                            { type: 'panicValueAtLeast', target: 'self', value: 3 },
+                        ],
+                        actions: [
+                            { type: 'applyStatus', target: 'self', statusId: 'test_panic_mark', count: 1 },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        const basicSkill = {
+            id: 'basic',
+            name: 'Basic',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, passives = []) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 50,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives,
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'panic-smoke',
+                name: 'Panic Smoke',
+                playerUnits: [createUnit('ally', 'Ally', [basicSkill], [passive])],
+                enemyUnits: [createUnit('enemy', 'Enemy', [basicSkill])],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+        });
+
+        const ally = engine.getState().playerUnits[0];
+        assert(ally.runtimeState?.panicStateId === 'meltdown', `Expected panicStateId "meltdown", got ${ally.runtimeState?.panicStateId}`);
+        assert(ally.runtimeState?.panicValue === 3, `Expected panicValue 3, got ${ally.runtimeState?.panicValue}`);
+        const mark = ally.statuses.find((status) => status.id === 'test_panic_mark')?.count || 0;
+        assert(mark === 1, `Expected panicStateIs/panicValueAtLeast to gate mark application, got ${mark}`);
+    });
+
     test('Golden fixture: coinRoll status triggers before hit resolution', () => {
         const battleModules = createBattleEnvironment();
         const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;

@@ -283,6 +283,9 @@
         grantCoinReroll: { id: 'grantCoinReroll', label: 'Grant Coin Reroll' },
         reuseCoins: { id: 'reuseCoins', label: 'Reuse Coins' },
         breakCoins: { id: 'breakCoins', label: 'Break Coins' },
+        setPanicState: { id: 'setPanicState', label: 'Set Panic State' },
+        clearPanicState: { id: 'clearPanicState', label: 'Clear Panic State' },
+        adjustPanicValue: { id: 'adjustPanicValue', label: 'Adjust Panic Value' },
         setDamageCap: { id: 'setDamageCap', label: 'Set Damage Cap' },
         chooseRandomActions: { id: 'chooseRandomActions', label: 'Choose Random Actions' },
         chooseWeightedActions: { id: 'chooseWeightedActions', label: 'Choose Weighted Actions' },
@@ -553,6 +556,12 @@
             return 'Reuse coins after clash.';
         case 'breakCoins':
             return 'Break coins after clash.';
+        case 'setPanicState':
+            return `Set panic state "${effect.stateId}".`;
+        case 'clearPanicState':
+            return 'Clear panic state.';
+        case 'adjustPanicValue':
+            return 'Adjust panic value.';
         case 'setDamageCap':
             return `Set damage cap ${effect.coinIndex ? `for coin ${effect.coinIndex}` : ''}.`;
         case 'chooseRandomActions':
@@ -674,6 +683,12 @@
             return `${target} side is ${condition.value}`;
         case 'lastEventTypeIs':
             return `Last event is ${condition.value}`;
+        case 'panicStateIs':
+            return `Panic state is ${condition.value}`;
+        case 'panicValueAtLeast':
+            return `Panic value is at least ${condition.value}`;
+        case 'panicValueAtOrBelow':
+            return `Panic value is at most ${condition.value}`;
         default:
             return condition.type;
         }
