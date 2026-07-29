@@ -709,6 +709,10 @@
             return `Resonance ${condition.sinType} >= ${condition.value}`;
         case 'resonanceAtOrBelow':
             return `Resonance ${condition.sinType} <= ${condition.value}`;
+        case 'absoluteResonanceAtLeast':
+            return `A-Resonance ${condition.sinType} >= ${condition.value}`;
+        case 'absoluteResonanceAtOrBelow':
+            return `A-Resonance ${condition.sinType} <= ${condition.value}`;
         default:
             return condition.type;
         }

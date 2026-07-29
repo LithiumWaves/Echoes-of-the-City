@@ -482,12 +482,24 @@
             if (!targetBattle.runtimeState || typeof targetBattle.runtimeState !== 'object' || Array.isArray(targetBattle.runtimeState)) {
                 targetBattle.runtimeState = {};
             }
-            if (!targetBattle.runtimeState.resonanceBySinType || typeof targetBattle.runtimeState.resonanceBySinType !== 'object' || Array.isArray(targetBattle.runtimeState.resonanceBySinType)) {
-                targetBattle.runtimeState.resonanceBySinType = {};
-            }
             if (typeof targetBattle.wave !== 'number' || !Number.isFinite(targetBattle.wave)) {
                 targetBattle.wave = 1;
             }
+            const ensureSideMap = (field) => {
+                const runtimeState = targetBattle.runtimeState;
+                if (!runtimeState[field] || typeof runtimeState[field] !== 'object' || Array.isArray(runtimeState[field])) {
+                    runtimeState[field] = {};
+                }
+                ['player', 'enemy'].forEach((side) => {
+                    if (!runtimeState[field][side] || typeof runtimeState[field][side] !== 'object' || Array.isArray(runtimeState[field][side])) {
+                        runtimeState[field][side] = {};
+                    }
+                });
+            };
+            ensureSideMap('resonanceBySide');
+            ensureSideMap('absoluteResonanceBySide');
+            ensureSideMap('resonanceBonusBySide');
+            ensureSideMap('absoluteResonanceBonusBySide');
             return targetBattle.runtimeState;
         }
 
@@ -1852,34 +1864,42 @@
                     if (!effect.resourceId || typeof adjustEncounterResource !== 'function') {
                         return;
                     }
-                    adjustEncounterResource(
-                        targetBattle,
-                        effect.resourceId,
-                        resolveEffectAmount(runtime, effect),
-                        {
-                            operation: effect.operation || 'add',
-                            min: effect.min,
-                            max: effect.max,
-                            reason: effect.reason || skill?.name || effect.resourceId,
-                            unit: sourceUnit || runtime?.unit || null,
-                        },
-                    );
+                    {
+                        const scope = effect.scope === 'battle' ? 'battle' : 'unit';
+                        const scopedUnit = scope === 'unit' ? (sourceUnit || runtime?.unit || null) : null;
+                        adjustEncounterResource(
+                            targetBattle,
+                            effect.resourceId,
+                            resolveEffectAmount(runtime, effect),
+                            {
+                                operation: effect.operation || 'add',
+                                min: effect.min,
+                                max: effect.max,
+                                reason: effect.reason || skill?.name || effect.resourceId,
+                                unit: scopedUnit,
+                            },
+                        );
+                    }
                     return;
                 case 'spendEncounterResource':
                     if (!effect.resourceId || typeof getEncounterResource !== 'function' || typeof adjustEncounterResource !== 'function') {
                         return;
                     }
                     {
+                        const scope = effect.scope === 'battle' ? 'battle' : 'unit';
+                        const scopedResourceId = scope === 'unit' && sourceUnit?.id
+                            ? `${sourceUnit.id}:${effect.resourceId}`
+                            : effect.resourceId;
                         const resolvedAmount = Math.max(0, resolveEffectAmount(runtime, effect));
-                        const currentValue = getEncounterResource(targetBattle, effect.resourceId) || 0;
+                        const currentValue = getEncounterResource(targetBattle, scopedResourceId) || 0;
                         if (currentValue < resolvedAmount && effect.cancelIfInsufficient) {
                             if (context) {
                                 context.cancelled = true;
                                 context.cancelReason = `insufficient ${effect.resourceId}`;
                             }
-                            if (typeof emitEvent === 'function' && runtime?.unit && skill) {
+                            if (typeof emitEvent === 'function' && sourceUnit && skill) {
                                 emitEvent(targetBattle, 'skill_cancelled', {
-                                    unitName: runtime.unit.name,
+                                    unitName: sourceUnit.name,
                                     skillName: skill.name,
                                     reason: `insufficient ${effect.resourceId}`,
                                 });
@@ -1890,7 +1910,7 @@
                             operation: 'add',
                             min: 0,
                             reason: effect.reason || skill?.name || effect.resourceId,
-                            unit: sourceUnit || runtime?.unit || null,
+                            unit: scope === 'unit' ? (sourceUnit || runtime?.unit || null) : null,
                         });
                     }
                     return;
@@ -1915,9 +1935,9 @@
                                 context.cancelled = true;
                                 context.cancelReason = `insufficient ${effect.resourceId}`;
                             }
-                            if (typeof emitEvent === 'function' && runtime?.unit && skill) {
+                            if (typeof emitEvent === 'function' && sourceUnit && skill) {
                                 emitEvent(targetBattle, 'skill_cancelled', {
-                                    unitName: runtime.unit.name,
+                                    unitName: sourceUnit.name,
                                     skillName: skill.name,
                                     reason: `insufficient ${effect.resourceId}`,
                                 });
@@ -1947,9 +1967,15 @@
                         if (!battleRuntimeState) {
                             return;
                         }
-                        const resonance = battleRuntimeState.resonanceBySinType;
-                        const previousValue = typeof resonance[effect.sinType] === 'number' && Number.isFinite(resonance[effect.sinType])
-                            ? resonance[effect.sinType]
+                        const selfSide = runtime?.unit?.side || 'player';
+                        const resolvedSide = effect.side === 'enemy' || effect.side === 'player'
+                            ? effect.side
+                            : (effect.side === 'opponent' && typeof getOpposingSide === 'function'
+                                ? getOpposingSide(selfSide)
+                                : selfSide);
+                        const resonanceBonus = battleRuntimeState.resonanceBonusBySide?.[resolvedSide] || {};
+                        const previousValue = typeof resonanceBonus[effect.sinType] === 'number' && Number.isFinite(resonanceBonus[effect.sinType])
+                            ? resonanceBonus[effect.sinType]
                             : 0;
                         const delta = resolveEffectAmount(runtime, effect);
                         const nextRaw = effect.operation === 'set'
@@ -1960,9 +1986,18 @@
                         const nextClamped = max != null
                             ? Math.min(max, min != null ? Math.max(min, nextRaw) : nextRaw)
                             : (min != null ? Math.max(min, nextRaw) : nextRaw);
-                        resonance[effect.sinType] = nextClamped;
+                        resonanceBonus[effect.sinType] = nextClamped;
+                        battleRuntimeState.resonanceBonusBySide[resolvedSide] = resonanceBonus;
+
+                        const currentResonance = battleRuntimeState.resonanceBySide?.[resolvedSide] || {};
+                        const currentValue = typeof currentResonance[effect.sinType] === 'number' && Number.isFinite(currentResonance[effect.sinType])
+                            ? currentResonance[effect.sinType]
+                            : 0;
+                        currentResonance[effect.sinType] = Math.max(0, Math.round(currentValue + (nextClamped - previousValue)));
+                        battleRuntimeState.resonanceBySide[resolvedSide] = currentResonance;
                         if (typeof emitEvent === 'function') {
                             emitEvent(targetBattle, 'resonance_changed', {
+                                side: resolvedSide,
                                 sinType: effect.sinType,
                                 previousValue,
                                 nextValue: nextClamped,
@@ -2490,16 +2525,29 @@
         }
         case 'resonanceAtLeast':
         case 'resonanceAtOrBelow':
+        case 'absoluteResonanceAtLeast':
+        case 'absoluteResonanceAtOrBelow':
         {
-            const resonance = runtime?.battle?.runtimeState?.resonanceBySinType
-                && typeof runtime.battle.runtimeState.resonanceBySinType === 'object'
-                && !Array.isArray(runtime.battle.runtimeState.resonanceBySinType)
-                ? runtime.battle.runtimeState.resonanceBySinType
+            const selfSide = runtime?.unit?.side || 'player';
+            const opponentSide = selfSide === 'player' ? 'enemy' : 'player';
+            const resolvedSide = condition.side === 'enemy' || condition.side === 'player'
+                ? condition.side
+                : (condition.side === 'opponent' ? opponentSide : selfSide);
+            const stateRoot = condition.type === 'absoluteResonanceAtLeast' || condition.type === 'absoluteResonanceAtOrBelow'
+                ? runtime?.battle?.runtimeState?.absoluteResonanceBySide
+                : runtime?.battle?.runtimeState?.resonanceBySide;
+            const resonance = stateRoot
+                && typeof stateRoot === 'object'
+                && !Array.isArray(stateRoot)
+                && stateRoot[resolvedSide]
+                && typeof stateRoot[resolvedSide] === 'object'
+                && !Array.isArray(stateRoot[resolvedSide])
+                ? stateRoot[resolvedSide]
                 : {};
             const value = typeof resonance?.[condition.sinType] === 'number' && Number.isFinite(resonance[condition.sinType])
                 ? resonance[condition.sinType]
                 : 0;
-            return condition.type === 'resonanceAtLeast'
+            return condition.type === 'resonanceAtLeast' || condition.type === 'absoluteResonanceAtLeast'
                 ? value >= conditionValue
                 : value <= conditionValue;
         }

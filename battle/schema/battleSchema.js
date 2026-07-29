@@ -114,6 +114,8 @@
         'waveAtOrBelow',
         'resonanceAtLeast',
         'resonanceAtOrBelow',
+        'absoluteResonanceAtLeast',
+        'absoluteResonanceAtOrBelow',
     ]);
 
     function cloneDefinition(definition) {
@@ -639,11 +641,16 @@
             break;
         case 'resonanceAtLeast':
         case 'resonanceAtOrBelow':
+        case 'absoluteResonanceAtLeast':
+        case 'absoluteResonanceAtOrBelow':
             if (!condition.sinType || typeof condition.sinType !== 'string' || !SIN_TYPES.has(condition.sinType)) {
                 pushError(errors, `${path}.sinType`, 'must be a supported sin type.');
             }
             if (!isFiniteNumber(condition.value)) {
                 pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (condition.side != null && !['self', 'opponent', 'player', 'enemy'].includes(condition.side)) {
+                pushError(errors, `${path}.side`, 'must be "self", "opponent", "player", or "enemy" when provided.');
             }
             break;
         case 'damageSourceIs':
@@ -921,6 +928,9 @@
                 if (effect.operation != null && !['add', 'set'].includes(effect.operation)) {
                     pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
                 }
+                if (effect.scope != null && !['unit', 'battle'].includes(effect.scope)) {
+                    pushError(errors, `${path}.scope`, 'must be "unit" or "battle" when provided.');
+                }
                 if (effect.min != null && (!isFiniteNumber(effect.min) || effect.min < 0)) {
                     pushError(errors, `${path}.min`, 'must be a non-negative number when provided.');
                 }
@@ -1093,6 +1103,9 @@
             if (effect.cancelIfInsufficient != null && typeof effect.cancelIfInsufficient !== 'boolean') {
                 pushError(errors, `${path}.cancelIfInsufficient`, 'must be a boolean when provided.');
             }
+            if (effect.scope != null && !['unit', 'battle'].includes(effect.scope)) {
+                pushError(errors, `${path}.scope`, 'must be "unit" or "battle" when provided.');
+            }
             if (effect.reason != null && typeof effect.reason !== 'string') {
                 pushError(errors, `${path}.reason`, 'must be a string when provided.');
             }
@@ -1108,6 +1121,9 @@
             }
             if (effect.operation != null && !['add', 'set'].includes(effect.operation)) {
                 pushError(errors, `${path}.operation`, 'must be omitted, "add", or "set".');
+            }
+            if (effect.side != null && !['self', 'opponent', 'player', 'enemy'].includes(effect.side)) {
+                pushError(errors, `${path}.side`, 'must be "self", "opponent", "player", or "enemy" when provided.');
             }
             if (effect.min != null && !isFiniteNumber(effect.min)) {
                 pushError(errors, `${path}.min`, 'must be a number when provided.');

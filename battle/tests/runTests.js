@@ -1771,9 +1771,8 @@ function runSuite() {
                 battleStart: [
                     {
                         actions: [
-                            { type: 'adjustEncounterResource', resourceId: 'test_currency', value: 2, operation: 'set' },
+                            { type: 'adjustEncounterResource', resourceId: 'test_currency', value: 2, operation: 'set', scope: 'battle' },
                             { type: 'setWave', value: 3 },
-                            { type: 'adjustResonance', sinType: 'wrath', value: 2, operation: 'set' },
                         ],
                     },
                 ],
@@ -1796,8 +1795,21 @@ function runSuite() {
                     resourceId: 'test_currency',
                     value: 1,
                     cancelIfInsufficient: true,
+                    scope: 'battle',
                 },
             ],
+        };
+
+        const wrathSkill = {
+            id: 'wrath_skill',
+            name: 'Wrath Skill',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
         };
 
         const gatedPassive = {
@@ -1851,7 +1863,10 @@ function runSuite() {
             battleDefinition: {
                 id: 'spend-encounter-resource-smoke',
                 name: 'Spend Encounter Resource Smoke',
-                playerUnits: [createUnit('ally', 'Ally', [spendSkill], [passive, gatedPassive])],
+                playerUnits: [
+                    createUnit('ally', 'Ally', [spendSkill], [passive, gatedPassive]),
+                    createUnit('ally2', 'Ally 2', [wrathSkill]),
+                ],
                 enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
                 rules: {
                     encounterType: 'focused',
@@ -1867,14 +1882,149 @@ function runSuite() {
         engine.selectSlot('player-slot-1');
         engine.selectSkill('spend_currency');
         engine.selectTarget('enemy-slot-1');
+        engine.selectSlot('player-slot-2');
+        engine.selectSkill('wrath_skill');
+        engine.selectTarget('enemy-slot-1');
         engine.resolveTurn();
 
         const state = engine.getState();
         assert(state.encounterResources.test_currency === 1, `Expected test_currency to be 1 after spending 1, got ${state.encounterResources.test_currency}`);
         assert(state.wave === 3, `Expected wave to be 3, got ${state.wave}`);
-        assert(state.runtimeState?.resonanceBySinType?.wrath === 2, `Expected wrath resonance to be 2, got ${state.runtimeState?.resonanceBySinType?.wrath}`);
+        assert(state.runtimeState?.resonanceBySide?.player?.wrath === 2, `Expected wrath resonance to be 2, got ${state.runtimeState?.resonanceBySide?.player?.wrath}`);
         const mark = state.playerUnits[0].statuses.find((status) => status.id === 'test_wave_mark')?.count || 0;
         assert(mark === 1, `Expected waveAtLeast+resonanceAtLeast to gate status application, got ${mark}`);
+    });
+
+    test('Effect runner: in-game absolute resonance uses longest chain (not sum)', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        registerStatusDefinition({ id: 'test_abs_mark', label: 'Abs Mark' });
+        registerStatusDefinition({
+            id: 'test_abs_mark',
+            label: 'Abs Mark',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const wrathSkill = {
+            id: 'wrath_skill',
+            name: 'Wrath Skill',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const prideSkill = {
+            id: 'pride_skill',
+            name: 'Pride Skill',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'pride',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { skills: {} },
+            skills,
+            passives: id === 'w1' ? [
+                {
+                    id: 'abs_res_passive',
+                    name: 'Abs Reson Gate',
+                    hooks: {
+                        skillSelected: [
+                            {
+                                conditions: [
+                                    { type: 'absoluteResonanceAtLeast', sinType: 'wrath', value: 3 },
+                                ],
+                                actions: [
+                                    { type: 'applyStatus', target: 'self', statusId: 'test_abs_mark', count: 1 },
+                                ],
+                            },
+                        ],
+                    },
+                },
+            ] : [],
+        });
+
+        const playerUnits = [
+            createUnit('w1', 'W1', [wrathSkill], 7),
+            createUnit('w2', 'W2', [wrathSkill], 6),
+            createUnit('w3', 'W3', [wrathSkill], 5),
+            createUnit('p1', 'P1', [prideSkill], 4),
+            createUnit('w4', 'W4', [wrathSkill], 3),
+            createUnit('w5', 'W5', [wrathSkill], 2),
+            createUnit('w6', 'W6', [wrathSkill], 1),
+        ];
+
+        const enemySkill = {
+            id: 'enemy_guard',
+            name: 'Enemy Guard',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const enemyUnits = [
+            createUnit('enemy', 'Enemy', [enemySkill], 1),
+        ];
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'abs-reson-chain-smoke',
+                name: 'Abs Reson Chain Smoke',
+                playerUnits,
+                enemyUnits,
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+        });
+
+        for (let index = 1; index <= playerUnits.length; index += 1) {
+            engine.selectSlot(`player-slot-${index}`);
+            engine.selectSkill(index === 4 ? 'pride_skill' : 'wrath_skill');
+            engine.selectTarget('enemy-slot-1');
+        }
+        engine.resolveTurn();
+
+        const state = engine.getState();
+        assert(state.runtimeState?.resonanceBySide?.player?.wrath === 6, `Expected wrath resonance to be 6, got ${state.runtimeState?.resonanceBySide?.player?.wrath}`);
+        assert(state.runtimeState?.absoluteResonanceBySide?.player?.wrath === 3, `Expected wrath A-resonance to be 3 (longest chain), got ${state.runtimeState?.absoluteResonanceBySide?.player?.wrath}`);
+        const absMark = state.playerUnits[0].statuses.find((status) => status.id === 'test_abs_mark')?.count || 0;
+        assert(absMark === 1, `Expected absoluteResonanceAtLeast to gate mark application, got ${absMark}`);
     });
 
     test('Golden fixture: coinRoll status triggers before hit resolution', () => {

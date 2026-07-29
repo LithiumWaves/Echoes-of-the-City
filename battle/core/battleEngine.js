@@ -3399,7 +3399,22 @@
                 activePlayerSlotId: playerSlots[0]?.id || null,
                 encounterResources: {},
                 runtimeState: {
-                    resonanceBySinType: {},
+                    resonanceBySide: {
+                        player: {},
+                        enemy: {},
+                    },
+                    absoluteResonanceBySide: {
+                        player: {},
+                        enemy: {},
+                    },
+                    resonanceBonusBySide: {
+                        player: {},
+                        enemy: {},
+                    },
+                    absoluteResonanceBonusBySide: {
+                        player: {},
+                        enemy: {},
+                    },
                 },
                 speedOrder: [],
                 resolutionQueue: [],
@@ -3434,6 +3449,12 @@
             targetBattle.clashPresentation = null;
             targetBattle.resolutionQueue = [];
             targetBattle.resolutionHistory = [];
+            if (targetBattle.runtimeState?.resonanceBonusBySide) {
+                targetBattle.runtimeState.resonanceBonusBySide = { player: {}, enemy: {} };
+            }
+            if (targetBattle.runtimeState?.absoluteResonanceBonusBySide) {
+                targetBattle.runtimeState.absoluteResonanceBonusBySide = { player: {}, enemy: {} };
+            }
             if (typeof onTurnStarted === 'function') {
                 onTurnStarted(targetBattle);
             }
@@ -3615,12 +3636,105 @@
             refreshRedirectedTargets(targetBattle);
         }
 
+        function computeSinResonance(targetBattle) {
+            if (!targetBattle || typeof targetBattle !== 'object') {
+                return;
+            }
+            const runtimeState = targetBattle.runtimeState || {};
+            const ensureSideMap = (field) => {
+                if (!runtimeState[field] || typeof runtimeState[field] !== 'object' || Array.isArray(runtimeState[field])) {
+                    runtimeState[field] = {};
+                }
+                ['player', 'enemy'].forEach((side) => {
+                    if (!runtimeState[field][side] || typeof runtimeState[field][side] !== 'object' || Array.isArray(runtimeState[field][side])) {
+                        runtimeState[field][side] = {};
+                    }
+                });
+            };
+            ensureSideMap('resonanceBySide');
+            ensureSideMap('absoluteResonanceBySide');
+            ensureSideMap('resonanceBonusBySide');
+            ensureSideMap('absoluteResonanceBonusBySide');
+            targetBattle.runtimeState = runtimeState;
+
+            const getDashboardChain = (side) => {
+                const slots = getSlotsForSide(targetBattle, side)
+                    .filter((slot) => slot?.selectedSkillId && isSlotActionable(targetBattle, slot))
+                    .map((slot) => {
+                        const unit = getUnitById(targetBattle, slot.unitId);
+                        const skill = getSkillById(unit, slot.selectedSkillId);
+                        return { slot, skill };
+                    })
+                    .filter((entry) => entry.skill?.sinType);
+                slots.sort((a, b) => {
+                    if (b.slot.speed !== a.slot.speed) {
+                        return b.slot.speed - a.slot.speed;
+                    }
+                    return a.slot.index - b.slot.index;
+                });
+                return slots.map((entry) => entry.skill.sinType);
+            };
+
+            const computeCounts = (chain) => chain.reduce((acc, sinType) => {
+                acc[sinType] = (acc[sinType] || 0) + 1;
+                return acc;
+            }, {});
+
+            const computeAbsoluteRuns = (chain) => {
+                const maxRuns = {};
+                let current = null;
+                let length = 0;
+                chain.forEach((sinType) => {
+                    if (sinType === current) {
+                        length += 1;
+                        return;
+                    }
+                    if (current) {
+                        maxRuns[current] = Math.max(maxRuns[current] || 0, length);
+                    }
+                    current = sinType;
+                    length = 1;
+                });
+                if (current) {
+                    maxRuns[current] = Math.max(maxRuns[current] || 0, length);
+                }
+                return maxRuns;
+            };
+
+            ['player', 'enemy'].forEach((side) => {
+                const chain = getDashboardChain(side);
+                const baseCounts = computeCounts(chain);
+                const baseAbsolute = computeAbsoluteRuns(chain);
+                const bonusCounts = runtimeState.resonanceBonusBySide[side] || {};
+                const bonusAbsolute = runtimeState.absoluteResonanceBonusBySide[side] || {};
+
+                const finalCounts = {};
+                Object.keys({ ...baseCounts, ...bonusCounts }).forEach((sinType) => {
+                    const value = (baseCounts[sinType] || 0) + (bonusCounts[sinType] || 0);
+                    finalCounts[sinType] = Math.max(0, Math.round(value));
+                });
+
+                const finalAbsolute = {};
+                Object.keys({ ...baseAbsolute, ...bonusAbsolute }).forEach((sinType) => {
+                    const value = (baseAbsolute[sinType] || 0) + (bonusAbsolute[sinType] || 0);
+                    const rounded = Math.max(0, Math.round(value));
+                    if (rounded >= 3) {
+                        finalAbsolute[sinType] = rounded;
+                    }
+                });
+
+                runtimeState.resonanceBySide[side] = finalCounts;
+                runtimeState.absoluteResonanceBySide[side] = finalAbsolute;
+            });
+        }
+
         function resolveTurn() {
             if (battle.phase !== 'select' || battle.winner || !hasAllPlayerAssignments(battle)) {
                 return false;
             }
 
             normalizeAutoTargets(battle);
+            computeSinResonance(battle);
             const queue = buildResolutionQueue(battle);
             for (const slot of queue) {
                 if (battle.winner) {
