@@ -1185,6 +1185,10 @@
             const debugIds = uiState?.debugIds;
             const debugPatchInput = typeof uiState?.debugPatchInput === 'string' ? uiState.debugPatchInput : '';
             const debugPatchMessage = typeof uiState?.debugPatchMessage === 'string' ? uiState.debugPatchMessage : null;
+            const debugStatusId = typeof uiState?.debugStatusId === 'string' ? uiState.debugStatusId : '';
+            const debugStatusPotency = typeof uiState?.debugStatusPotency === 'string' ? uiState.debugStatusPotency : '0';
+            const debugStatusCount = typeof uiState?.debugStatusCount === 'string' ? uiState.debugStatusCount : '1';
+            const debugSanityValue = typeof uiState?.debugSanityValue === 'string' ? uiState.debugSanityValue : '';
             const debugHint = `{"set":{"unit.${unit?.id || 'unitId'}.hp":50,"unit.${unit?.id || 'unitId'}.sp":0,"battle.wave":2}}`;
             const debugUnitIdMarkup = Array.isArray(debugIds?.units) && debugIds.units.length
                 ? debugIds.units.map((entry) => `${entry.id}`).join(', ')
@@ -1192,6 +1196,7 @@
             const debugSlotIdMarkup = Array.isArray(debugIds?.slots) && debugIds.slots.length
                 ? debugIds.slots.map((entry) => `${entry.id}`).join(', ')
                 : '';
+            const debugTargetSlotId = slot?.targetSlotId || '';
             const debugMarkup = debugToolsEnabled
                 ? `
                     <div class="echoes-battle-panel__inspect-block">
@@ -1212,6 +1217,70 @@
                             <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-dump-slot" data-slot-id="${escapeAttribute(slot?.id || '')}">Dump Slot</button>
                             <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-dump-battle">Dump Battle</button>
                         </div>
+                        <div style="margin-top: 0.75rem; display: grid; gap: 0.45rem;">
+                            <strong>Set Status</strong>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center;">
+                                <input
+                                    type="text"
+                                    value="${escapeAttribute(debugStatusId)}"
+                                    placeholder="statusId (e.g., bleed)"
+                                    data-action="debug-status-id"
+                                    spellcheck="false"
+                                    style="flex: 1 1 160px; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.45rem 0.55rem; font: inherit;"
+                                />
+                                <input
+                                    type="number"
+                                    value="${escapeAttribute(debugStatusPotency)}"
+                                    placeholder="potency"
+                                    data-action="debug-status-potency"
+                                    style="width: 90px; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.45rem 0.55rem; font: inherit;"
+                                />
+                                <input
+                                    type="number"
+                                    value="${escapeAttribute(debugStatusCount)}"
+                                    placeholder="count"
+                                    data-action="debug-status-count"
+                                    style="width: 90px; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.45rem 0.55rem; font: inherit;"
+                                />
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-apply-status" data-unit-id="${escapeAttribute(unit?.id || '')}">Apply</button>
+                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-clear-status" data-unit-id="${escapeAttribute(unit?.id || '')}">Clear</button>
+                            </div>
+                        </div>
+                        <div style="margin-top: 0.75rem; display: grid; gap: 0.45rem;">
+                            <strong>Sanity</strong>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-adjust-sanity" data-unit-id="${escapeAttribute(unit?.id || '')}" data-delta="-10">SP -10</button>
+                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-adjust-sanity" data-unit-id="${escapeAttribute(unit?.id || '')}" data-delta="10">SP +10</button>
+                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-set-sanity" data-unit-id="${escapeAttribute(unit?.id || '')}" data-value="-45">Set -45</button>
+                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-set-sanity" data-unit-id="${escapeAttribute(unit?.id || '')}" data-value="45">Set 45</button>
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center;">
+                                <input
+                                    type="number"
+                                    value="${escapeAttribute(debugSanityValue)}"
+                                    placeholder="set SP"
+                                    data-action="debug-sanity-value"
+                                    style="width: 120px; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.45rem 0.55rem; font: inherit;"
+                                />
+                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-set-sanity" data-unit-id="${escapeAttribute(unit?.id || '')}">Set</button>
+                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-apply-sanity-model">Recheck Panic</button>
+                            </div>
+                        </div>
+                        ${slot?.id && debugTargetSlotId
+                            ? `
+                                <div style="margin-top: 0.75rem; display: grid; gap: 0.45rem;">
+                                    <strong>Force Clash Outcome</strong>
+                                    <span style="white-space: pre-wrap;">Uses forced roll directives (P999/P-999) for ${escapeAttribute(slot.id)} vs ${escapeAttribute(debugTargetSlotId)}.</span>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+                                        <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-force-clash" data-slot-id="${escapeAttribute(slot.id)}" data-target-slot-id="${escapeAttribute(debugTargetSlotId)}" data-mode="win">Win</button>
+                                        <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-force-clash" data-slot-id="${escapeAttribute(slot.id)}" data-target-slot-id="${escapeAttribute(debugTargetSlotId)}" data-mode="lose">Lose</button>
+                                        <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="debug-force-clash" data-slot-id="${escapeAttribute(slot.id)}" data-target-slot-id="${escapeAttribute(debugTargetSlotId)}" data-mode="tie">Tie</button>
+                                    </div>
+                                </div>
+                            `
+                            : ''}
                     </div>
                 `
                 : '';

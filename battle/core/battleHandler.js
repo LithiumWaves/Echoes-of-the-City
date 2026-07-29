@@ -61,6 +61,10 @@
         let turnDebugEnabled = enableDebugTools ? loadPersistedTurnDebugEnabled() : false;
         let debugPatchInput = '';
         let debugPatchMessage = null;
+        let debugStatusId = '';
+        let debugStatusPotency = '0';
+        let debugStatusCount = '1';
+        let debugSanityValue = '';
         let inspectState = typeof battleModules.createInspectState === 'function'
             ? battleModules.createInspectState()
             : { isOpen: false, unitId: null };
@@ -364,6 +368,10 @@
                 debugPatchInput,
                 debugPatchMessage,
                 debugIds,
+                debugStatusId,
+                debugStatusPotency,
+                debugStatusCount,
+                debugSanityValue,
                 inspect: inspectState,
             });
         }
@@ -470,6 +478,97 @@
                 return;
             }
 
+            if (action === 'debug-apply-status' && enableDebugTools && engine?.debug?.applyStatus) {
+                const targetId = unitId || inspectState?.unitId;
+                if (!targetId || !debugStatusId) {
+                    debugPatchMessage = 'Missing unit or status id.';
+                    render();
+                    return;
+                }
+                const potency = Number.parseInt(debugStatusPotency || '0', 10);
+                const count = Number.parseInt(debugStatusCount || '0', 10);
+                const payload = {};
+                if (Number.isFinite(potency) && potency !== 0) {
+                    payload.potency = potency;
+                }
+                if (Number.isFinite(count) && count !== 0) {
+                    payload.count = count;
+                }
+                const result = engine.debug.applyStatus(targetId, debugStatusId, payload);
+                debugPatchMessage = result?.ok ? `Applied status ${debugStatusId} to ${targetId}.` : (result?.message || 'Failed to apply status.');
+                render();
+                return;
+            }
+
+            if (action === 'debug-clear-status' && enableDebugTools && engine?.debug?.clearStatus) {
+                const targetId = unitId || inspectState?.unitId;
+                if (!targetId || !debugStatusId) {
+                    debugPatchMessage = 'Missing unit or status id.';
+                    render();
+                    return;
+                }
+                const result = engine.debug.clearStatus(targetId, debugStatusId);
+                debugPatchMessage = result?.ok ? `Cleared status ${debugStatusId} on ${targetId}.` : (result?.message || 'Failed to clear status.');
+                render();
+                return;
+            }
+
+            if (action === 'debug-adjust-sanity' && enableDebugTools && engine?.debug?.adjustSanity) {
+                const targetId = unitId || inspectState?.unitId;
+                const delta = Number.parseInt(actionTarget.dataset.delta || '0', 10);
+                if (!targetId || !Number.isFinite(delta)) {
+                    debugPatchMessage = 'Missing unit or sanity delta.';
+                    render();
+                    return;
+                }
+                const result = engine.debug.adjustSanity(targetId, delta, { reason: 'debug' });
+                debugPatchMessage = result?.ok ? `Adjusted SP by ${delta} (${result.previousSp} → ${result.nextSp}).` : (result?.message || 'Failed to adjust sanity.');
+                render();
+                return;
+            }
+
+            if (action === 'debug-set-sanity' && enableDebugTools && engine?.debug?.setSanity) {
+                const targetId = unitId || inspectState?.unitId;
+                const value = Number.parseInt(actionTarget.dataset.value || debugSanityValue || '0', 10);
+                if (!targetId || !Number.isFinite(value)) {
+                    debugPatchMessage = 'Missing unit or sanity value.';
+                    render();
+                    return;
+                }
+                const result = engine.debug.setSanity(targetId, value, { reason: 'debug' });
+                debugPatchMessage = result?.ok ? `Set SP to ${result.nextSp} (${result.previousSp} → ${result.nextSp}).` : (result?.message || 'Failed to set sanity.');
+                render();
+                return;
+            }
+
+            if (action === 'debug-apply-sanity-model' && enableDebugTools && engine?.debug?.applySanityModel) {
+                engine.debug.applySanityModel();
+                debugPatchMessage = 'Re-applied sanity model.';
+                render();
+                return;
+            }
+
+            if (action === 'debug-force-clash' && enableDebugTools && debugRollManager?.setSequence && slotId && targetSlotId) {
+                const mode = actionTarget.dataset.mode || 'win';
+                const winnerDirective = 'P999';
+                const loserDirective = 'P-999';
+                if (mode === 'win') {
+                    debugRollManager.setSequence(slotId, winnerDirective);
+                    debugRollManager.setSequence(targetSlotId, loserDirective);
+                    debugPatchMessage = `Forced clash: ${slotId} wins vs ${targetSlotId}.`;
+                } else if (mode === 'lose') {
+                    debugRollManager.setSequence(slotId, loserDirective);
+                    debugRollManager.setSequence(targetSlotId, winnerDirective);
+                    debugPatchMessage = `Forced clash: ${slotId} loses vs ${targetSlotId}.`;
+                } else {
+                    debugRollManager.setSequence(slotId, winnerDirective);
+                    debugRollManager.setSequence(targetSlotId, winnerDirective);
+                    debugPatchMessage = `Forced clash: ${slotId} ties vs ${targetSlotId} (speed-break will decide).`;
+                }
+                render();
+                return;
+            }
+
             if (action === 'select-slot' && slotId) {
                 engine.selectSlot(slotId);
                 render();
@@ -521,6 +620,27 @@
             const patchInput = event.target.closest('[data-action="debug-patch-input"]');
             if (patchInput && enableDebugTools) {
                 debugPatchInput = patchInput.value || '';
+                return;
+            }
+
+            const statusIdInput = event.target.closest('[data-action="debug-status-id"]');
+            if (statusIdInput && enableDebugTools) {
+                debugStatusId = statusIdInput.value || '';
+                return;
+            }
+            const statusPotencyInput = event.target.closest('[data-action="debug-status-potency"]');
+            if (statusPotencyInput && enableDebugTools) {
+                debugStatusPotency = statusPotencyInput.value || '';
+                return;
+            }
+            const statusCountInput = event.target.closest('[data-action="debug-status-count"]');
+            if (statusCountInput && enableDebugTools) {
+                debugStatusCount = statusCountInput.value || '';
+                return;
+            }
+            const sanityValueInput = event.target.closest('[data-action="debug-sanity-value"]');
+            if (sanityValueInput && enableDebugTools) {
+                debugSanityValue = sanityValueInput.value || '';
                 return;
             }
 

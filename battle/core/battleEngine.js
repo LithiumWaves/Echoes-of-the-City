@@ -4656,6 +4656,85 @@
             };
         }
 
+        function debugApplyStatus(unitId, statusId, payload = {}) {
+            const unit = getUnitByDebugId(unitId);
+            if (!unit || !statusId) {
+                return { ok: false, message: 'Unit or statusId missing.' };
+            }
+
+            applyStatus(battle, unit, statusId, payload);
+            emitEvent(battle, 'debug_status_applied', {
+                unitId: unit.id,
+                unitName: unit.name,
+                statusId,
+                payload,
+            });
+            return { ok: true };
+        }
+
+        function debugClearStatus(unitId, statusId) {
+            const unit = getUnitByDebugId(unitId);
+            if (!unit || !statusId) {
+                return { ok: false, message: 'Unit or statusId missing.' };
+            }
+
+            removeStatus(unit, statusId);
+            emitEvent(battle, 'debug_status_cleared', {
+                unitId: unit.id,
+                unitName: unit.name,
+                statusId,
+            });
+            return { ok: true };
+        }
+
+        function debugAdjustSanity(unitId, amount, options = {}) {
+            const unit = getUnitByDebugId(unitId);
+            if (!unit || !Number.isFinite(amount)) {
+                return { ok: false, message: 'Unit missing or sanity amount invalid.' };
+            }
+
+            const sanityChange = adjustSanity(unit, amount);
+            emitEvent(battle, 'sanity_changed', {
+                unitName: unit.name,
+                previousSp: sanityChange.previousSp,
+                nextSp: sanityChange.nextSp,
+                reason: options.reason || 'debug',
+            });
+
+            if (options.applySanityModel !== false) {
+                processSanityModelAtTurnStart(battle);
+            }
+
+            return { ok: true, previousSp: sanityChange.previousSp, nextSp: sanityChange.nextSp };
+        }
+
+        function debugSetSanity(unitId, value, options = {}) {
+            const unit = getUnitByDebugId(unitId);
+            if (!unit || !Number.isFinite(value)) {
+                return { ok: false, message: 'Unit missing or sanity value invalid.' };
+            }
+
+            const previousSp = unit.sp;
+            unit.sp = clamp(Math.round(value), -45, 45);
+            emitEvent(battle, 'sanity_changed', {
+                unitName: unit.name,
+                previousSp,
+                nextSp: unit.sp,
+                reason: options.reason || 'debug',
+            });
+
+            if (options.applySanityModel !== false) {
+                processSanityModelAtTurnStart(battle);
+            }
+
+            return { ok: true, previousSp, nextSp: unit.sp };
+        }
+
+        function debugApplySanityModel() {
+            processSanityModelAtTurnStart(battle);
+            return { ok: true };
+        }
+
         return {
             getState,
             selectSlot,
@@ -4673,6 +4752,11 @@
                 dumpUnitJson,
                 dumpSlotJson,
                 listIds: listDebugIds,
+                applyStatus: debugApplyStatus,
+                clearStatus: debugClearStatus,
+                adjustSanity: debugAdjustSanity,
+                setSanity: debugSetSanity,
+                applySanityModel: debugApplySanityModel,
             },
         };
     }
