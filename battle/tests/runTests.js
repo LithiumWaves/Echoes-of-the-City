@@ -6198,6 +6198,26 @@ function runSuite() {
         assert(installedPacks.some((entry) => entry.id === 'persisted-pack-test'), 'Expected persisted pack to be listed.');
     });
 
+    test('Export installed content pack payload', () => {
+        const storage = createMemoryLocalStorage();
+        const battleModules = createBattleEnvironment({ localStorage: storage });
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses'));
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'units'));
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'battles'));
+
+        assert(typeof battleModules.content?.exportInstalledContentPack === 'function', 'Expected exportInstalledContentPack to exist.');
+
+        const battles = getCanonicalEntries(battleModules.content.listBattleDefinitions());
+        const battleId = battles[0].id;
+        const pack = battleModules.content.exportBattleContentPack(battleId);
+        pack.manifest.id = 'export-installed-pack-test';
+        battleModules.content.installContentPack(pack, { conflictStrategy: 'overwrite' });
+
+        const exported = battleModules.content.exportInstalledContentPack('export-installed-pack-test');
+        assert(exported?.manifest?.id === 'export-installed-pack-test', 'Expected exported payload to include manifest id.');
+        assert(Array.isArray(exported?.battles) && exported.battles.length === 1, 'Expected exported payload to include battles.');
+    });
+
     test('Uninstall and clear installed packs', () => {
         const storage = createMemoryLocalStorage();
         const battleModules = createBattleEnvironment({ localStorage: storage });

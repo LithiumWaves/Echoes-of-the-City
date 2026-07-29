@@ -393,6 +393,17 @@
             .filter((entry) => Boolean(entry.id));
     }
 
+    function exportInstalledContentPack(packId) {
+        if (!packId || typeof packId !== 'string') {
+            throw new Error('Pack id is required.');
+        }
+        const pack = installedContentPacks[packId];
+        if (!pack || !pack.payload) {
+            throw new Error(`Installed pack "${packId}" is not available.`);
+        }
+        return cloneContentValue(pack.payload);
+    }
+
     function getStorage() {
         if (typeof window === 'undefined') {
             return null;
@@ -929,6 +940,7 @@
         exportBattleDefinition,
         exportBattleContentPack,
         listInstalledContentPacks,
+        exportInstalledContentPack,
         persistInstalledContentPacks,
         loadPersistedContentPacks,
         uninstallContentPack,
@@ -952,6 +964,7 @@
         exportBattleDefinition,
         exportBattleContentPack,
         listInstalledContentPacks,
+        exportInstalledContentPack,
         persistInstalledContentPacks,
         loadPersistedContentPacks,
         uninstallContentPack,

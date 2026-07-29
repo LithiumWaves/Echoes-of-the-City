@@ -133,6 +133,7 @@
         battleCoreModulePromise: null,
         battleDebugModulePromise: null,
         battleSelectionPromise: null,
+        creatorSelectionPromise: null,
         availableBattles: [],
         selectedBattleId: null,
         battleDebugToolsEnabled: loadBooleanSetting(BATTLE_DEBUG_TOOLS_STORAGE_KEY, false),
@@ -148,6 +149,11 @@
         extensionBaseUrl: null,
         contentJsonInput: '',
         contentImportMessage: null,
+        creatorTab: 'library',
+        creatorEntityType: 'battle',
+        creatorSelectedId: null,
+        creatorJsonInput: '',
+        creatorMessage: null,
     };
 
     const elements = {
@@ -160,10 +166,13 @@
         screen: null,
         mainMenu: null,
         characterSelect: null,
+        creatorScreen: null,
+        creatorContent: null,
         combatScreen: null,
         combatContent: null,
         combatTrayButton: null,
         characterTrayButton: null,
+        creatorTrayButton: null,
     };
 
     const hoverAudio = new Audio();
@@ -491,6 +500,353 @@
         }
     }
 
+    async function prepareCreatorSelection() {
+        if (state.creatorSelectionPromise) {
+            return state.creatorSelectionPromise;
+        }
+
+        state.creatorSelectionPromise = (async () => {
+            await ensureBattleModuleLoaded();
+            const api = getBattleContentApi();
+            if (typeof api.loadPersistedContentPacks === 'function') {
+                api.loadPersistedContentPacks();
+            }
+        })().catch((error) => {
+            state.creatorSelectionPromise = null;
+            throw error;
+        });
+
+        try {
+            await state.creatorSelectionPromise;
+        } finally {
+            state.creatorSelectionPromise = null;
+        }
+    }
+
+    function getSchemaApi() {
+        return window.EchoesOfTheCityBattleModules?.schema || window.EchoesOfTheCityBattle?.schema || null;
+    }
+
+    function getRegistryApi() {
+        return window.EchoesOfTheCityBattleModules?.registry || window.EchoesOfTheCityBattleModules?.battleRegistry || null;
+    }
+
+    function setCreatorMessage(type, text) {
+        state.creatorMessage = text
+            ? { type, text }
+            : null;
+    }
+
+    function getCreatorWorkshopManifest(existingManifest = null) {
+        const next = existingManifest && typeof existingManifest === 'object' && !Array.isArray(existingManifest)
+            ? { ...existingManifest }
+            : {};
+        next.id = typeof next.id === 'string' && next.id ? next.id : 'creator-workshop';
+        next.name = typeof next.name === 'string' && next.name ? next.name : 'Creator Workshop';
+        next.version = typeof next.version === 'string' && next.version ? next.version : '0.1.0';
+        next.engineVersion = typeof next.engineVersion === 'string' && next.engineVersion ? next.engineVersion : 'dev';
+        next.description = typeof next.description === 'string' && next.description ? next.description : 'Locally authored content saved from the Creator UI.';
+        next.authors = Array.isArray(next.authors) ? next.authors : [];
+        next.dependencies = Array.isArray(next.dependencies) ? next.dependencies : [];
+        next.featureFlags = next.featureFlags && typeof next.featureFlags === 'object' && !Array.isArray(next.featureFlags)
+            ? next.featureFlags
+            : {};
+        return next;
+    }
+
+    function upsertPackEntry(list, entry) {
+        const items = Array.isArray(list) ? list.slice() : [];
+        const id = entry?.id;
+        if (!id) {
+            return items;
+        }
+        const index = items.findIndex((candidate) => candidate?.id === id);
+        if (index >= 0) {
+            items[index] = entry;
+            return items;
+        }
+        items.push(entry);
+        return items;
+    }
+
+    async function saveCreatorJsonToWorkshop(entityType) {
+        const raw = String(state.creatorJsonInput || '').trim();
+        if (!raw) {
+            setCreatorMessage('error', 'Paste JSON first.');
+            renderCreatorScreen();
+            return;
+        }
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (error) {
+            setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
+            renderCreatorScreen();
+            return;
+        }
+
+        try {
+            await ensureBattleModuleLoaded();
+            const api = getBattleContentApi();
+            const workshopId = 'creator-workshop';
+            const existingWorkshop = typeof api.exportInstalledContentPack === 'function'
+                ? (() => {
+                    try {
+                        return api.exportInstalledContentPack(workshopId);
+                    } catch {
+                        return null;
+                    }
+                })()
+                : null;
+            const manifest = getCreatorWorkshopManifest(existingWorkshop?.manifest);
+            const nextPack = {
+                manifest,
+                statuses: Array.isArray(existingWorkshop?.statuses) ? existingWorkshop.statuses.slice() : [],
+                units: Array.isArray(existingWorkshop?.units) ? existingWorkshop.units.slice() : [],
+                battles: Array.isArray(existingWorkshop?.battles) ? existingWorkshop.battles.slice() : [],
+            };
+
+            if (entityType === 'status') {
+                nextPack.statuses = upsertPackEntry(nextPack.statuses, parsed);
+            } else if (entityType === 'unit') {
+                nextPack.units = upsertPackEntry(nextPack.units, parsed);
+            } else {
+                nextPack.battles = upsertPackEntry(nextPack.battles, parsed);
+            }
+
+            if (typeof api.installContentPack !== 'function') {
+                throw new Error('Content pack installation is not available.');
+            }
+
+            const result = api.installContentPack(nextPack, { conflictStrategy: 'overwrite', persist: true, source: 'creator' });
+            refreshBattleSelectionState();
+            setCreatorMessage('success', `Saved to ${manifest.id}. (${result?.counts?.battles || 0} battles, ${result?.counts?.units || 0} units, ${result?.counts?.statuses || 0} statuses)`);
+        } catch (error) {
+            setCreatorMessage('error', formatCombatModuleError(error));
+        }
+
+        renderCreatorScreen();
+    }
+
+    async function validateCreatorJson(entityType) {
+        const raw = String(state.creatorJsonInput || '').trim();
+        if (!raw) {
+            setCreatorMessage('error', 'Paste JSON first.');
+            renderCreatorScreen();
+            return;
+        }
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (error) {
+            setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
+            renderCreatorScreen();
+            return;
+        }
+        try {
+            await ensureBattleModuleLoaded();
+            const api = getBattleContentApi();
+            if (entityType === 'status') {
+                const result = typeof api.validateStatusDefinition === 'function'
+                    ? api.validateStatusDefinition(parsed)
+                    : { errors: [] };
+                if (result.errors?.length) {
+                    throw new Error(result.errors.join('\n'));
+                }
+            } else if (entityType === 'unit') {
+                const result = typeof api.validateUnitDefinition === 'function'
+                    ? api.validateUnitDefinition(parsed)
+                    : { errors: [] };
+                if (result.errors?.length) {
+                    throw new Error(result.errors.join('\n'));
+                }
+            } else {
+                const result = typeof api.validateBattleDefinition === 'function'
+                    ? api.validateBattleDefinition(parsed)
+                    : { errors: [] };
+                if (result.errors?.length) {
+                    const formatter = getSchemaApi()?.formatBattleDefinitionErrors;
+                    throw new Error(typeof formatter === 'function' ? formatter(result.errors) : result.errors.join('\n'));
+                }
+            }
+            setCreatorMessage('success', 'Validation passed.');
+        } catch (error) {
+            setCreatorMessage('error', formatCombatModuleError(error));
+        }
+        renderCreatorScreen();
+    }
+
+    async function playtestCreatorBattle() {
+        const raw = String(state.creatorJsonInput || '').trim();
+        if (!raw) {
+            setCreatorMessage('error', 'Paste battle JSON first.');
+            renderCreatorScreen();
+            return;
+        }
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (error) {
+            setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
+            renderCreatorScreen();
+            return;
+        }
+
+        try {
+            await ensureBattleModuleLoaded();
+            const api = getBattleContentApi();
+            if (typeof api.registerBattleDefinition !== 'function') {
+                throw new Error('Battle registry is not available.');
+            }
+            api.registerBattleDefinition(parsed, { allowOverwrite: true });
+            refreshBattleSelectionState();
+            state.selectedBattleId = parsed.id;
+            state.activeScreen = 'combat';
+            syncPanelState();
+            await initializeBattleHandler(parsed.id);
+        } catch (error) {
+            setCreatorMessage('error', formatCombatModuleError(error));
+            renderCreatorScreen();
+        }
+    }
+
+    function getCreatorListEntries(entityType) {
+        const api = getBattleContentApi();
+        if (entityType === 'unit') {
+            return typeof api.listUnitDefinitions === 'function' ? api.listUnitDefinitions() : [];
+        }
+        if (entityType === 'status') {
+            const registry = getRegistryApi();
+            return typeof registry?.listStatusDefinitions === 'function' ? registry.listStatusDefinitions() : [];
+        }
+        return typeof api.listBattleDefinitions === 'function' ? api.listBattleDefinitions() : [];
+    }
+
+    function getCreatorEntityDefinition(entityType, id) {
+        const api = getBattleContentApi();
+        if (!id) {
+            return null;
+        }
+        if (entityType === 'unit') {
+            return typeof api.getUnitDefinition === 'function' ? api.getUnitDefinition(id) : null;
+        }
+        if (entityType === 'status') {
+            const registry = getRegistryApi();
+            return typeof registry?.getStatusDefinition === 'function' ? registry.getStatusDefinition(id) : null;
+        }
+        return typeof api.getBattleDefinition === 'function' ? api.getBattleDefinition(id) : null;
+    }
+
+    function renderCreatorScreen() {
+        if (!elements.creatorContent) {
+            return;
+        }
+
+        const api = getBattleContentApi();
+        const installedPacks = typeof api.listInstalledContentPacks === 'function'
+            ? api.listInstalledContentPacks()
+            : [];
+        const message = state.creatorMessage?.text || '';
+        const messageStyles = state.creatorMessage?.type === 'error'
+            ? 'background: rgba(120, 24, 24, 0.58); border: 1px solid rgba(255, 110, 110, 0.4);'
+            : 'background: rgba(24, 120, 70, 0.42); border: 1px solid rgba(120, 255, 170, 0.35);';
+        const tab = state.creatorTab;
+        const entityType = state.creatorEntityType;
+
+        const tabButton = (id, label) => `
+            <button
+                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost"
+                type="button"
+                data-action="creator-tab"
+                data-tab="${id}"
+                style="${tab === id ? 'outline: 2px solid rgba(255,255,255,0.55);' : ''}"
+            >${escapeHtml(label)}</button>
+        `;
+
+        const typeButton = (id, label) => `
+            <button
+                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost"
+                type="button"
+                data-action="creator-type"
+                data-type="${id}"
+                style="${entityType === id ? 'outline: 2px solid rgba(255,255,255,0.55);' : ''}"
+            >${escapeHtml(label)}</button>
+        `;
+
+        const listEntries = (tab === 'library')
+            ? installedPacks.map((pack) => `
+                <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 0.55rem; align-items: center;">
+                    <span class="echoes-battle-panel__combat-pill">${escapeHtml(`${pack.name} (${pack.id})${pack.version ? ` v${pack.version}` : ''}`)}</span>
+                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-export-pack" data-pack-id="${escapeHtml(pack.id)}">Export</button>
+                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-uninstall-pack" data-pack-id="${escapeHtml(pack.id)}">Uninstall</button>
+                </div>
+            `).join('')
+            : getCreatorListEntries(entityType).map((entry) => `
+                <button
+                    class="echoes-battle-panel__combat-button"
+                    type="button"
+                    data-action="creator-select-entity"
+                    data-entity-type="${escapeHtml(entityType)}"
+                    data-entity-id="${escapeHtml(entry.id)}"
+                    style="justify-content: space-between; ${entry.id === state.creatorSelectedId ? 'outline: 2px solid rgba(255,255,255,0.55);' : ''}"
+                >
+                    <span>${escapeHtml(entry.name || entry.label || entry.id)}</span>
+                    <span class="echoes-battle-panel__combat-pill">${escapeHtml(entry.id)}</span>
+                </button>
+            `).join('');
+
+        const editorControls = tab === 'library'
+            ? `
+                <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
+                    Installed packs are persisted locally. Use Export to download the data-only JSON payload, or Uninstall to remove it.
+                </div>
+            `
+            : `
+                <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+                    <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-validate">Validate</button>
+                    <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
+                    ${entityType === 'battle' ? '<button class="echoes-battle-panel__combat-button" type="button" data-action="creator-playtest">Playtest</button>' : ''}
+                </div>
+                <textarea
+                    data-action="creator-json-input"
+                    rows="12"
+                    style="width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height: 1.35;"
+                    placeholder='Paste a battle / unit / status JSON object here...'
+                >${escapeHtml(state.creatorJsonInput || '')}</textarea>
+            `;
+
+        elements.creatorContent.innerHTML = `
+            <div class="echoes-battle-panel__combat-debug">
+                <div class="echoes-battle-panel__combat-toolbar">
+                    <div class="echoes-battle-panel__combat-pills">
+                        <span class="echoes-battle-panel__combat-pill">Creator</span>
+                        <span class="echoes-battle-panel__combat-pill">${escapeHtml(tab === 'library' ? 'Content Library' : 'Editor')}</span>
+                    </div>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+                    ${tabButton('library', 'Library')}
+                    ${tabButton('editor', 'Editor')}
+                </div>
+                ${tab === 'editor'
+                    ? `
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+                            ${typeButton('battle', 'Battles')}
+                            ${typeButton('unit', 'Units')}
+                            ${typeButton('status', 'Statuses')}
+                        </div>
+                    `
+                    : ''}
+                <div style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; height: 100%;">
+                    <div style="display: grid; gap: 0.55rem; max-height: 12.5rem; overflow: auto; padding-right: 0.35rem;">
+                        ${listEntries || '<span class="echoes-battle-panel__planner-empty">None</span>'}
+                    </div>
+                    ${editorControls}
+                    ${message ? `<div style="padding: 0.65rem 0.75rem; color: rgba(255,255,255,0.92); white-space: pre-wrap; ${messageStyles}">${escapeHtml(message)}</div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
     async function prepareBattleSelection() {
         if (state.battleSelectionPromise) {
             return state.battleSelectionPromise;
@@ -754,23 +1110,120 @@
         state.battleHandler?.handleClick(event);
     }
 
-        function handleCombatContentChange(event) {
-            const textarea = event.target.closest('[data-action="content-json-input"]');
-            if (textarea) {
-                state.contentJsonInput = textarea.value || '';
-                return;
-            }
-
-            const debugToggle = event.target.closest('[data-action="toggle-debug-tools"]');
-            if (debugToggle) {
-                state.battleDebugToolsEnabled = Boolean(debugToggle.checked);
-                persistBooleanSetting(BATTLE_DEBUG_TOOLS_STORAGE_KEY, state.battleDebugToolsEnabled);
-                renderBattleStartScreen();
-                return;
-            }
-
-            state.battleHandler?.handleChange?.(event);
+    function handleCombatContentChange(event) {
+        const textarea = event.target.closest('[data-action="content-json-input"]');
+        if (textarea) {
+            state.contentJsonInput = textarea.value || '';
+            return;
         }
+
+        const debugToggle = event.target.closest('[data-action="toggle-debug-tools"]');
+        if (debugToggle) {
+            state.battleDebugToolsEnabled = Boolean(debugToggle.checked);
+            persistBooleanSetting(BATTLE_DEBUG_TOOLS_STORAGE_KEY, state.battleDebugToolsEnabled);
+            renderBattleStartScreen();
+            return;
+        }
+
+        state.battleHandler?.handleChange?.(event);
+    }
+
+    async function handleCreatorContentClick(event) {
+        const actionTarget = event.target.closest('[data-action]');
+        if (!actionTarget) {
+            return;
+        }
+        const { action } = actionTarget.dataset;
+
+        if (action === 'creator-tab') {
+            state.creatorTab = actionTarget.dataset.tab || 'library';
+            renderCreatorScreen();
+            return;
+        }
+
+        if (action === 'creator-type') {
+            state.creatorEntityType = actionTarget.dataset.type || 'battle';
+            state.creatorSelectedId = null;
+            renderCreatorScreen();
+            return;
+        }
+
+        if (action === 'creator-select-entity') {
+            const entityType = actionTarget.dataset.entityType || state.creatorEntityType;
+            const entityId = actionTarget.dataset.entityId || null;
+            state.creatorEntityType = entityType;
+            state.creatorSelectedId = entityId;
+            await prepareCreatorSelection();
+            const definition = getCreatorEntityDefinition(entityType, entityId);
+            state.creatorJsonInput = definition ? JSON.stringify(definition, null, 2) : '';
+            setCreatorMessage('success', definition ? `Loaded ${entityType} "${entityId}".` : `Missing ${entityType} "${entityId}".`);
+            renderCreatorScreen();
+            return;
+        }
+
+        if (action === 'creator-export-pack') {
+            const packId = actionTarget.dataset.packId || null;
+            if (!packId) {
+                return;
+            }
+            try {
+                await prepareCreatorSelection();
+                const api = getBattleContentApi();
+                if (typeof api.exportInstalledContentPack !== 'function') {
+                    throw new Error('Exporting installed packs is not available.');
+                }
+                const payload = api.exportInstalledContentPack(packId);
+                downloadJsonFile(`${sanitizeDownloadFileName(packId, 'pack')}.json`, payload);
+                setCreatorMessage('success', `Exported ${packId}.`);
+            } catch (error) {
+                setCreatorMessage('error', formatCombatModuleError(error));
+            }
+            renderCreatorScreen();
+            return;
+        }
+
+        if (action === 'creator-uninstall-pack') {
+            const packId = actionTarget.dataset.packId || null;
+            if (!packId) {
+                return;
+            }
+            try {
+                await prepareCreatorSelection();
+                const api = getBattleContentApi();
+                if (typeof api.uninstallContentPack !== 'function') {
+                    throw new Error('Uninstall is not available.');
+                }
+                api.uninstallContentPack(packId);
+                refreshBattleSelectionState();
+                setCreatorMessage('success', `Uninstalled ${packId}.`);
+            } catch (error) {
+                setCreatorMessage('error', formatCombatModuleError(error));
+            }
+            renderCreatorScreen();
+            return;
+        }
+
+        if (action === 'creator-validate') {
+            await validateCreatorJson(state.creatorEntityType);
+            return;
+        }
+
+        if (action === 'creator-save-workshop') {
+            await saveCreatorJsonToWorkshop(state.creatorEntityType);
+            return;
+        }
+
+        if (action === 'creator-playtest') {
+            await playtestCreatorBattle();
+        }
+    }
+
+    function handleCreatorContentChange(event) {
+        const textarea = event.target.closest('[data-action="creator-json-input"]');
+        if (textarea) {
+            state.creatorJsonInput = textarea.value || '';
+        }
+    }
 
     function handleCombatContentPointerDown(event) {
         state.battleHandler?.handlePointerDown(event);
@@ -1165,17 +1618,21 @@
 
         const isCharacterSelectOpen = state.activeScreen === 'character-select';
         const isCombatScreenOpen = state.activeScreen === 'combat';
+        const isCreatorScreenOpen = state.activeScreen === 'creator';
 
         elements.root.classList.toggle('is-open', state.isOpen);
         elements.root.classList.toggle('is-character-select', isCharacterSelectOpen);
         elements.root.classList.toggle('is-combat-screen', isCombatScreenOpen);
+        elements.root.classList.toggle('is-creator-screen', isCreatorScreenOpen);
         elements.button.setAttribute('aria-expanded', String(state.isOpen));
         elements.panel.setAttribute('aria-hidden', String(!state.isOpen));
         elements.mainMenu?.setAttribute('aria-hidden', String(state.activeScreen !== 'main-menu'));
         elements.characterSelect?.setAttribute('aria-hidden', String(!isCharacterSelectOpen));
+        elements.creatorScreen?.setAttribute('aria-hidden', String(!isCreatorScreenOpen));
         elements.combatScreen?.setAttribute('aria-hidden', String(!isCombatScreenOpen));
         elements.characterTrayButton?.setAttribute('aria-pressed', String(isCharacterSelectOpen));
         elements.combatTrayButton?.setAttribute('aria-pressed', String(isCombatScreenOpen));
+        elements.creatorTrayButton?.setAttribute('aria-pressed', String(isCreatorScreenOpen));
     }
 
     function syncThemePlayback() {
@@ -1347,6 +1804,29 @@
         renderCombatScreen();
     }
 
+    async function handleCreatorTrayButtonClick() {
+        await unlockAudioPlayback();
+
+        if (state.activeScreen === 'creator') {
+            return;
+        }
+
+        playSound('click');
+
+        if (!elements.creatorTrayButton) {
+            return;
+        }
+
+        state.activeScreen = 'creator';
+        syncPanelState();
+        void prepareCreatorSelection().catch((error) => {
+            console.error(`${EXTENSION_ID}: creator initialization failed.`, error);
+            setCreatorMessage('error', formatCombatModuleError(error));
+            renderCreatorScreen();
+        });
+        renderCreatorScreen();
+    }
+
     function handleTrayButtonHover(event) {
         if (event.currentTarget?.getAttribute('aria-pressed') === 'true') {
             return;
@@ -1442,6 +1922,9 @@
                         <div class="echoes-battle-panel__combat-screen" aria-hidden="true">
                             <div class="echoes-battle-panel__combat-content"></div>
                         </div>
+                        <div class="echoes-battle-panel__creator-screen" aria-hidden="true">
+                            <div class="echoes-battle-panel__creator-content"></div>
+                        </div>
                         <div class="echoes-battle-panel__tray" aria-hidden="true">
                             <button
                                 class="echoes-battle-panel__tray-button echoes-battle-panel__tray-button--combat"
@@ -1464,6 +1947,15 @@
                             >
                                 <span class="echoes-battle-panel__tray-icon" aria-hidden="true"></span>
                             </button>
+                            <button
+                                class="echoes-battle-panel__tray-button echoes-battle-panel__tray-button--creator"
+                                type="button"
+                                aria-label="Open creator"
+                                aria-pressed="false"
+                                title="Open creator"
+                            >
+                                <span class="echoes-battle-panel__tray-icon echoes-battle-panel__tray-icon--creator" aria-hidden="true"></span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1485,6 +1977,9 @@
         elements.combatContent = root.querySelector('.echoes-battle-panel__combat-content');
         elements.combatTrayButton = root.querySelector('.echoes-battle-panel__tray-button--combat');
         elements.characterTrayButton = root.querySelector('.echoes-battle-panel__tray-button--characters');
+        elements.creatorScreen = root.querySelector('.echoes-battle-panel__creator-screen');
+        elements.creatorContent = root.querySelector('.echoes-battle-panel__creator-content');
+        elements.creatorTrayButton = root.querySelector('.echoes-battle-panel__tray-button--creator');
 
         syncAssetUrls();
         elements.button.addEventListener('mouseenter', handleLauncherHover);
@@ -1509,6 +2004,10 @@
         elements.combatContent.addEventListener('dragend', () => state.battleHandler?.handleDragEnd());
         elements.characterTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.characterTrayButton.addEventListener('click', handleCharacterTrayButtonClick);
+        elements.creatorTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
+        elements.creatorTrayButton.addEventListener('click', handleCreatorTrayButtonClick);
+        elements.creatorContent.addEventListener('click', handleCreatorContentClick);
+        elements.creatorContent.addEventListener('change', handleCreatorContentChange);
         document.addEventListener('keydown', handleKeydown);
         window.addEventListener('resize', handleResize);
 

@@ -159,6 +159,7 @@
 
 .echoes-battle-panel__main-menu,
 .echoes-battle-panel__character-select,
+.echoes-battle-panel__creator-screen,
 .echoes-battle-panel__combat-screen {
     position: absolute;
     inset: 0;
@@ -190,6 +191,12 @@
     pointer-events: none;
 }
 
+.echoes-battle-panel__creator-screen {
+    opacity: 0;
+    transform: translateX(120%);
+    pointer-events: none;
+}
+
 .echoes-battle-panel__combat-content {
     position: absolute;
     inset: 0;
@@ -197,6 +204,18 @@
     background:
         radial-gradient(circle at center, rgba(183, 94, 28, 0.18), transparent 38%),
         linear-gradient(135deg, rgba(26, 15, 8, 0.96), rgba(7, 7, 7, 0.98)),
+        #020202;
+    color: #f2d7bc;
+    font-family: "Segoe UI", Tahoma, sans-serif;
+}
+
+.echoes-battle-panel__creator-content {
+    position: absolute;
+    inset: 0;
+    padding: 2.4% 2.8% 14.5%;
+    background:
+        radial-gradient(circle at center, rgba(183, 94, 28, 0.14), transparent 40%),
+        linear-gradient(135deg, rgba(16, 14, 12, 0.96), rgba(7, 7, 7, 0.98)),
         #020202;
     color: #f2d7bc;
     font-family: "Segoe UI", Tahoma, sans-serif;
@@ -832,6 +851,10 @@
     left: 15.6%;
 }
 
+.echoes-battle-panel__tray-button--creator {
+    left: 29.4%;
+}
+
 .echoes-battle-panel__tray-button:hover {
     transform: translateY(-50%) scale(1.02);
     filter: drop-shadow(0 0 12px rgba(255, 129, 46, 0.25));
@@ -859,6 +882,11 @@
 .echoes-battle-panel__tray-icon--combat {
     mask-image: url("./assets/svg/fight.svg");
     -webkit-mask-image: url("./assets/svg/fight.svg");
+}
+
+.echoes-battle-panel__tray-icon--creator {
+    mask-image: url("./assets/svg/edit.svg");
+    -webkit-mask-image: url("./assets/svg/edit.svg");
 }
 
 .echoes-battle-panel__tray-button:hover .echoes-battle-panel__tray-icon {
@@ -892,6 +920,18 @@
 }
 
 .echoes-battle-ui.is-combat-screen .echoes-battle-panel__combat-screen {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.echoes-battle-ui.is-creator-screen .echoes-battle-panel__main-menu {
+    opacity: 0;
+    transform: translateX(-115%);
+    pointer-events: none;
+}
+
+.echoes-battle-ui.is-creator-screen .echoes-battle-panel__creator-screen {
     opacity: 1;
     transform: translateX(0);
     pointer-events: auto;
