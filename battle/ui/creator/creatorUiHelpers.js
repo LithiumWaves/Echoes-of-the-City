@@ -1314,6 +1314,7 @@
         buildSelectOptions,
         renderTargetSelect,
         renderStatusSelect,
+        renderEffectFields,
     };
 
     battleModules.creatorUi = CreatorUi;

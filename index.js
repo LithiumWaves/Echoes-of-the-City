@@ -159,6 +159,7 @@
         creatorMessage: null,
         creatorPendingOpenLane: null,
         creatorUnitDraftCache: null,
+        creatorRenderLock: false,
     };
 
     const elements = {
@@ -740,6 +741,44 @@
         });
     }
 
+    function beginCreatorRenderLock() {
+        state.creatorRenderLock = true;
+    }
+
+    function endCreatorRenderLock() {
+        requestAnimationFrame(() => {
+            state.creatorRenderLock = false;
+        });
+    }
+
+    function appendLaneEffectCard(laneButton, effect, skillIndex, effectIndex) {
+        const creatorUi = getCreatorUi();
+        if (!creatorUi?.renderEffectFields) {
+            return false;
+        }
+        const lane = laneButton.closest('.echoes-moveset__lane');
+        const laneBody = lane?.querySelector('.echoes-moveset__lane-body');
+        if (!lane || !laneBody) {
+            return false;
+        }
+        lane.open = true;
+        laneBody.querySelectorAll('.echoes-creator__hint').forEach((hint) => {
+            if (/no effects/i.test(hint.textContent || '')) {
+                hint.remove();
+            }
+        });
+        const catalog = getCreatorCatalog();
+        const fieldAttrs = `data-creator-scope="skill-effect" data-skill-index="${skillIndex}" data-effect-index="${effectIndex}" data-action="creator-skill-effect-field"`;
+        const card = document.createElement('div');
+        card.className = 'echoes-moveset__lane-effect';
+        card.innerHTML = `
+            ${creatorUi.renderEffectFields(effect, catalog, escapeAttribute, escapeHtml, fieldAttrs, { showFilters: true })}
+            <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-skill-remove-effect" data-skill-index="${skillIndex}" data-effect-index="${effectIndex}">Remove</button>
+        `;
+        laneButton.insertAdjacentElement('beforebegin', card);
+        return true;
+    }
+
     function syncCreatorJsonTextareas() {
         const root = elements.creatorContent;
         if (!root) {
@@ -769,6 +808,7 @@
         const unitDraft = normalizeCreatorDraft('unit', resolveCreatorUnitParsed());
         const catalog = getCreatorCatalog();
         const wrapper = document.createElement('div');
+        beginCreatorRenderLock();
         try {
             wrapper.innerHTML = movesetSheet.renderMovesetSheet(
                 unitDraft,
@@ -777,18 +817,20 @@
                 escapeAttribute,
                 escapeHtml,
             ).trim();
+            const newMoveset = wrapper.firstElementChild;
+            if (!newMoveset) {
+                return false;
+            }
+
+            existing.replaceWith(newMoveset);
+            scheduleCreatorUiStateRestore(uiState);
+            return true;
         } catch (error) {
             console.error(`${EXTENSION_ID}: moveset sheet patch failed.`, error);
             return false;
+        } finally {
+            endCreatorRenderLock();
         }
-        const newMoveset = wrapper.firstElementChild;
-        if (!newMoveset) {
-            return false;
-        }
-
-        existing.replaceWith(newMoveset);
-        scheduleCreatorUiStateRestore(uiState);
-        return true;
     }
 
     function handleCreatorLaneAddEffect(laneButton) {
@@ -803,6 +845,19 @@
             return;
         }
 
+        const effect = {
+            trigger,
+            type: 'applyStatus',
+            target: 'opponent',
+            statusId: '',
+            potency: 1,
+            count: 1,
+        };
+        if (trigger === 'onHit' && Number.isInteger(coinIndex) && coinIndex > 0) {
+            effect.coinIndex = coinIndex;
+        }
+
+        let effectIndex = -1;
         let added = false;
         updateCreatorUnitJson((draft) => {
             draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
@@ -811,31 +866,36 @@
                 return;
             }
             skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
-            const effect = {
-                trigger,
-                type: 'applyStatus',
-                target: 'opponent',
-                statusId: '',
-                potency: 1,
-                count: 1,
-            };
-            if (trigger === 'onHit' && Number.isInteger(coinIndex) && coinIndex > 0) {
-                effect.coinIndex = coinIndex;
-            }
             skill.effects.push(effect);
+            effectIndex = skill.effects.length - 1;
             added = true;
         });
 
-        if (!added) {
+        if (!added || effectIndex < 0) {
             setCreatorMessage('error', `Skill #${skillIndex + 1} was not found in the draft. Select the unit again or add a skill first.`);
             return;
         }
 
-        if (laneKey) {
-            state.creatorPendingOpenLane = laneKey;
+        syncCreatorJsonTextareas();
+
+        beginCreatorRenderLock();
+        try {
+            if (appendLaneEffectCard(laneButton, effect, skillIndex, effectIndex)) {
+                setCreatorMessage('success', `Added ${trigger} effect.`);
+                return;
+            }
+            if (laneKey) {
+                state.creatorPendingOpenLane = laneKey;
+            }
+            rerenderCreatorAfterUnitEdit();
+            setCreatorMessage('success', `Added ${trigger} effect.`);
+        } catch (error) {
+            console.error(`${EXTENSION_ID}: lane add-effect render failed.`, error);
+            setCreatorMessage('error', formatCombatModuleError(error));
+            rerenderCreatorAfterUnitEdit({ full: true });
+        } finally {
+            endCreatorRenderLock();
         }
-        setCreatorMessage('success', `Added ${trigger} effect.`);
-        rerenderCreatorAfterUnitEdit();
     }
 
     function refreshCreatorUnitEditor({ full = false } = {}) {
@@ -1735,7 +1795,9 @@
                 ` : ''}
             `;
 
-        elements.creatorContent.innerHTML = `
+        beginCreatorRenderLock();
+        try {
+            elements.creatorContent.innerHTML = `
             <div class="echoes-battle-panel__combat-debug">
                 <div class="echoes-battle-panel__combat-toolbar">
                     <div class="echoes-battle-panel__combat-pills">
@@ -1765,6 +1827,12 @@
                 </div>
             </div>
         `;
+        } catch (error) {
+            console.error(`${EXTENSION_ID}: creator screen render failed.`, error);
+            setCreatorMessage('error', formatCombatModuleError(error));
+        } finally {
+            endCreatorRenderLock();
+        }
         scheduleCreatorUiStateRestore(creatorUiState);
     }
 
@@ -2053,7 +2121,6 @@
         const laneAddButton = event.target.closest('[data-creator-action="lane-add-effect"]');
         if (laneAddButton) {
             event.preventDefault();
-            event.stopPropagation();
             handleCreatorLaneAddEffect(laneAddButton);
             return;
         }
@@ -2386,6 +2453,10 @@
     }
 
     function handleCreatorContentChange(event) {
+        if (state.creatorRenderLock) {
+            return;
+        }
+
         const textarea = event.target.closest('[data-action="creator-json-input"]');
         if (textarea) {
             state.creatorJsonInput = textarea.value || '';
