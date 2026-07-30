@@ -66,21 +66,41 @@ Optional:
 - `damageType: "slash" | "pierce" | "blunt"`
 - `sinType: "wrath" | "lust" | "sloth" | "gluttony" | "gloom" | "pride" | "envy"`
 - `offenseLevel: number`
+- `attackWeight: number` (multi-target weight; default `1`)
 - `borderPath: string`
 - `description: string`
 - `showInPlanner: boolean` (set `false` for follow-up-only skills)
+- `skillSlot: string` (planner groups variants into one slot)
+- `variantPriority: number` (higher priority wins when multiple variants match)
+- `variantConditions: HookCondition[]` (all must pass for this variant to be active in planner)
 - `ammo: { statusId: string; countCost?: number; potencyCost?: number; randomCost?: number; cancelIfInsufficient?: boolean }`
 - `effects: EffectDefinition[]`
+
+### Skill effect phases (Creator moveset sheet)
+
+Group flat `effects[]` by `trigger` when authoring:
+
+| Trigger | When it runs |
+|---------|----------------|
+| `onSelect` | Combat start / skill selected (before coins) |
+| `onUse` | Skill is committed (grants sin resource + runs effects) |
+| `onClashWin` / `onClashLose` | After clash resolution |
+| `onHit` + `coinIndex: N` | When coin N hits |
+| `onAttackEnd` | After attack finishes |
+
+Optional per-effect filters: `coinIndex`, `criticalOnly`, `headsOnly`, `tailsOnly`, `outcome`, `minStatusPotency`.
 
 ## EffectDefinition
 
 Base fields:
-- `trigger: "onSelect" | "onHit" | "onClashWin" | "onClashLose" | "onAttackEnd"`
+- `trigger: "onSelect" | "onUse" | "onHit" | "onClashWin" | "onClashLose" | "onAttackEnd"`
 - `type: string`
 
 Common optional filters:
 - `coinIndex?: number`
 - `criticalOnly?: boolean`
+- `headsOnly?: boolean`
+- `tailsOnly?: boolean`
 - `minStatusPotency?: number` (uses `statusId` + `statusSource`)
 - `statusSource?: "self" | "opponent"`
 - `outcome?: "win" | "lose"`
@@ -176,6 +196,7 @@ Required:
 
 Optional:
 - `description: string`
+- `requirements?: { owned?: boolean; resonance?: { sinType: string; minimum?: number } }` (resonance gates hook invocation)
 - `hooks: Record<PassiveHookName, EffectDefinition[] | HookBlock | HookBlock[] | Function>`
 
 Supported passive hook names (current):

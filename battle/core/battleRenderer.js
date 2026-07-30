@@ -910,8 +910,12 @@
             }
 
             const unit = getUnitById(battle, activePlayerSlot.unitId);
-            return unit.skills
-                .filter((skill) => skill.showInPlanner !== false)
+            const plannerSkills = battleModules.plannerSkills?.resolvePlannerSkills
+                || window.EchoesOfTheCityPlannerSkills?.resolvePlannerSkills;
+            const skills = typeof plannerSkills === 'function'
+                ? plannerSkills(unit, battle)
+                : unit.skills.filter((skill) => skill.showInPlanner !== false);
+            return skills
                 .map((skill, index) => {
                     const isSelected = activePlayerSlot.selectedSkillId === skill.id;
                     const isDisabled = battle.phase !== 'select' || Boolean(battle.winner);

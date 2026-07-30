@@ -87,8 +87,10 @@
         'battle/content/battleContentRegistry.js',
         ...BATTLE_BASE_PACK_SCRIPT_RELATIVE_PATHS,
         'battle/ui/creator/creatorUiHelpers.js',
+        'battle/ui/creator/movesetSheet/movesetSheetRenderer.js',
         'battle/ui/inspect/inspectState.js',
         'battle/core/damageFormula.js',
+        'battle/core/plannerSkills.js',
         'battle/core/battleEngine.js',
         'battle/core/battleRenderer.js',
         'battle/core/battleHandler.js',
@@ -534,6 +536,10 @@
 
     function getCreatorUi() {
         return window.EchoesOfTheCityCreatorUi || window.EchoesOfTheCityBattleModules?.creatorUi || null;
+    }
+
+    function getMovesetSheet() {
+        return window.EchoesOfTheCityMovesetSheet || window.EchoesOfTheCityBattleModules?.movesetSheet || null;
     }
 
     function getCreatorCatalog() {
@@ -1215,6 +1221,7 @@
 
         const catalog = getCreatorCatalog();
         const creatorUi = getCreatorUi();
+        const movesetSheet = getMovesetSheet();
         const parsedEditorJson = (entityType === 'unit' || entityType === 'status') ? getCreatorParsedJsonOrNull() : null;
         const unitDraft = entityType === 'unit' ? normalizeCreatorDraft('unit', parsedEditorJson) : null;
         const statusView = entityType === 'status' ? getStatusEditorViewModel(parsedEditorJson) : null;
@@ -1243,7 +1250,7 @@
                         <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
                     </div>
 
-                    <p class="echoes-creator__hint"><strong>Passives &amp; statuses</strong> use trigger → conditions → actions. <strong>Skills</strong> use simpler per-moment effects (on select, on hit, etc.) — use presets or custom effects below.</p>
+                    <p class="echoes-creator__hint">Build movesets on the sheet below: each skill card has phase lanes (Combat Start, On Use, Clash, per-coin On Hit). Passives and workshop statuses sit on the right.</p>
 
                     <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;">
                         <div style="display: grid; gap: 0.45rem;">
@@ -1318,123 +1325,8 @@
                         </div>
                     </details>
 
-                    <details open>
-                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Passives</summary>
-                        <div style="display: grid; gap: 0.75rem; margin-top: 0.75rem;">
-                            <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-unit-add-passive">Add Passive</button>
-                            ${unitPassives.length
-                                ? unitPassives.map((passive, index) => `
-                                    <details>
-                                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">
-                                            ${escapeHtml(passive?.name || passive?.id || `Passive ${index + 1}`)}
-                                        </summary>
-                                        <div style="display: grid; gap: 0.55rem; margin-top: 0.65rem;">
-                                            <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem;">
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Id</label>
-                                                    <input data-action="creator-unit-passive-field" data-index="${index}" data-field="id" value="${escapeAttribute(String(passive?.id || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                </div>
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Name</label>
-                                                    <input data-action="creator-unit-passive-field" data-index="${index}" data-field="name" value="${escapeAttribute(String(passive?.name || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                </div>
-                                            </div>
-                                            <div style="display:grid; gap: 0.35rem;">
-                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Description</label>
-                                                <textarea data-action="creator-unit-passive-field" data-index="${index}" data-field="description" rows="2" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(String(passive?.description || ''))}</textarea>
-                                            </div>
-                                            <div class="echoes-creator__section">
-                                                <div class="echoes-creator__section-title">Behavior — when it runs, what it checks, what it does</div>
-                                                ${creatorUi?.renderHooksEditor(
-                                                    passive?.hooks || {},
-                                                    catalog,
-                                                    escapeAttribute,
-                                                    escapeHtml,
-                                                    `data-creator-scope="unit-passive" data-passive-index="${index}"`,
-                                                ) || '<span class="echoes-creator__hint">Creator UI module not loaded.</span>'}
-                                            </div>
-                                            <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-remove-passive" data-index="${index}">Remove Passive</button>
-                                        </div>
-                                    </details>
-                                `).join('')
-                                : '<span class="echoes-battle-panel__planner-empty" style="text-align:left;">No passives yet.</span>'}
-                        </div>
-                    </details>
-
-                    <details open>
-                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Skills</summary>
-                        <div style="display: grid; gap: 0.75rem; margin-top: 0.75rem;">
-                            <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-unit-add-skill">Add Skill</button>
-                            ${unitSkills.length
-                                ? unitSkills.map((skill, index) => `
-                                    <details>
-                                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">
-                                            ${escapeHtml(skill?.name || skill?.id || `Skill ${index + 1}`)}
-                                        </summary>
-                                        <div style="display:grid; gap: 0.55rem; margin-top: 0.65rem;">
-                                            <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem;">
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Id</label>
-                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="id" value="${escapeAttribute(String(skill?.id || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                </div>
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Name</label>
-                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="name" value="${escapeAttribute(String(skill?.name || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                </div>
-                                            </div>
-                                            <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem;">
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Base</label>
-                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="basePower" inputmode="numeric" value="${escapeAttribute(String(skill?.basePower ?? 0))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                </div>
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Coin</label>
-                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="coinPower" inputmode="numeric" value="${escapeAttribute(String(skill?.coinPower ?? 0))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                </div>
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Coins</label>
-                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="coinCount" inputmode="numeric" value="${escapeAttribute(String(skill?.coinCount ?? 1))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                </div>
-                                            </div>
-                                            <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem;">
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Type</label>
-                                                    ${renderEnumSelect(catalog.skillTypes, skill?.skillType || 'attack', `data-action="creator-unit-skill-field" data-index="${index}" data-field="skillType"`)}
-                                                </div>
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Damage</label>
-                                                    ${renderEnumSelect(catalog.damageTypes, skill?.damageType || 'slash', `data-action="creator-unit-skill-field" data-index="${index}" data-field="damageType"`)}
-                                                </div>
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Sin</label>
-                                                    ${renderEnumSelect(catalog.sinTypes, skill?.sinType || 'wrath', `data-action="creator-unit-skill-field" data-index="${index}" data-field="sinType"`)}
-                                                </div>
-                                            </div>
-                                            <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem;">
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Offense level</label>
-                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="offenseLevel" inputmode="numeric" value="${escapeAttribute(String(skill?.offenseLevel ?? ''))}" placeholder="Optional" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                </div>
-                                                <div style="display:grid; gap: 0.35rem;">
-                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Tags (comma separated)</label>
-                                                    <input data-action="creator-unit-skill-tags" data-index="${index}" value="${escapeAttribute(Array.isArray(skill?.tags) ? skill.tags.join(', ') : '')}" placeholder="base, burn, follow-up" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                </div>
-                                            </div>
-                                            <div style="display:grid; gap: 0.35rem;">
-                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Description</label>
-                                                <textarea data-action="creator-unit-skill-field" data-index="${index}" data-field="description" rows="2" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(String(skill?.description || ''))}</textarea>
-                                            </div>
-                                            <div class="echoes-creator__section">
-                                                <div class="echoes-creator__section-title">Skill effects</div>
-                                                ${creatorUi?.renderSkillEffectsSection(skill, index, catalog, escapeAttribute, escapeHtml) || '<span class="echoes-creator__hint">Creator UI module not loaded.</span>'}
-                                            </div>
-                                            <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-remove-skill" data-index="${index}">Remove Skill</button>
-                                        </div>
-                                    </details>
-                                `).join('')
-                                : '<span class="echoes-battle-panel__planner-empty" style="text-align:left;">No skills yet.</span>'}
-                        </div>
-                    </details>
+                    ${movesetSheet?.renderMovesetSheet(unitDraft, catalog, creatorUi, escapeAttribute, escapeHtml)
+                        || '<span class="echoes-creator__hint">Moveset sheet module not loaded.</span>'}
 
                     <details>
                         <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Raw JSON</summary>
@@ -2145,6 +2037,66 @@
             return;
         }
 
+        if (action === 'creator-lane-add-effect') {
+            const skillIndex = Number(actionTarget.dataset.skillIndex);
+            const trigger = actionTarget.dataset.trigger || 'onHit';
+            const coinIndex = Number(actionTarget.dataset.coinIndex);
+            if (Number.isInteger(skillIndex)) {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[skillIndex];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
+                    const effect = {
+                        trigger,
+                        type: 'applyStatus',
+                        statusId: '',
+                        potency: 1,
+                        count: 1,
+                    };
+                    if (trigger === 'onHit' && Number.isInteger(coinIndex) && coinIndex > 0) {
+                        effect.coinIndex = coinIndex;
+                    }
+                    skill.effects.push(effect);
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        if (action === 'creator-skill-add-variant') {
+            const index = Number(actionTarget.dataset.index);
+            if (Number.isInteger(index)) {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const base = draft.skills[index];
+                    if (!base || typeof base !== 'object') {
+                        return;
+                    }
+                    const slot = base.skillSlot || base.id || `slot-${index + 1}`;
+                    base.skillSlot = slot;
+                    const variantId = `${base.id || 'skill'}-variant-${draft.skills.length + 1}`;
+                    draft.skills.push({
+                        ...JSON.parse(JSON.stringify(base)),
+                        id: variantId,
+                        name: `${base.name || base.id || 'Skill'} (variant)`,
+                        skillSlot: slot,
+                        variantPriority: (Number.isInteger(base.variantPriority) ? base.variantPriority : 0) + 1,
+                        variantConditions: [{
+                            type: 'statusCountAtLeast',
+                            target: 'self',
+                            statusId: '',
+                            value: 1,
+                        }],
+                    });
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
         if (action === 'creator-unit-remove-skill') {
             const index = Number(actionTarget.dataset.index);
             if (Number.isInteger(index)) {
@@ -2461,6 +2413,77 @@
             return;
         }
 
+        const skillToggle = event.target.closest('[data-action="creator-unit-skill-toggle"]');
+        if (skillToggle) {
+            const index = Number(skillToggle.dataset.index);
+            const field = skillToggle.dataset.field || null;
+            if (Number.isInteger(index) && field === 'showInPlanner') {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[index];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    if (skillToggle.checked) {
+                        delete skill.showInPlanner;
+                    } else {
+                        skill.showInPlanner = false;
+                    }
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const passiveReq = event.target.closest('[data-action="creator-passive-req"]');
+        if (passiveReq) {
+            const index = Number(passiveReq.dataset.index);
+            const field = passiveReq.dataset.field || null;
+            if (Number.isInteger(index) && field) {
+                updateCreatorUnitJson((draft) => {
+                    draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
+                    const passive = draft.passives[index];
+                    if (!passive || typeof passive !== 'object') {
+                        return;
+                    }
+                    passive.requirements = passive.requirements && typeof passive.requirements === 'object'
+                        ? passive.requirements
+                        : {};
+                    if (field === 'owned') {
+                        if (passiveReq.checked) {
+                            passive.requirements.owned = true;
+                        } else {
+                            delete passive.requirements.owned;
+                        }
+                    } else if (field === 'resonanceSinType') {
+                        passive.requirements.resonance = passive.requirements.resonance || {};
+                        const sinType = normalizeStringInput(passiveReq.value, '');
+                        if (sinType) {
+                            passive.requirements.resonance.sinType = sinType;
+                        } else {
+                            delete passive.requirements.resonance.sinType;
+                        }
+                    } else if (field === 'resonanceMinimum') {
+                        passive.requirements.resonance = passive.requirements.resonance || {};
+                        const trimmed = String(passiveReq.value ?? '').trim();
+                        if (trimmed) {
+                            passive.requirements.resonance.minimum = Math.round(normalizeNumberInput(trimmed, 0));
+                        } else {
+                            delete passive.requirements.resonance.minimum;
+                        }
+                    }
+                    if (passive.requirements.resonance && !passive.requirements.resonance.sinType && !passive.requirements.resonance.minimum) {
+                        delete passive.requirements.resonance;
+                    }
+                    if (!passive.requirements.owned && !passive.requirements.resonance) {
+                        delete passive.requirements;
+                    }
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
         const skillTags = event.target.closest('[data-action="creator-unit-skill-tags"]');
         if (skillTags) {
             const index = Number(skillTags.dataset.index);
@@ -2515,15 +2538,18 @@
                     if (!skill || typeof skill !== 'object') {
                         return;
                     }
-                    if (['id', 'name', 'damageType', 'sinType', 'skillType', 'description'].includes(field)) {
+                    if (['id', 'name', 'damageType', 'sinType', 'skillType', 'description', 'skillSlot'].includes(field)) {
                         skill[field] = normalizeStringInput(skillField.value, '');
+                        if (field === 'skillSlot' && !skill[field]) {
+                            delete skill.skillSlot;
+                        }
                         return;
                     }
-                    if (['basePower', 'coinPower', 'coinCount', 'offenseLevel'].includes(field)) {
-                        const fallback = skill[field] ?? (field === 'offenseLevel' ? 0 : 0);
+                    if (['basePower', 'coinPower', 'coinCount', 'offenseLevel', 'variantPriority', 'attackWeight'].includes(field)) {
+                        const fallback = skill[field] ?? 0;
                         const parsed = normalizeNumberInput(skillField.value, fallback);
-                        if (field === 'offenseLevel' && !String(skillField.value ?? '').trim()) {
-                            delete skill.offenseLevel;
+                        if ((field === 'offenseLevel' || field === 'variantPriority' || field === 'attackWeight') && !String(skillField.value ?? '').trim()) {
+                            delete skill[field];
                         } else {
                             skill[field] = Math.round(parsed);
                         }

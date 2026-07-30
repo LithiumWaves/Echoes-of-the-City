@@ -820,6 +820,18 @@
             pushError(errors, `${path}.outcome`, 'must be "win" or "lose" when provided.');
         }
 
+        if (effect.headsOnly != null && typeof effect.headsOnly !== 'boolean') {
+            pushError(errors, `${path}.headsOnly`, 'must be a boolean when provided.');
+        }
+
+        if (effect.tailsOnly != null && typeof effect.tailsOnly !== 'boolean') {
+            pushError(errors, `${path}.tailsOnly`, 'must be a boolean when provided.');
+        }
+
+        if (effect.headsOnly && effect.tailsOnly) {
+            pushError(errors, `${path}.headsOnly`, 'cannot be combined with tailsOnly.');
+        }
+
         switch (effect.type) {
         case 'applyStatus':
         case 'queueStatus':
@@ -1461,6 +1473,21 @@
         if (skill.attackWeight != null && (!Number.isInteger(skill.attackWeight) || skill.attackWeight <= 0)) {
             pushError(errors, `${path}.attackWeight`, 'must be a positive integer when provided.');
         }
+        if (skill.skillSlot != null && typeof skill.skillSlot !== 'string') {
+            pushError(errors, `${path}.skillSlot`, 'must be a string when provided.');
+        }
+        if (skill.variantPriority != null && (!Number.isInteger(skill.variantPriority) || skill.variantPriority < 0)) {
+            pushError(errors, `${path}.variantPriority`, 'must be a non-negative integer when provided.');
+        }
+        if (skill.variantConditions != null) {
+            if (!Array.isArray(skill.variantConditions)) {
+                pushError(errors, `${path}.variantConditions`, 'must be an array when provided.');
+            } else {
+                skill.variantConditions.forEach((condition, index) => {
+                    validateHookCondition(errors, condition, `${path}.variantConditions[${index}]`);
+                });
+            }
+        }
         if (skill.ammo != null) {
             if (typeof skill.ammo !== 'object' || Array.isArray(skill.ammo)) {
                 pushError(errors, `${path}.ammo`, 'must be an object when provided.');
@@ -1504,6 +1531,29 @@
         }
         if (passive.description != null && typeof passive.description !== 'string') {
             pushError(errors, `${path}.description`, 'must be a string when provided.');
+        }
+        if (passive.requirements != null) {
+            if (typeof passive.requirements !== 'object' || Array.isArray(passive.requirements)) {
+                pushError(errors, `${path}.requirements`, 'must be an object when provided.');
+            } else {
+                if (passive.requirements.owned != null && typeof passive.requirements.owned !== 'boolean') {
+                    pushError(errors, `${path}.requirements.owned`, 'must be a boolean when provided.');
+                }
+                const resonance = passive.requirements.resonance;
+                if (resonance != null) {
+                    if (typeof resonance !== 'object' || Array.isArray(resonance)) {
+                        pushError(errors, `${path}.requirements.resonance`, 'must be an object when provided.');
+                    } else {
+                        if (!resonance.sinType || !SIN_TYPES.has(resonance.sinType)) {
+                            pushError(errors, `${path}.requirements.resonance.sinType`, 'must be a supported Sin affinity.');
+                        }
+                        const minimum = resonance.minimum ?? resonance.value;
+                        if (minimum != null && (!Number.isInteger(minimum) || minimum < 0)) {
+                            pushError(errors, `${path}.requirements.resonance.minimum`, 'must be a non-negative integer when provided.');
+                        }
+                    }
+                }
+            }
         }
         if (passive.hooks != null && (typeof passive.hooks !== 'object' || Array.isArray(passive.hooks))) {
             pushError(errors, `${path}.hooks`, 'must be an object when provided.');

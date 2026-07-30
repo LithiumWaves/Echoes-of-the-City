@@ -451,6 +451,217 @@
     gap: 0.35rem;
 }
 
+.echoes-moveset {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.echoes-moveset__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+.echoes-moveset__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(14rem, 22rem);
+    gap: 0.85rem;
+    align-items: start;
+}
+
+.echoes-moveset__skills-row {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+}
+
+.echoes-moveset__skill-card {
+    flex: 0 0 18rem;
+    min-width: 18rem;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.65rem;
+    background: rgba(8, 10, 14, 0.82);
+    padding: 0.65rem;
+    display: grid;
+    gap: 0.55rem;
+}
+
+.echoes-moveset__skill-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.45rem;
+    align-items: center;
+}
+
+.echoes-moveset__skill-sin {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.35rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #111;
+}
+
+.echoes-moveset__skill-name,
+.echoes-moveset__skill-id,
+.echoes-moveset__passive-name,
+.echoes-moveset__passive-id {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(8, 10, 14, 0.72);
+    color: rgba(255, 255, 255, 0.92);
+    padding: 0.45rem;
+    font: inherit;
+}
+
+.echoes-moveset__coin-pips {
+    display: flex;
+    gap: 0.2rem;
+    flex-wrap: wrap;
+}
+
+.echoes-moveset__coin-pip {
+    width: 0.55rem;
+    height: 0.55rem;
+    transform: rotate(45deg);
+    display: inline-block;
+}
+
+.echoes-moveset__skill-stats,
+.echoes-moveset__skill-meta,
+.echoes-moveset__skill-variant-row,
+.echoes-moveset__passive-req-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
+    gap: 0.35rem;
+    align-items: end;
+}
+
+.echoes-moveset__skill-stats label,
+.echoes-moveset__skill-meta label,
+.echoes-moveset__skill-variant-row label,
+.echoes-moveset__passive-req-row label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.echoes-moveset__skill-stats input,
+.echoes-moveset__skill-variant-row input,
+.echoes-moveset__passive-req-row input,
+.echoes-moveset__passive-req-row select {
+    width: 100%;
+}
+
+.echoes-moveset__skill-desc {
+    width: 100%;
+    resize: vertical;
+    min-height: 2.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(8, 10, 14, 0.72);
+    color: rgba(255, 255, 255, 0.92);
+    padding: 0.45rem;
+    font: inherit;
+}
+
+.echoes-moveset__lanes {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.echoes-moveset__lane {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.45rem;
+    padding: 0.35rem 0.5rem;
+}
+
+.echoes-moveset__lane-title {
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: rgba(255, 220, 180, 0.88);
+}
+
+.echoes-moveset__lane-body {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 0.45rem;
+}
+
+.echoes-moveset__lane-effect {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.echoes-moveset__column-title {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+    color: rgba(255, 220, 180, 0.9);
+}
+
+.echoes-moveset__side-column {
+    display: grid;
+    gap: 0.75rem;
+    max-height: 42rem;
+    overflow-y: auto;
+}
+
+.echoes-moveset__passive-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.55rem;
+    padding: 0.55rem;
+    display: grid;
+    gap: 0.45rem;
+    margin-bottom: 0.55rem;
+    background: rgba(8, 10, 14, 0.65);
+}
+
+.echoes-moveset__passive-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.echoes-moveset__passive-number {
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.echoes-moveset__passive-badge {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.echoes-moveset__passive-badge--owned {
+    background: rgba(90, 140, 90, 0.25);
+}
+
+.echoes-moveset__passive-badge--resonance {
+    background: rgba(140, 110, 200, 0.25);
+}
+
+.echoes-moveset__mechanics-list {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.echoes-moveset__mechanic-entry {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.4rem;
+    padding: 0.35rem 0.5rem;
+}
+
+@media (max-width: 900px) {
+    .echoes-moveset__body {
+        grid-template-columns: 1fr;
+    }
+}
+
 .echoes-battle-panel__combat-debug {
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);

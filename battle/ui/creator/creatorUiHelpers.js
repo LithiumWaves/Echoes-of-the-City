@@ -423,6 +423,14 @@
                         <input type="checkbox" ${fieldAttrs} data-field="criticalOnly" ${criticalOnly ? 'checked' : ''} />
                         Critical only
                     </label>
+                    <label class="echoes-creator__checkbox" style="align-self:center;">
+                        <input type="checkbox" ${fieldAttrs} data-field="headsOnly" ${effect?.headsOnly ? 'checked' : ''} />
+                        Heads only
+                    </label>
+                    <label class="echoes-creator__checkbox" style="align-self:center;">
+                        <input type="checkbox" ${fieldAttrs} data-field="tailsOnly" ${effect?.tailsOnly ? 'checked' : ''} />
+                        Tails only
+                    </label>
                     <label>Clash outcome</label>
                     <select ${fieldAttrs} data-field="outcome" style="width:100%;">
                         <option value="" ${!outcome ? 'selected' : ''}>Any</option>
@@ -1157,6 +1165,24 @@
                 effect.criticalOnly = true;
             } else {
                 delete effect.criticalOnly;
+            }
+            return;
+        }
+        if (field === 'headsOnly') {
+            if (rawValue === true || rawValue === 'true' || rawValue === 'on') {
+                effect.headsOnly = true;
+                delete effect.tailsOnly;
+            } else {
+                delete effect.headsOnly;
+            }
+            return;
+        }
+        if (field === 'tailsOnly') {
+            if (rawValue === true || rawValue === 'true' || rawValue === 'on') {
+                effect.tailsOnly = true;
+                delete effect.headsOnly;
+            } else {
+                delete effect.tailsOnly;
             }
             return;
         }

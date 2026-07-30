@@ -2286,6 +2286,14 @@
             return false;
         }
 
+        if (effect.headsOnly && !runtime.isHeads) {
+            return false;
+        }
+
+        if (effect.tailsOnly && runtime.isHeads) {
+            return false;
+        }
+
         return true;
     }
 
@@ -2786,12 +2794,34 @@
         return applyPassiveEffects;
     }
 
+    function createHookConditionEvaluator(deps = {}) {
+        const { getEncounterResource } = deps;
+
+        function getStatus(unit, statusId) {
+            if (!unit || !statusId) {
+                return null;
+            }
+            const statuses = Array.isArray(unit.statuses) ? unit.statuses : [];
+            return statuses.find((entry) => entry?.id === statusId || entry?.statusId === statusId) || null;
+        }
+
+        return function evaluateHookConditions(conditions, runtime) {
+            if (!Array.isArray(conditions) || !conditions.length) {
+                return true;
+            }
+            return conditions.every((condition) => conditionMatchesRuntime(condition, runtime, getStatus, getEncounterResource));
+        };
+    }
+
     battleModules.createSkillEffectRunner = createSkillEffectRunner;
     battleModules.createPassiveEffectRunner = createPassiveEffectRunner;
+    battleModules.createHookConditionEvaluator = createHookConditionEvaluator;
+    battleModules.effectMatchesRuntime = effectMatchesRuntime;
 
     window.EchoesOfTheCityBattle = {
         ...window.EchoesOfTheCityBattle,
         createSkillEffectRunner,
         createPassiveEffectRunner,
+        createHookConditionEvaluator,
     };
 })();

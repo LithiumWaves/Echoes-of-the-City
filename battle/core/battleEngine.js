@@ -371,6 +371,31 @@
             return `${unit?.name || 'Unknown'} ${getSlotLabel(slot)}`;
         }
 
+        function passiveMeetsRequirements(passive, unit, battle) {
+            const requirements = passive?.requirements;
+            if (!requirements || typeof requirements !== 'object' || Array.isArray(requirements)) {
+                return true;
+            }
+            const resonance = requirements.resonance;
+            if (resonance && typeof resonance === 'object' && resonance.sinType) {
+                const minimum = typeof resonance.minimum === 'number' && Number.isFinite(resonance.minimum)
+                    ? resonance.minimum
+                    : (typeof resonance.value === 'number' && Number.isFinite(resonance.value) ? resonance.value : 0);
+                const side = unit?.side || 'player';
+                const resonanceRoot = battle?.runtimeState?.absoluteResonanceBySide;
+                const sideResonance = resonanceRoot && typeof resonanceRoot === 'object' && resonanceRoot[side]
+                    ? resonanceRoot[side]
+                    : {};
+                const current = typeof sideResonance[resonance.sinType] === 'number' && Number.isFinite(sideResonance[resonance.sinType])
+                    ? sideResonance[resonance.sinType]
+                    : 0;
+                if (current < minimum) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         function invokeHooks(unit, hookName, context) {
             if (!unit) {
                 return;
@@ -430,6 +455,9 @@
 
             const passives = Array.isArray(unit.passives) ? unit.passives : [];
             passives.forEach((passive) => {
+                if (!passiveMeetsRequirements(passive, unit, hookContext.battle)) {
+                    return;
+                }
                 invokeHookDefinition(passive?.hooks?.[hookName], passive, 'passive');
             });
         }
@@ -2083,16 +2111,25 @@
             return context;
         }
 
-        function grantEgoResourceOnUse(targetBattle, unit, skill) {
-            if (!targetBattle || !unit || !skill?.sinType) {
+        function grantEgoResourceOnUse(targetBattle, unit, skill, options = {}) {
+            if (!targetBattle || !unit || !skill) {
                 return;
             }
-            adjustEncounterResource(targetBattle, skill.sinType, 1, {
-                operation: 'add',
-                min: 0,
-                max: 999,
-                reason: `${skill.name} [On Use]`,
-                side: unit.side,
+            if (skill.sinType) {
+                adjustEncounterResource(targetBattle, skill.sinType, 1, {
+                    operation: 'add',
+                    min: 0,
+                    max: 999,
+                    reason: `${skill.name} [On Use]`,
+                    side: unit.side,
+                });
+            }
+            applySkillEffects(targetBattle, 'onUse', {
+                sourceUnit: unit,
+                targetUnit: options.targetUnit || null,
+                skill,
+                attackContext: options.attackContext || null,
+                slot: options.slot || null,
             });
         }
 
@@ -2544,6 +2581,7 @@
                     defendContext,
                     coinIndex: coinIndex + 1,
                     isCritical,
+                    isHeads: roll.isHeads,
                 });
                 applyPendingAmmoOnHitEffects(targetBattle, attacker, resolvedDefender, skill, attackContext);
 
@@ -2779,7 +2817,11 @@
             if (context.cancelled) {
                 return [];
             }
-            grantEgoResourceOnUse(targetBattle, attacker, followUpSkill);
+            grantEgoResourceOnUse(targetBattle, attacker, followUpSkill, {
+                targetUnit: defender,
+                attackContext: context,
+                slot,
+            });
             const defenderContext = {
                 damageReductionMultiplier: 1,
                 damageReductionFlat: 0,
@@ -2952,6 +2994,7 @@
                     defendContext,
                     coinIndex: coinIndex + 1,
                     isCritical,
+                    isHeads: roll.isHeads,
                 });
                 applyPendingAmmoOnHitEffects(targetBattle, attacker, defender, attackSkill, attackContext);
             }
@@ -2984,7 +3027,11 @@
             }
             defenseState.activated = true;
             defenseState.used = true;
-            grantEgoResourceOnUse(targetBattle, defender, counterSkill);
+            grantEgoResourceOnUse(targetBattle, defender, counterSkill, {
+                targetUnit: attacker,
+                attackContext: defenseState.context,
+                slot: defenderSlot,
+            });
 
             emitEvent(targetBattle, 'engagement_started', {
                 engagementType: 'one-sided',
@@ -3032,7 +3079,11 @@
 
             defenseState.activated = true;
             defenseState.used = true;
-            grantEgoResourceOnUse(targetBattle, defender, guardSkill);
+            grantEgoResourceOnUse(targetBattle, defender, guardSkill, {
+                targetUnit: attacker,
+                attackContext: defenseState.context,
+                slot: defenderSlot,
+            });
 
             const guardRoll = flipCoins(targetBattle, defender, guardSkill, Math.max(0, (guardSkill.coinCount || 0) + (defenseState.context?.coinCountBonus || 0)), defenseState.context);
             const guardPower = Math.max(0, (guardRoll?.power || guardSkill.basePower) + getDefenseSkillFinalPowerBonus(defender, guardSkill, defenseState.context, attacker, attackSkill, attackContext));
@@ -3114,7 +3165,11 @@
                 const winnerSlot = leftContext.cancelled ? rightSlot : leftSlot;
                 const loserSlot = leftContext.cancelled ? leftSlot : rightSlot;
                 if (!winnerSlot.onUseGranted) {
-                    grantEgoResourceOnUse(targetBattle, clashWinnerUnit, winnerSkill);
+                    grantEgoResourceOnUse(targetBattle, clashWinnerUnit, winnerSkill, {
+                        targetUnit: clashLoserUnit,
+                        attackContext: winnerContext,
+                        slot: winnerSlot,
+                    });
                     winnerSlot.onUseGranted = true;
                 }
                 const coinBonus = typeof winnerContext?.coinCountBonus === 'number' && Number.isFinite(winnerContext.coinCountBonus)
@@ -3166,11 +3221,19 @@
             }
 
             if (!leftSlot.onUseGranted) {
-                grantEgoResourceOnUse(targetBattle, leftUnit, leftSkill);
+                grantEgoResourceOnUse(targetBattle, leftUnit, leftSkill, {
+                    targetUnit: rightUnit,
+                    attackContext: leftContext,
+                    slot: leftSlot,
+                });
                 leftSlot.onUseGranted = true;
             }
             if (!rightSlot.onUseGranted) {
-                grantEgoResourceOnUse(targetBattle, rightUnit, rightSkill);
+                grantEgoResourceOnUse(targetBattle, rightUnit, rightSkill, {
+                    targetUnit: leftUnit,
+                    attackContext: rightContext,
+                    slot: rightSlot,
+                });
                 rightSlot.onUseGranted = true;
             }
 
@@ -3337,7 +3400,11 @@
                 hits = [];
             } else if (isEvadeSkill(defendingSkill) && !defenseState.broken && isUnitAlive(targetUnit)) {
                 if (!actingSlot.onUseGranted) {
-                    grantEgoResourceOnUse(targetBattle, actingUnit, actingSkill);
+                    grantEgoResourceOnUse(targetBattle, actingUnit, actingSkill, {
+                        targetUnit,
+                        attackContext,
+                        slot: actingSlot,
+                    });
                     actingSlot.onUseGranted = true;
                 }
                 if (!defenseState.context) {
@@ -3346,7 +3413,11 @@
                 if (!defenseState.context?.cancelled) {
                     defenseState.activated = true;
                     defenseState.used = true;
-                    grantEgoResourceOnUse(targetBattle, targetUnit, defendingSkill);
+                    grantEgoResourceOnUse(targetBattle, targetUnit, defendingSkill, {
+                        targetUnit: actingUnit,
+                        attackContext: defenseState.context,
+                        slot: targetSlot,
+                    });
                     evadeResult = resolveAttackAgainstEvade(targetBattle, actingUnit, actingSkill, targetUnit, defendingSkill, attackContext, defenseState.context);
                     hits = evadeResult.hits;
                     if (evadeResult.evadeBroken) {
@@ -3359,7 +3430,11 @@
             } else {
                 if (!attackContext.cancelled) {
                     if (!actingSlot.onUseGranted) {
-                        grantEgoResourceOnUse(targetBattle, actingUnit, actingSkill);
+                        grantEgoResourceOnUse(targetBattle, actingUnit, actingSkill, {
+                            targetUnit,
+                            attackContext,
+                            slot: actingSlot,
+                        });
                         actingSlot.onUseGranted = true;
                     }
                 }

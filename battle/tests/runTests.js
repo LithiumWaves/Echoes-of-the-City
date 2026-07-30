@@ -74,6 +74,7 @@ function createBattleEnvironment(options = {}) {
     require(path.resolve(battleRoot, 'content', 'battleContentRegistry.js'));
     require(path.resolve(battleRoot, 'effects', 'skillEffectRunner.js'));
     require(path.resolve(battleRoot, 'core', 'damageFormula.js'));
+    require(path.resolve(battleRoot, 'core', 'plannerSkills.js'));
     require(path.resolve(battleRoot, 'core', 'battleEngine.js'));
 
     return global.window.EchoesOfTheCityBattleModules;
@@ -6277,6 +6278,240 @@ function runSuite() {
         battleModules.content.installContentPack(depPack, { conflictStrategy: 'rename' });
         const installed = battleModules.content.installContentPack(childPack, { conflictStrategy: 'rename' });
         assert(installed.manifest.id === 'dep-pack-b', 'Expected dependent pack to install once dependency exists.');
+    });
+
+    test('Effect runner: onUse trigger fires when skill is used', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        registerStatusDefinition({
+            id: 'test_on_use_marker',
+            label: 'On Use Marker',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const battleDefinition = {
+            id: 'test-on-use',
+            name: 'Test On Use',
+            playerUnits: [{
+                id: 'hero',
+                name: 'Hero',
+                level: 1,
+                maxHp: 100,
+                sp: 0,
+                speedRange: [5, 5],
+                defenseLevel: 0,
+                resistances: {
+                    physical: { slash: 1, pierce: 1, blunt: 1 },
+                    sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                },
+                sprites: { idle: '', skills: {} },
+                skills: [{
+                    id: 'on-use-skill',
+                    name: 'On Use Skill',
+                    basePower: 5,
+                    coinPower: 0,
+                    coinCount: 1,
+                    damageType: 'slash',
+                    sinType: 'wrath',
+                    effects: [{
+                        trigger: 'onUse',
+                        type: 'adjustStatus',
+                        target: 'self',
+                        statusId: 'test_on_use_marker',
+                        countDelta: 1,
+                    }],
+                }],
+                passives: [],
+            }],
+            enemyUnits: [{
+                id: 'enemy',
+                name: 'Enemy',
+                level: 1,
+                maxHp: 100,
+                sp: 0,
+                speedRange: [1, 1],
+                defenseLevel: 0,
+                resistances: {
+                    physical: { slash: 1, pierce: 1, blunt: 1 },
+                    sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                },
+                sprites: { idle: '', skills: {} },
+                skills: [{
+                    id: 'enemy-skill',
+                    name: 'Enemy Skill',
+                    basePower: 1,
+                    coinPower: 0,
+                    coinCount: 1,
+                    skillType: 'guard',
+                    sinType: 'wrath',
+                }],
+                passives: [],
+            }],
+            rules: {
+                encounterType: 'focused',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp });
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('on-use-skill');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const hero = engine.getState().playerUnits[0];
+        const marker = hero.statuses.find((status) => status.id === 'test_on_use_marker');
+        assert(marker && marker.count >= 1, `Expected onUse effect to apply marker, got ${JSON.stringify(marker)}`);
+    });
+
+    test('Effect runner: headsOnly filter on onHit effects', () => {
+        const battleModules = createBattleEnvironment();
+        const effectMatchesRuntime = battleModules.effectMatchesRuntime;
+        assert(typeof effectMatchesRuntime === 'function', 'Expected effectMatchesRuntime export.');
+
+        const headsEffect = { trigger: 'onHit', type: 'applyStatus', headsOnly: true };
+        assert(effectMatchesRuntime(headsEffect, { isHeads: true }, () => 0), 'Expected headsOnly to match heads.');
+        assert(!effectMatchesRuntime(headsEffect, { isHeads: false }, () => 0), 'Expected headsOnly to reject tails.');
+    });
+
+    test('Passive requirements: resonance gate blocks hook actions', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        registerStatusDefinition({
+            id: 'test_resonance_gate',
+            label: 'Resonance Gate',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const battleDefinition = {
+            id: 'test-resonance-passive',
+            name: 'Test Resonance Passive',
+            playerUnits: [{
+                id: 'hero',
+                name: 'Hero',
+                level: 1,
+                maxHp: 100,
+                sp: 0,
+                speedRange: [5, 5],
+                defenseLevel: 0,
+                resistances: {
+                    physical: { slash: 1, pierce: 1, blunt: 1 },
+                    sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                },
+                sprites: { idle: '', skills: {} },
+                skills: [{
+                    id: 'basic',
+                    name: 'Basic',
+                    basePower: 1,
+                    coinPower: 0,
+                    coinCount: 1,
+                    damageType: 'slash',
+                    sinType: 'wrath',
+                }],
+                passives: [{
+                    id: 'gated-passive',
+                    name: 'Gated Passive',
+                    requirements: { resonance: { sinType: 'wrath', minimum: 3 } },
+                    hooks: {
+                        battleStart: [{
+                            type: 'adjustStatus',
+                            target: 'self',
+                            statusId: 'test_resonance_gate',
+                            countDelta: 1,
+                        }],
+                    },
+                }],
+            }],
+            enemyUnits: [{
+                id: 'enemy',
+                name: 'Enemy',
+                level: 1,
+                maxHp: 100,
+                sp: 0,
+                speedRange: [1, 1],
+                defenseLevel: 0,
+                resistances: {
+                    physical: { slash: 1, pierce: 1, blunt: 1 },
+                    sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                },
+                sprites: { idle: '', skills: {} },
+                skills: [{
+                    id: 'enemy-skill',
+                    name: 'Enemy Skill',
+                    basePower: 1,
+                    coinPower: 0,
+                    coinCount: 1,
+                    skillType: 'guard',
+                    sinType: 'wrath',
+                }],
+                passives: [],
+            }],
+            rules: {
+                encounterType: 'focused',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp });
+        const hero = engine.getState().playerUnits[0];
+        const marker = hero.statuses.find((status) => status.id === 'test_resonance_gate');
+        assert(!marker || marker.count === 0, 'Expected gated passive not to fire without resonance.');
+    });
+
+    test('Planner skills: skill slot variants resolve by conditions', () => {
+        const battleModules = createBattleEnvironment();
+        const resolvePlannerSkills = battleModules.plannerSkills?.resolvePlannerSkills;
+        assert(typeof resolvePlannerSkills === 'function', 'Expected resolvePlannerSkills.');
+
+        const unit = {
+            id: 'variant-unit',
+            name: 'Variant Unit',
+            skills: [
+                {
+                    id: 'skill-base',
+                    name: 'Skill Base',
+                    skillSlot: 'slot-1',
+                    variantPriority: 0,
+                    basePower: 1,
+                    coinPower: 0,
+                    coinCount: 1,
+                    showInPlanner: true,
+                },
+                {
+                    id: 'skill-enhanced',
+                    name: 'Skill Enhanced',
+                    skillSlot: 'slot-1',
+                    variantPriority: 2,
+                    variantConditions: [{
+                        type: 'statusCountAtLeast',
+                        target: 'self',
+                        statusId: 'insight',
+                        value: 3,
+                    }],
+                    basePower: 5,
+                    coinPower: 2,
+                    coinCount: 2,
+                    showInPlanner: true,
+                },
+            ],
+            statuses: [{ id: 'insight', count: 4, potency: 0 }],
+        };
+
+        const battle = { playerUnits: [unit], enemyUnits: [], playerSlots: [], enemySlots: [] };
+        const active = resolvePlannerSkills(unit, battle);
+        assert(active.length === 1 && active[0].id === 'skill-enhanced', `Expected enhanced variant, got ${active[0]?.id}`);
     });
 
     process.stdout.write(`\nResult: ${passed} passed, ${failed} failed\n`);
