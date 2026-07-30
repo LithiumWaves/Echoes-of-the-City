@@ -737,6 +737,99 @@
         return typeof api.getBattleDefinition === 'function' ? api.getBattleDefinition(id) : null;
     }
 
+    function createDefaultUnitDefinition() {
+        const sinKeys = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
+        const sinResistances = Object.fromEntries(sinKeys.map((key) => [key, 1]));
+        return {
+            id: 'new-unit',
+            name: 'New Unit',
+            level: 1,
+            maxHp: 100,
+            sp: 0,
+            speedRange: [1, 1],
+            defenseLevel: 0,
+            staggerThresholds: [],
+            resistances: {
+                physical: {
+                    slash: 1,
+                    pierce: 1,
+                    blunt: 1,
+                },
+                sin: sinResistances,
+            },
+            passives: [],
+            sprites: {
+                idle: '',
+                moving: '',
+                hurt: '',
+                guard: '',
+                evade: '',
+                skills: {},
+            },
+            skills: [],
+        };
+    }
+
+    function getCreatorParsedJsonOrNull() {
+        const raw = String(state.creatorJsonInput || '').trim();
+        if (!raw) {
+            return null;
+        }
+        try {
+            return JSON.parse(raw);
+        } catch {
+            return null;
+        }
+    }
+
+    function normalizeNumberInput(value, fallback) {
+        const trimmed = String(value ?? '').trim();
+        if (!trimmed) {
+            return fallback;
+        }
+        const parsed = Number(trimmed);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function normalizeStringInput(value, fallback = '') {
+        const trimmed = String(value ?? '').trim();
+        return trimmed ? trimmed : fallback;
+    }
+
+    function resolveCreatorSpriteUrl(value) {
+        const path = String(value || '').trim();
+        if (!path) {
+            return '';
+        }
+        if (path.startsWith('data:') || path.startsWith('http://') || path.startsWith('https://')) {
+            return path;
+        }
+        if (path.startsWith('assets/')) {
+            return resolveExtensionUrl(path);
+        }
+        return path;
+    }
+
+    function updateCreatorUnitJson(mutator) {
+        const parsed = getCreatorParsedJsonOrNull();
+        const draft = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? parsed
+            : createDefaultUnitDefinition();
+        draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
+        draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+        draft.sprites = draft.sprites && typeof draft.sprites === 'object' && !Array.isArray(draft.sprites) ? draft.sprites : {};
+        draft.sprites.skills = draft.sprites.skills && typeof draft.sprites.skills === 'object' && !Array.isArray(draft.sprites.skills) ? draft.sprites.skills : {};
+        draft.resistances = draft.resistances && typeof draft.resistances === 'object' && !Array.isArray(draft.resistances) ? draft.resistances : {};
+        draft.resistances.physical = draft.resistances.physical && typeof draft.resistances.physical === 'object' && !Array.isArray(draft.resistances.physical) ? draft.resistances.physical : {};
+        draft.resistances.sin = draft.resistances.sin && typeof draft.resistances.sin === 'object' && !Array.isArray(draft.resistances.sin) ? draft.resistances.sin : {};
+        draft.speedRange = Array.isArray(draft.speedRange) ? draft.speedRange : [1, 1];
+        draft.staggerThresholds = Array.isArray(draft.staggerThresholds) ? draft.staggerThresholds : [];
+        if (typeof mutator === 'function') {
+            mutator(draft);
+        }
+        state.creatorJsonInput = JSON.stringify(draft, null, 2);
+    }
+
     function renderCreatorScreen() {
         if (!elements.creatorContent) {
             return;
@@ -795,6 +888,212 @@
                 </button>
             `).join('');
 
+        const parsedEditorJson = entityType === 'unit' ? getCreatorParsedJsonOrNull() : null;
+        const unitDraft = entityType === 'unit' && parsedEditorJson && typeof parsedEditorJson === 'object' && !Array.isArray(parsedEditorJson)
+            ? parsedEditorJson
+            : (entityType === 'unit' ? createDefaultUnitDefinition() : null);
+        const unitSprites = unitDraft?.sprites && typeof unitDraft.sprites === 'object' && !Array.isArray(unitDraft.sprites) ? unitDraft.sprites : {};
+        const unitSkillSprites = unitSprites.skills && typeof unitSprites.skills === 'object' && !Array.isArray(unitSprites.skills) ? unitSprites.skills : {};
+        const unitPassives = Array.isArray(unitDraft?.passives) ? unitDraft.passives : [];
+        const unitSkills = Array.isArray(unitDraft?.skills) ? unitDraft.skills : [];
+
+        const unitEditorMarkup = tab === 'editor' && entityType === 'unit'
+            ? `
+                <div style="display: grid; gap: 0.85rem;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-unit-new">New Unit</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-validate">Validate</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;">
+                        <div style="display: grid; gap: 0.45rem;">
+                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Id</label>
+                            <input data-action="creator-unit-field" data-field="id" value="${escapeAttribute(String(unitDraft?.id || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                        </div>
+                        <div style="display: grid; gap: 0.45rem;">
+                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Name</label>
+                            <input data-action="creator-unit-field" data-field="name" value="${escapeAttribute(String(unitDraft?.name || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                        </div>
+                        <div style="display: grid; gap: 0.45rem;">
+                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Level</label>
+                            <input data-action="creator-unit-field" data-field="level" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.level ?? 1))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                        </div>
+                        <div style="display: grid; gap: 0.45rem;">
+                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Max HP</label>
+                            <input data-action="creator-unit-field" data-field="maxHp" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.maxHp ?? 100))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                        </div>
+                        <div style="display: grid; gap: 0.45rem;">
+                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">SP</label>
+                            <input data-action="creator-unit-field" data-field="sp" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.sp ?? 0))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                        </div>
+                        <div style="display: grid; gap: 0.45rem;">
+                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Defense Level</label>
+                            <input data-action="creator-unit-field" data-field="defenseLevel" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.defenseLevel ?? 0))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;">
+                        <div style="display: grid; gap: 0.45rem;">
+                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Speed Min</label>
+                            <input data-action="creator-unit-speed" data-index="0" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.speedRange?.[0] ?? 1))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                        </div>
+                        <div style="display: grid; gap: 0.45rem;">
+                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Speed Max</label>
+                            <input data-action="creator-unit-speed" data-index="1" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.speedRange?.[1] ?? 1))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                        </div>
+                    </div>
+
+                    <details open>
+                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Sprites</summary>
+                        <div style="display: grid; gap: 0.75rem; margin-top: 0.75rem;">
+                            ${['idle', 'moving', 'hurt', 'guard', 'evade'].map((key) => `
+                                <div style="display: grid; grid-template-columns: 7rem minmax(0, 1fr) auto; gap: 0.55rem; align-items: center;">
+                                    <span class="echoes-battle-panel__planner-empty" style="text-align:left;">${escapeHtml(key)}</span>
+                                    <input data-action="creator-unit-sprite" data-sprite-key="${escapeAttribute(key)}" value="${escapeAttribute(String(unitSprites?.[key] || ''))}" placeholder="assets/... or URL or data:" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                    <input type="file" accept="image/*" data-action="creator-upload-sprite" data-sprite-key="${escapeAttribute(key)}" style="max-width: 14rem;" />
+                                </div>
+                                ${unitSprites?.[key] ? `<img src="${escapeAttribute(resolveCreatorSpriteUrl(unitSprites[key]))}" alt="${escapeAttribute(key)}" style="max-height: 7rem; max-width: 100%; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.2); padding: 0.35rem;" />` : ''}
+                            `).join('')}
+
+                            <details>
+                                <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Skill sprites</summary>
+                                <div style="display: grid; gap: 0.55rem; margin-top: 0.65rem;">
+                                    ${unitSkills.map((skill) => {
+                                        const skillId = skill?.id || '';
+                                        if (!skillId) {
+                                            return '';
+                                        }
+                                        const spriteValue = unitSkillSprites?.[skillId] || '';
+                                        return `
+                                            <div style="display: grid; grid-template-columns: 1fr minmax(0, 1.2fr) auto auto; gap: 0.55rem; align-items: center;">
+                                                <span class="echoes-battle-panel__combat-pill">${escapeHtml(skillId)}</span>
+                                                <input data-action="creator-unit-skill-sprite" data-skill-id="${escapeAttribute(skillId)}" value="${escapeAttribute(String(spriteValue))}" placeholder="assets/... or URL or data:" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                <input type="file" accept="image/*" data-action="creator-upload-skill-sprite" data-skill-id="${escapeAttribute(skillId)}" style="max-width: 14rem;" />
+                                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-clear-skill-sprite" data-skill-id="${escapeAttribute(skillId)}">Clear</button>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </details>
+                        </div>
+                    </details>
+
+                    <details open>
+                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Passives</summary>
+                        <div style="display: grid; gap: 0.75rem; margin-top: 0.75rem;">
+                            <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-unit-add-passive">Add Passive</button>
+                            ${unitPassives.length
+                                ? unitPassives.map((passive, index) => `
+                                    <details>
+                                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">
+                                            ${escapeHtml(passive?.name || passive?.id || `Passive ${index + 1}`)}
+                                        </summary>
+                                        <div style="display: grid; gap: 0.55rem; margin-top: 0.65rem;">
+                                            <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem;">
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Id</label>
+                                                    <input data-action="creator-unit-passive-field" data-index="${index}" data-field="id" value="${escapeAttribute(String(passive?.id || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Name</label>
+                                                    <input data-action="creator-unit-passive-field" data-index="${index}" data-field="name" value="${escapeAttribute(String(passive?.name || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                            </div>
+                                            <div style="display:grid; gap: 0.35rem;">
+                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Description</label>
+                                                <textarea data-action="creator-unit-passive-field" data-index="${index}" data-field="description" rows="2" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(String(passive?.description || ''))}</textarea>
+                                            </div>
+                                            <div style="display:grid; gap: 0.35rem;">
+                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Hooks (JSON)</label>
+                                                <textarea data-action="creator-unit-passive-hooks" data-index="${index}" rows="6" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(JSON.stringify(passive?.hooks || {}, null, 2))}</textarea>
+                                            </div>
+                                            <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-remove-passive" data-index="${index}">Remove Passive</button>
+                                        </div>
+                                    </details>
+                                `).join('')
+                                : '<span class="echoes-battle-panel__planner-empty" style="text-align:left;">No passives yet.</span>'}
+                        </div>
+                    </details>
+
+                    <details open>
+                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Skills</summary>
+                        <div style="display: grid; gap: 0.75rem; margin-top: 0.75rem;">
+                            <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-unit-add-skill">Add Skill</button>
+                            ${unitSkills.length
+                                ? unitSkills.map((skill, index) => `
+                                    <details>
+                                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">
+                                            ${escapeHtml(skill?.name || skill?.id || `Skill ${index + 1}`)}
+                                        </summary>
+                                        <div style="display:grid; gap: 0.55rem; margin-top: 0.65rem;">
+                                            <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem;">
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Id</label>
+                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="id" value="${escapeAttribute(String(skill?.id || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Name</label>
+                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="name" value="${escapeAttribute(String(skill?.name || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                            </div>
+                                            <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem;">
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Base</label>
+                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="basePower" inputmode="numeric" value="${escapeAttribute(String(skill?.basePower ?? 0))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Coin</label>
+                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="coinPower" inputmode="numeric" value="${escapeAttribute(String(skill?.coinPower ?? 0))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Coins</label>
+                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="coinCount" inputmode="numeric" value="${escapeAttribute(String(skill?.coinCount ?? 1))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                            </div>
+                                            <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem;">
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Type</label>
+                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="skillType" value="${escapeAttribute(String(skill?.skillType || 'attack'))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Damage</label>
+                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="damageType" value="${escapeAttribute(String(skill?.damageType || 'slash'))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Sin</label>
+                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="sinType" value="${escapeAttribute(String(skill?.sinType || 'wrath'))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                            </div>
+                                            <div style="display:grid; gap: 0.35rem;">
+                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Description</label>
+                                                <textarea data-action="creator-unit-skill-field" data-index="${index}" data-field="description" rows="2" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(String(skill?.description || ''))}</textarea>
+                                            </div>
+                                            <div style="display:grid; gap: 0.35rem;">
+                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Effects (JSON)</label>
+                                                <textarea data-action="creator-unit-skill-effects" data-index="${index}" rows="6" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(JSON.stringify(skill?.effects || [], null, 2))}</textarea>
+                                            </div>
+                                            <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-remove-skill" data-index="${index}">Remove Skill</button>
+                                        </div>
+                                    </details>
+                                `).join('')
+                                : '<span class="echoes-battle-panel__planner-empty" style="text-align:left;">No skills yet.</span>'}
+                        </div>
+                    </details>
+
+                    <details>
+                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Raw JSON</summary>
+                        <textarea
+                            data-action="creator-json-input"
+                            rows="14"
+                            style="width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height: 1.35; margin-top: 0.65rem;"
+                            placeholder='Paste a unit JSON object here...'
+                        >${escapeHtml(state.creatorJsonInput || '')}</textarea>
+                    </details>
+                </div>
+            `
+            : '';
+
         const editorControls = tab === 'library'
             ? `
                 <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
@@ -807,12 +1106,14 @@
                     <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
                     ${entityType === 'battle' ? '<button class="echoes-battle-panel__combat-button" type="button" data-action="creator-playtest">Playtest</button>' : ''}
                 </div>
-                <textarea
-                    data-action="creator-json-input"
-                    rows="12"
-                    style="width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height: 1.35;"
-                    placeholder='Paste a battle / unit / status JSON object here...'
-                >${escapeHtml(state.creatorJsonInput || '')}</textarea>
+                ${entityType === 'unit' ? unitEditorMarkup : `
+                    <textarea
+                        data-action="creator-json-input"
+                        rows="12"
+                        style="width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height: 1.35;"
+                        placeholder='Paste a battle / unit / status JSON object here...'
+                    >${escapeHtml(state.creatorJsonInput || '')}</textarea>
+                `}
             `;
 
         elements.creatorContent.innerHTML = `
@@ -1216,12 +1517,303 @@
         if (action === 'creator-playtest') {
             await playtestCreatorBattle();
         }
+
+        if (action === 'creator-unit-new') {
+            updateCreatorUnitJson((draft) => {
+                const next = createDefaultUnitDefinition();
+                Object.keys(draft).forEach((key) => delete draft[key]);
+                Object.assign(draft, next);
+            });
+            setCreatorMessage('success', 'Created a new unit draft.');
+            renderCreatorScreen();
+        }
+
+        if (action === 'creator-unit-add-passive') {
+            updateCreatorUnitJson((draft) => {
+                const nextIndex = Array.isArray(draft.passives) ? draft.passives.length + 1 : 1;
+                draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
+                draft.passives.push({
+                    id: `passive_${nextIndex}`,
+                    name: `Passive ${nextIndex}`,
+                    description: '',
+                    hooks: {},
+                });
+            });
+            renderCreatorScreen();
+        }
+
+        if (action === 'creator-unit-remove-passive') {
+            const index = Number(actionTarget.dataset.index);
+            if (Number.isInteger(index)) {
+                updateCreatorUnitJson((draft) => {
+                    draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
+                    draft.passives.splice(index, 1);
+                });
+                renderCreatorScreen();
+            }
+        }
+
+        if (action === 'creator-unit-add-skill') {
+            updateCreatorUnitJson((draft) => {
+                const nextIndex = Array.isArray(draft.skills) ? draft.skills.length + 1 : 1;
+                draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                draft.skills.push({
+                    id: `skill_${nextIndex}`,
+                    name: `Skill ${nextIndex}`,
+                    skillType: 'attack',
+                    basePower: 1,
+                    coinPower: 0,
+                    coinCount: 1,
+                    damageType: 'slash',
+                    sinType: 'wrath',
+                    effects: [],
+                    description: '',
+                });
+            });
+            renderCreatorScreen();
+        }
+
+        if (action === 'creator-unit-remove-skill') {
+            const index = Number(actionTarget.dataset.index);
+            if (Number.isInteger(index)) {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const removed = draft.skills.splice(index, 1);
+                    const removedId = removed?.[0]?.id;
+                    if (removedId && draft.sprites?.skills) {
+                        delete draft.sprites.skills[removedId];
+                    }
+                });
+                renderCreatorScreen();
+            }
+        }
+
+        if (action === 'creator-unit-clear-skill-sprite') {
+            const skillId = actionTarget.dataset.skillId || null;
+            if (skillId) {
+                updateCreatorUnitJson((draft) => {
+                    draft.sprites = draft.sprites && typeof draft.sprites === 'object' && !Array.isArray(draft.sprites) ? draft.sprites : {};
+                    draft.sprites.skills = draft.sprites.skills && typeof draft.sprites.skills === 'object' && !Array.isArray(draft.sprites.skills) ? draft.sprites.skills : {};
+                    delete draft.sprites.skills[skillId];
+                });
+                renderCreatorScreen();
+            }
+        }
     }
 
     function handleCreatorContentChange(event) {
         const textarea = event.target.closest('[data-action="creator-json-input"]');
         if (textarea) {
             state.creatorJsonInput = textarea.value || '';
+            return;
+        }
+
+        const unitField = event.target.closest('[data-action="creator-unit-field"]');
+        if (unitField) {
+            const field = unitField.dataset.field;
+            const value = unitField.value;
+            updateCreatorUnitJson((draft) => {
+                if (field === 'id' || field === 'name') {
+                    draft[field] = normalizeStringInput(value, '');
+                    return;
+                }
+                if (field === 'level') {
+                    draft.level = Math.max(1, Math.round(normalizeNumberInput(value, draft.level ?? 1)));
+                    return;
+                }
+                if (field === 'maxHp') {
+                    draft.maxHp = Math.max(1, Math.round(normalizeNumberInput(value, draft.maxHp ?? 100)));
+                    return;
+                }
+                if (field === 'sp') {
+                    draft.sp = Math.round(normalizeNumberInput(value, draft.sp ?? 0));
+                    return;
+                }
+                if (field === 'defenseLevel') {
+                    draft.defenseLevel = Math.round(normalizeNumberInput(value, draft.defenseLevel ?? 0));
+                }
+            });
+            renderCreatorScreen();
+            return;
+        }
+
+        const speedField = event.target.closest('[data-action="creator-unit-speed"]');
+        if (speedField) {
+            const index = Number(speedField.dataset.index);
+            updateCreatorUnitJson((draft) => {
+                draft.speedRange = Array.isArray(draft.speedRange) ? draft.speedRange : [1, 1];
+                const fallback = Number.isFinite(draft.speedRange[index]) ? draft.speedRange[index] : 1;
+                const next = Math.max(0, Math.round(normalizeNumberInput(speedField.value, fallback)));
+                draft.speedRange[index] = next;
+            });
+            renderCreatorScreen();
+            return;
+        }
+
+        const spriteField = event.target.closest('[data-action="creator-unit-sprite"]');
+        if (spriteField) {
+            const spriteKey = spriteField.dataset.spriteKey || null;
+            if (spriteKey) {
+                updateCreatorUnitJson((draft) => {
+                    draft.sprites = draft.sprites && typeof draft.sprites === 'object' && !Array.isArray(draft.sprites) ? draft.sprites : {};
+                    draft.sprites[spriteKey] = normalizeStringInput(spriteField.value, '');
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const skillSpriteField = event.target.closest('[data-action="creator-unit-skill-sprite"]');
+        if (skillSpriteField) {
+            const skillId = skillSpriteField.dataset.skillId || null;
+            if (skillId) {
+                updateCreatorUnitJson((draft) => {
+                    draft.sprites = draft.sprites && typeof draft.sprites === 'object' && !Array.isArray(draft.sprites) ? draft.sprites : {};
+                    draft.sprites.skills = draft.sprites.skills && typeof draft.sprites.skills === 'object' && !Array.isArray(draft.sprites.skills) ? draft.sprites.skills : {};
+                    const nextValue = normalizeStringInput(skillSpriteField.value, '');
+                    if (!nextValue) {
+                        delete draft.sprites.skills[skillId];
+                        return;
+                    }
+                    draft.sprites.skills[skillId] = nextValue;
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const passiveField = event.target.closest('[data-action="creator-unit-passive-field"]');
+        if (passiveField) {
+            const index = Number(passiveField.dataset.index);
+            const field = passiveField.dataset.field || null;
+            if (Number.isInteger(index) && field) {
+                updateCreatorUnitJson((draft) => {
+                    draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
+                    const passive = draft.passives[index];
+                    if (!passive || typeof passive !== 'object') {
+                        return;
+                    }
+                    passive[field] = normalizeStringInput(passiveField.value, '');
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const passiveHooks = event.target.closest('[data-action="creator-unit-passive-hooks"]');
+        if (passiveHooks) {
+            const index = Number(passiveHooks.dataset.index);
+            if (Number.isInteger(index)) {
+                try {
+                    const parsed = JSON.parse(passiveHooks.value || '{}');
+                    updateCreatorUnitJson((draft) => {
+                        draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
+                        const passive = draft.passives[index];
+                        if (!passive || typeof passive !== 'object') {
+                            return;
+                        }
+                        passive.hooks = parsed;
+                    });
+                    setCreatorMessage('success', 'Updated passive hooks.');
+                } catch (error) {
+                    setCreatorMessage('error', `Invalid hooks JSON: ${error?.message || error}`);
+                }
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const skillField = event.target.closest('[data-action="creator-unit-skill-field"]');
+        if (skillField) {
+            const index = Number(skillField.dataset.index);
+            const field = skillField.dataset.field || null;
+            if (Number.isInteger(index) && field) {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[index];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    if (['id', 'name', 'damageType', 'sinType', 'skillType', 'description'].includes(field)) {
+                        skill[field] = normalizeStringInput(skillField.value, '');
+                        return;
+                    }
+                    if (['basePower', 'coinPower', 'coinCount'].includes(field)) {
+                        skill[field] = Math.round(normalizeNumberInput(skillField.value, skill[field] ?? 0));
+                    }
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const skillEffects = event.target.closest('[data-action="creator-unit-skill-effects"]');
+        if (skillEffects) {
+            const index = Number(skillEffects.dataset.index);
+            if (Number.isInteger(index)) {
+                try {
+                    const parsed = JSON.parse(skillEffects.value || '[]');
+                    updateCreatorUnitJson((draft) => {
+                        draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                        const skill = draft.skills[index];
+                        if (!skill || typeof skill !== 'object') {
+                            return;
+                        }
+                        skill.effects = parsed;
+                    });
+                    setCreatorMessage('success', 'Updated skill effects.');
+                } catch (error) {
+                    setCreatorMessage('error', `Invalid effects JSON: ${error?.message || error}`);
+                }
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const spriteUpload = event.target.closest('[data-action="creator-upload-sprite"]');
+        if (spriteUpload) {
+            const spriteKey = spriteUpload.dataset.spriteKey || null;
+            const file = spriteUpload.files?.[0] || null;
+            if (spriteKey && file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+                    if (!dataUrl) {
+                        return;
+                    }
+                    updateCreatorUnitJson((draft) => {
+                        draft.sprites = draft.sprites && typeof draft.sprites === 'object' && !Array.isArray(draft.sprites) ? draft.sprites : {};
+                        draft.sprites[spriteKey] = dataUrl;
+                    });
+                    setCreatorMessage('success', `Uploaded ${spriteKey} sprite.`);
+                    renderCreatorScreen();
+                };
+                reader.readAsDataURL(file);
+            }
+            return;
+        }
+
+        const skillSpriteUpload = event.target.closest('[data-action="creator-upload-skill-sprite"]');
+        if (skillSpriteUpload) {
+            const skillId = skillSpriteUpload.dataset.skillId || null;
+            const file = skillSpriteUpload.files?.[0] || null;
+            if (skillId && file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+                    if (!dataUrl) {
+                        return;
+                    }
+                    updateCreatorUnitJson((draft) => {
+                        draft.sprites = draft.sprites && typeof draft.sprites === 'object' && !Array.isArray(draft.sprites) ? draft.sprites : {};
+                        draft.sprites.skills = draft.sprites.skills && typeof draft.sprites.skills === 'object' && !Array.isArray(draft.sprites.skills) ? draft.sprites.skills : {};
+                        draft.sprites.skills[skillId] = dataUrl;
+                    });
+                    setCreatorMessage('success', `Uploaded sprite for ${skillId}.`);
+                    renderCreatorScreen();
+                };
+                reader.readAsDataURL(file);
+            }
         }
     }
 
@@ -1254,6 +1846,10 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttribute(value) {
+        return escapeHtml(value).replace(/\n/g, '&#10;');
     }
 
     function configureAudio(audio, volume) {
