@@ -737,6 +737,34 @@
         return typeof api.getBattleDefinition === 'function' ? api.getBattleDefinition(id) : null;
     }
 
+
+    function createDefaultStatusDefinition() {
+        return {
+            id: 'new_status',
+            name: 'New Status',
+            label: 'New Status',
+            description: 'Describe what this status does.',
+            iconPath: '',
+            countOnly: false,
+            tags: [],
+            stackModel: {
+                potency: { enabled: true, min: 0, max: 99, application: 'add' },
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {
+                turnEnd: [
+                    {
+                        type: 'adjustStatus',
+                        target: 'self',
+                        statusId: 'new_status',
+                        countDelta: -1,
+                    },
+                ],
+            },
+        };
+    }
+
     function createDefaultUnitDefinition() {
         const sinKeys = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
         const sinResistances = Object.fromEntries(sinKeys.map((key) => [key, 1]));
@@ -808,6 +836,21 @@
             return resolveExtensionUrl(path);
         }
         return path;
+    }
+
+
+    function updateCreatorStatusJson(mutator) {
+        const parsed = getCreatorParsedJsonOrNull();
+        const draft = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? parsed
+            : createDefaultStatusDefinition();
+        draft.tags = Array.isArray(draft.tags) ? draft.tags : [];
+        draft.stackModel = draft.stackModel && typeof draft.stackModel === 'object' && !Array.isArray(draft.stackModel) ? draft.stackModel : {};
+        draft.hooks = draft.hooks && typeof draft.hooks === 'object' && !Array.isArray(draft.hooks) ? draft.hooks : {};
+        if (typeof mutator === 'function') {
+            mutator(draft);
+        }
+        state.creatorJsonInput = JSON.stringify(draft, null, 2);
     }
 
     function updateCreatorUnitJson(mutator) {
@@ -896,6 +939,54 @@
         const unitSkillSprites = unitSprites.skills && typeof unitSprites.skills === 'object' && !Array.isArray(unitSprites.skills) ? unitSprites.skills : {};
         const unitPassives = Array.isArray(unitDraft?.passives) ? unitDraft.passives : [];
         const unitSkills = Array.isArray(unitDraft?.skills) ? unitDraft.skills : [];
+        const parsedStatusJson = entityType === 'status' ? getCreatorParsedJsonOrNull() : null;
+        const statusDraft = entityType === 'status' && parsedStatusJson && typeof parsedStatusJson === 'object' && !Array.isArray(parsedStatusJson)
+            ? parsedStatusJson
+            : (entityType === 'status' ? createDefaultStatusDefinition() : null);
+        const statusTags = Array.isArray(statusDraft?.tags) ? statusDraft.tags.join(', ') : '';
+
+        const statusEditorMarkup = tab === 'editor' && entityType === 'status'
+            ? `
+                <div style="display: grid; gap: 0.85rem;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-status-new">New Status</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-validate">Validate</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;">
+                        ${['id','name','label','iconPath'].map((field) => `
+                            <div style="display: grid; gap: 0.45rem;">
+                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">${escapeHtml(field)}</label>
+                                <input data-action="creator-status-field" data-field="${field}" value="${escapeAttribute(String(statusDraft?.[field] || ''))}" placeholder="${field === 'iconPath' ? 'assets/... or URL' : field}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                            </div>
+                        `).join('')}
+                    </div>
+                    <label style="display:flex; gap:0.55rem; align-items:center; color:rgba(255,255,255,0.86);">
+                        <input type="checkbox" data-action="creator-status-count-only" ${statusDraft?.countOnly ? 'checked' : ''} /> Count-only status (hide potency and use Count as the main stack)
+                    </label>
+                    <div style="display:grid; gap:0.45rem;">
+                        <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Tags (comma separated)</label>
+                        <input data-action="creator-status-tags" value="${escapeAttribute(statusTags)}" placeholder="buff, custom, damage" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                    </div>
+                    <div style="display:grid; gap:0.45rem;">
+                        <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Description</label>
+                        <textarea data-action="creator-status-field" data-field="description" rows="3" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(String(statusDraft?.description || ''))}</textarea>
+                    </div>
+                    <details open>
+                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Stack Model JSON</summary>
+                        <textarea data-action="creator-status-json-section" data-section="stackModel" rows="8" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35; margin-top: 0.55rem;">${escapeHtml(JSON.stringify(statusDraft?.stackModel || {}, null, 2))}</textarea>
+                    </details>
+                    <details open>
+                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Lifecycle Hooks JSON</summary>
+                        <textarea data-action="creator-status-json-section" data-section="hooks" rows="10" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35; margin-top: 0.55rem;">${escapeHtml(JSON.stringify(statusDraft?.hooks || {}, null, 2))}</textarea>
+                    </details>
+                    <details>
+                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Raw JSON</summary>
+                        <textarea data-action="creator-json-input" rows="14" style="width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height: 1.35; margin-top: 0.65rem;">${escapeHtml(state.creatorJsonInput || '')}</textarea>
+                    </details>
+                </div>
+            `
+            : '';
 
         const unitEditorMarkup = tab === 'editor' && entityType === 'unit'
             ? `
@@ -1207,7 +1298,7 @@
                     <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
                     ${entityType === 'battle' ? '<button class="echoes-battle-panel__combat-button" type="button" data-action="creator-playtest">Playtest</button>' : ''}
                 </div>
-                ${entityType === 'unit' ? unitEditorMarkup : `
+                ${entityType === 'unit' ? unitEditorMarkup : entityType === 'status' ? statusEditorMarkup : `
                     <textarea
                         data-action="creator-json-input"
                         rows="12"
@@ -1629,6 +1720,16 @@
             renderCreatorScreen();
         }
 
+        if (action === 'creator-status-new') {
+            updateCreatorStatusJson((draft) => {
+                const next = createDefaultStatusDefinition();
+                Object.keys(draft).forEach((key) => delete draft[key]);
+                Object.assign(draft, next);
+            });
+            setCreatorMessage('success', 'Created a new status draft.');
+            renderCreatorScreen();
+        }
+
         if (action === 'creator-unit-add-passive') {
             updateCreatorUnitJson((draft) => {
                 const nextIndex = Array.isArray(draft.passives) ? draft.passives.length + 1 : 1;
@@ -1773,6 +1874,65 @@
         const textarea = event.target.closest('[data-action="creator-json-input"]');
         if (textarea) {
             state.creatorJsonInput = textarea.value || '';
+            return;
+        }
+
+        const statusField = event.target.closest('[data-action="creator-status-field"]');
+        if (statusField) {
+            const field = statusField.dataset.field || null;
+            if (field) {
+                updateCreatorStatusJson((draft) => {
+                    draft[field] = normalizeStringInput(statusField.value, '');
+                    if (field === 'name' && !draft.label) {
+                        draft.label = draft.name;
+                    }
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const statusCountOnly = event.target.closest('[data-action="creator-status-count-only"]');
+        if (statusCountOnly) {
+            updateCreatorStatusJson((draft) => {
+                draft.countOnly = Boolean(statusCountOnly.checked);
+                if (draft.countOnly && draft.stackModel?.potency) {
+                    draft.stackModel.potency.enabled = false;
+                } else if (draft.stackModel?.potency) {
+                    draft.stackModel.potency.enabled = true;
+                }
+            });
+            renderCreatorScreen();
+            return;
+        }
+
+        const statusTags = event.target.closest('[data-action="creator-status-tags"]');
+        if (statusTags) {
+            updateCreatorStatusJson((draft) => {
+                draft.tags = String(statusTags.value || '')
+                    .split(',')
+                    .map((tag) => tag.trim())
+                    .filter(Boolean);
+            });
+            renderCreatorScreen();
+            return;
+        }
+
+        const statusJsonSection = event.target.closest('[data-action="creator-status-json-section"]');
+        if (statusJsonSection) {
+            const section = statusJsonSection.dataset.section || null;
+            if (section) {
+                try {
+                    const parsed = JSON.parse(statusJsonSection.value || '{}');
+                    updateCreatorStatusJson((draft) => {
+                        draft[section] = parsed;
+                    });
+                    setCreatorMessage('success', `Updated status ${section}.`);
+                } catch (error) {
+                    setCreatorMessage('error', `Invalid ${section} JSON: ${error?.message || error}`);
+                }
+                renderCreatorScreen();
+            }
             return;
         }
 
