@@ -28,6 +28,12 @@
         );
     }
 
+    function getEncounterDefinitionValidator() {
+        return battleModules.validation?.validateAndNormalizeEncounterDefinition
+            || battleModules.validateAndNormalizeEncounterDefinition
+            || null;
+    }
+
     function getBattleDefinitionValidator() {
         return battleModules.validation?.validateAndNormalizeBattleDefinition
             || battleModules.validateAndNormalizeBattleDefinition
@@ -52,7 +58,7 @@
     function registerBattleDefinition(definition, options = {}) {
         assertContentRegistryReady();
 
-        const validator = getBattleDefinitionValidator();
+        const validator = getEncounterDefinitionValidator() || getBattleDefinitionValidator();
         const resolvedDefinition = resolveBattleDefinitionComposition(definition);
         const { normalizedDefinition, errors, message } = validator(resolvedDefinition);
         if (Array.isArray(errors) && errors.length) {
@@ -60,6 +66,9 @@
         }
 
         const registeredDefinition = normalizedDefinition || definition;
+        if (!Array.isArray(registeredDefinition.playerUnits)) {
+            registeredDefinition.playerUnits = [];
+        }
         const definitionId = registeredDefinition?.id;
         if (!definitionId || typeof definitionId !== 'string') {
             throw new Error('Registered battle definitions must have an id.');
@@ -275,7 +284,7 @@
 
         const nextDefinition = {
             ...sourceDefinition,
-            playerUnits: resolvedPlayerUnits || sourceDefinition.playerUnits,
+            playerUnits: resolvedPlayerUnits || sourceDefinition.playerUnits || [],
             enemyUnits: resolvedEnemyUnits || sourceDefinition.enemyUnits,
         };
 
@@ -290,6 +299,45 @@
         }
 
         return nextDefinition;
+    }
+
+    function buildRuntimeBattleDefinition(encounterDefinition, playerUnitIds) {
+        if (!encounterDefinition || typeof encounterDefinition !== 'object' || Array.isArray(encounterDefinition)) {
+            throw new Error('Encounter definition is required.');
+        }
+        if (!Array.isArray(playerUnitIds) || !playerUnitIds.length) {
+            throw new Error('At least one player unit id is required to build a runtime battle.');
+        }
+
+        const source = cloneContentValue(encounterDefinition);
+        const resolvedPlayers = resolveUnitList(playerUnitIds, 'battle.playerUnitIds');
+        const sortedPlayers = resolvedPlayers.slice().sort((unitA, unitB) => {
+            const orderA = Number.isInteger(unitA?.deploymentOrder) ? unitA.deploymentOrder : 999;
+            const orderB = Number.isInteger(unitB?.deploymentOrder) ? unitB.deploymentOrder : 999;
+            if (orderA !== orderB) {
+                return orderA - orderB;
+            }
+            return 0;
+        });
+
+        const runtimeDefinition = {
+            ...source,
+            playerUnits: sortedPlayers,
+            playerUnitIds: playerUnitIds.slice(),
+        };
+
+        const validator = getBattleDefinitionValidator();
+        if (typeof validator !== 'function') {
+            return runtimeDefinition;
+        }
+
+        const resolvedDefinition = resolveBattleDefinitionComposition(runtimeDefinition);
+        const { normalizedDefinition, errors, message } = validator(resolvedDefinition);
+        if (Array.isArray(errors) && errors.length) {
+            throw new Error(message || 'Runtime battle definition is invalid.');
+        }
+
+        return normalizedDefinition || runtimeDefinition;
     }
 
     function normalizeContentPackImport(payload) {
@@ -971,6 +1019,7 @@
         getUnitDefinition,
         listUnitDefinitions,
         resolveBattleDefinitionComposition,
+        buildRuntimeBattleDefinition,
         registerBattleDefinition,
         unregisterBattleDefinition,
         getBattleDefinition,
@@ -995,6 +1044,7 @@
         getUnitDefinition,
         listUnitDefinitions,
         resolveBattleDefinitionComposition,
+        buildRuntimeBattleDefinition,
         registerBattleDefinition,
         unregisterBattleDefinition,
         getBattleDefinition,

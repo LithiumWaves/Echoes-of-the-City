@@ -1,18 +1,30 @@
 # Battle Authoring (Schema)
 
-This engine consumes a `BattleDefinition` object.
+The engine consumes two related shapes:
 
-## BattleDefinition
+- **Encounter definitions** (authored in Creator / content packs): enemies, rules, and scripted events. Player party is **not** authored on encounters.
+- **Runtime battle definitions** (built at deploy): encounter + deployed player units, validated with full `validateBattleDefinition`.
+
+## EncounterDefinition (authored)
 
 Required:
 - `id: string`
 - `name: string`
-- `playerUnits: UnitDefinition[]`
-- `enemyUnits: UnitDefinition[]`
+- `enemyUnits: UnitDefinition[]` **or** `enemyUnitIds` / wave `enemyUnitIds` resolvable to units
 
 Optional:
 - `description: string`
 - `rules: EncounterRules`
+
+Player units are chosen in the Characters screen (team presets) and merged at launch via `buildRuntimeBattleDefinition(encounter, playerUnitIds)`.
+
+## BattleDefinition (runtime)
+
+Required:
+- `id: string`
+- `name: string`
+- `playerUnits: UnitDefinition[]` (at least one at runtime)
+- `enemyUnits: UnitDefinition[]`
 
 Legacy compatibility:
 - `hero` → treated as `playerUnits: [hero]`
@@ -23,6 +35,7 @@ Legacy compatibility:
 Optional:
 - `encounterType: "focused" | "unfocused"` (default: `"focused"`)
 - `maxTurns: number` (default: `100`)
+- `maxPlayerUnits: number` (optional deploy cap for player party subset)
 - `victoryCondition: string` (default: `"defeat-all-enemies"`)
 - `failureCondition: string` (default: `"all-allies-defeated"`)
 - `enemyAiProfile: string | { skill?: string; target?: string }`
@@ -223,6 +236,8 @@ Supported passive hook names (current):
 - `attackEnd`
 - `turnEnd`
 - `unitDefeated`
+- `staggerThresholdCrossed` (scripted events may filter with optional `threshold` HP fraction, e.g. `0.75`)
+- `staggerRecovered`
 - `battleEnd`
 
 Notes:

@@ -134,9 +134,6 @@
       "id": "example-advanced-battle",
       "name": "Example Advanced Battle",
       "description": "A battle that uses the custom Example Soldier unit.",
-      "playerUnitIds": [
-        "example-soldier"
-      ],
       "enemyUnitIds": [
         "dongbaek"
       ],

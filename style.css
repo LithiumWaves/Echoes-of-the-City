@@ -1378,6 +1378,239 @@
     background: url("./assets/characterstab/nocharacter.png") center / contain no-repeat;
 }
 
+.echoes-battle-panel__character-screen .echoes-team {
+    position: absolute;
+    inset: 8% 3.5% 8% 3.5%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    color: rgba(255, 255, 255, 0.92);
+    font: 0.72rem/1.35 "Segoe UI", system-ui, sans-serif;
+    pointer-events: auto;
+}
+
+.echoes-team__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(8, 10, 14, 0.55);
+}
+
+.echoes-team__preset-name-label {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: 1;
+}
+
+.echoes-team__preset-name-label input {
+    flex: 1;
+    min-width: 8rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(8, 10, 14, 0.72);
+    color: inherit;
+    padding: 0.35rem 0.5rem;
+    font: inherit;
+}
+
+.echoes-team__count {
+    opacity: 0.85;
+    font-weight: 600;
+}
+
+.echoes-team__layout {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 9%) 1fr minmax(11rem, 22%);
+    gap: 0.55rem;
+}
+
+.echoes-team__presets {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    overflow: auto;
+}
+
+.echoes-team__preset-tab {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(8, 10, 14, 0.62);
+    color: inherit;
+    padding: 0.4rem 0.45rem;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.echoes-team__preset-tab.is-active {
+    outline: 2px solid rgba(255, 180, 120, 0.55);
+    background: rgba(24, 18, 14, 0.82);
+}
+
+.echoes-team__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+    gap: 0.45rem;
+    overflow: auto;
+    padding: 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(8, 10, 14, 0.42);
+}
+
+.echoes-team__card {
+    position: relative;
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.45rem;
+    border: 2px solid var(--echoes-team-sin-color, rgba(255, 255, 255, 0.25));
+    background: rgba(12, 14, 18, 0.78);
+    min-height: 6.5rem;
+}
+
+.echoes-team__card-thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    background: rgba(0, 0, 0, 0.35) center / contain no-repeat;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.echoes-team__card-body {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.35rem;
+    align-items: baseline;
+}
+
+.echoes-team__card-name {
+    font-size: 0.78rem;
+}
+
+.echoes-team__card-level {
+    opacity: 0.75;
+    font-size: 0.68rem;
+}
+
+.echoes-team__card-remove {
+    position: absolute;
+    top: 0.2rem;
+    right: 0.2rem;
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(120, 24, 24, 0.75);
+    color: #fff;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.echoes-team__roster {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-height: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(8, 10, 14, 0.52);
+    padding: 0.35rem;
+}
+
+.echoes-team__roster-search {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(8, 10, 14, 0.72);
+    color: inherit;
+    padding: 0.35rem 0.5rem;
+    font: inherit;
+}
+
+.echoes-team__roster-list {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.echoes-team__roster-row {
+    display: grid;
+    grid-template-columns: 2rem 1fr auto;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 3px solid var(--echoes-team-sin-color, rgba(255, 255, 255, 0.25));
+    background: rgba(12, 14, 18, 0.72);
+    color: inherit;
+    padding: 0.3rem 0.4rem;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.echoes-team__roster-thumb {
+    width: 2rem;
+    height: 2rem;
+    background: rgba(0, 0, 0, 0.35) center / contain no-repeat;
+}
+
+.echoes-team__roster-add {
+    opacity: 0.8;
+    font-weight: 700;
+}
+
+.echoes-team__empty {
+    opacity: 0.8;
+    margin: 0.35rem 0;
+}
+
+.echoes-deploy__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+    gap: 0.55rem;
+    margin-top: 0.75rem;
+}
+
+.echoes-deploy__card {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.55rem;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(8, 10, 14, 0.62);
+    cursor: pointer;
+}
+
+.echoes-deploy__card.is-selected {
+    outline: 2px solid rgba(255, 200, 140, 0.55);
+    background: rgba(24, 18, 14, 0.78);
+}
+
+.echoes-deploy__card input {
+    margin: 0;
+}
+
+.echoes-deploy__thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    background: rgba(0, 0, 0, 0.35) center / contain no-repeat;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.echoes-deploy__name {
+    font-size: 0.82rem;
+    text-align: center;
+}
+
+.echoes-deploy__actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.65rem;
+    margin-top: 1rem;
+}
+
 .echoes-battle-panel__tray {
     position: absolute;
     right: 2.4%;

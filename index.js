@@ -89,6 +89,7 @@
         'battle/ui/creator/creatorUiHelpers.js',
         'battle/ui/creator/movesetSheet/movesetSheetRenderer.js',
         'battle/ui/creator/encounterBuilder/encounterBuilderRenderer.js',
+        'battle/ui/roster/teamBuilderRenderer.js',
         'battle/ui/inspect/inspectState.js',
         'battle/core/damageFormula.js',
         'battle/core/plannerSkills.js',
@@ -162,6 +163,10 @@
         creatorUnitDraftCache: null,
         creatorBattleDraftCache: null,
         creatorRenderLock: false,
+        teamPresets: null,
+        teamRosterFilter: '',
+        combatPhase: 'select',
+        deploySelectedUnitIds: [],
     };
 
     const elements = {
@@ -174,6 +179,8 @@
         screen: null,
         mainMenu: null,
         characterSelect: null,
+        characterScreen: null,
+        characterLayout: null,
         creatorScreen: null,
         creatorContent: null,
         combatScreen: null,
@@ -547,6 +554,54 @@
         return window.EchoesOfTheCityMovesetSheet || window.EchoesOfTheCityBattleModules?.movesetSheet || null;
     }
 
+    function getTeamBuilder() {
+        return window.EchoesOfTheCityTeamBuilder || window.EchoesOfTheCityBattleModules?.teamBuilder || null;
+    }
+
+    function ensureTeamPresetsLoaded() {
+        const teamBuilder = getTeamBuilder();
+        if (!teamBuilder) {
+            return null;
+        }
+        if (!state.teamPresets) {
+            try {
+                const raw = window.localStorage?.getItem(teamBuilder.TEAM_PRESETS_STORAGE_KEY);
+                state.teamPresets = teamBuilder.parseTeamPresetsFromStorage(raw);
+            } catch {
+                state.teamPresets = teamBuilder.createDefaultTeamPresetsState();
+            }
+        }
+        return state.teamPresets;
+    }
+
+    function saveTeamPresetsState() {
+        const teamBuilder = getTeamBuilder();
+        if (!teamBuilder || !state.teamPresets) {
+            return;
+        }
+        state.teamPresets = teamBuilder.normalizeTeamPresetsState(state.teamPresets);
+        try {
+            window.localStorage?.setItem(
+                teamBuilder.TEAM_PRESETS_STORAGE_KEY,
+                teamBuilder.serializeTeamPresetsState(state.teamPresets),
+            );
+        } catch {
+            return;
+        }
+    }
+
+    function getActiveTeamPreset() {
+        const teamBuilder = getTeamBuilder();
+        const normalized = teamBuilder?.normalizeTeamPresetsState(ensureTeamPresetsLoaded())
+            || { presets: [], activePresetIndex: 0 };
+        return normalized.presets[normalized.activePresetIndex] || { name: '', unitIds: [] };
+    }
+
+    function getActiveTeamUnitIds() {
+        const preset = getActiveTeamPreset();
+        return Array.isArray(preset.unitIds) ? preset.unitIds.slice() : [];
+    }
+
     function getEncounterBuilder() {
         return window.EchoesOfTheCityEncounterBuilder || window.EchoesOfTheCityBattleModules?.encounterBuilder || null;
     }
@@ -600,7 +655,6 @@
             const draft = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
                 ? parsed
                 : fallback;
-            draft.playerUnitIds = Array.isArray(draft.playerUnitIds) ? draft.playerUnitIds : [];
             draft.enemyUnitIds = Array.isArray(draft.enemyUnitIds) ? draft.enemyUnitIds : [];
             draft.rules = draft.rules && typeof draft.rules === 'object' && !Array.isArray(draft.rules)
                 ? draft.rules
@@ -692,18 +746,12 @@
             id: definition.id || fallback.id,
             name: definition.name || fallback.name,
             description: definition.description || '',
-            playerUnitIds: [],
             enemyUnitIds: [],
             rules: {
                 ...fallback.rules,
                 ...(definition.rules && typeof definition.rules === 'object' ? definition.rules : {}),
             },
         };
-        if (Array.isArray(definition.playerUnitIds)) {
-            draft.playerUnitIds = definition.playerUnitIds.slice();
-        } else if (Array.isArray(definition.playerUnits)) {
-            draft.playerUnitIds = definition.playerUnits.map((unit) => unit?.id).filter(Boolean);
-        }
         if (Array.isArray(definition.enemyUnitIds)) {
             draft.enemyUnitIds = definition.enemyUnitIds.slice();
         } else if (Array.isArray(definition.enemyUnits)) {
@@ -1554,11 +1602,15 @@
                 const resolvedBattle = typeof api.resolveBattleDefinitionComposition === 'function'
                     ? api.resolveBattleDefinitionComposition(parsed)
                     : parsed;
-                const result = typeof api.validateBattleDefinition === 'function'
-                    ? api.validateBattleDefinition(resolvedBattle)
+                const schemaApi = getSchemaApi();
+                const validator = typeof schemaApi?.validateEncounterDefinition === 'function'
+                    ? schemaApi.validateEncounterDefinition
+                    : (typeof api.validateEncounterDefinition === 'function' ? api.validateEncounterDefinition : null);
+                const result = validator
+                    ? validator(resolvedBattle)
                     : { errors: [] };
                 if (result.errors?.length) {
-                    const formatter = getSchemaApi()?.formatBattleDefinitionErrors;
+                    const formatter = schemaApi?.formatBattleDefinitionErrors || getSchemaApi()?.formatBattleDefinitionErrors;
                     throw new Error(typeof formatter === 'function' ? formatter(result.errors) : result.errors.join('\n'));
                 }
             }
@@ -1589,8 +1641,10 @@
             refreshBattleSelectionState();
             state.selectedBattleId = parsed.id;
             state.activeScreen = 'combat';
+            state.combatPhase = 'deploy';
+            state.deploySelectedUnitIds = getActiveTeamUnitIds();
             syncPanelState();
-            await initializeBattleHandler(parsed.id);
+            renderCombatScreen();
         } catch (error) {
             setCreatorMessage('error', formatCombatModuleError(error));
             renderCreatorScreen();
@@ -1694,7 +1748,6 @@
             id: 'new-battle',
             name: 'New Encounter',
             description: '',
-            playerUnitIds: [],
             enemyUnitIds: [],
             rules: {
                 encounterType: 'focused',
@@ -2254,7 +2307,7 @@
                         data-action="launch-selected-battle"
                         ${selectedBattle ? '' : 'disabled'}
                     >
-                        ${selectedBattle?.isDebug ? 'Launch Debug Battle' : 'Launch Battle'}
+                        ${selectedBattle?.isDebug ? 'Launch Debug Battle' : 'Deploy'}
                     </button>
                 </div>
                 ${selectedBattle && !selectedBattle.isDebug
@@ -2298,7 +2351,79 @@
         `;
     }
 
-    async function initializeBattleHandler(battleId = state.selectedBattleId) {
+    function renderDeployScreen() {
+        if (!elements.combatContent) {
+            return;
+        }
+
+        const api = getBattleContentApi();
+        const encounter = typeof api.getBattleDefinition === 'function'
+            ? api.getBattleDefinition(state.selectedBattleId)
+            : null;
+        const selectedBattle = state.availableBattles.find((battle) => battle.id === state.selectedBattleId) || null;
+        const activePreset = getActiveTeamPreset();
+        const unitList = typeof api.listUnitDefinitions === 'function' ? api.listUnitDefinitions() : [];
+        const maxPlayerUnits = Number.isInteger(encounter?.rules?.maxPlayerUnits)
+            ? encounter.rules.maxPlayerUnits
+            : null;
+        const selectedIds = Array.isArray(state.deploySelectedUnitIds) ? state.deploySelectedUnitIds : [];
+        const teamUnitIds = Array.isArray(activePreset.unitIds) ? activePreset.unitIds : [];
+
+        const unitLabel = (unitId) => {
+            const entry = unitList.find((unit) => unit?.id === unitId);
+            return entry?.name || unitId;
+        };
+
+        const deployCards = teamUnitIds.length
+            ? teamUnitIds.map((unitId) => {
+                const checked = selectedIds.includes(unitId);
+                const unit = unitList.find((entry) => entry?.id === unitId);
+                const idleSprite = unit?.sprites?.idle || '';
+                const spriteUrl = idleSprite ? resolveExtensionUrl(idleSprite) : '';
+                return `
+                    <label class="echoes-deploy__card${checked ? ' is-selected' : ''}" data-unit-id="${escapeAttribute(unitId)}">
+                        <input type="checkbox" data-action="toggle-deploy-unit" data-unit-id="${escapeAttribute(unitId)}" ${checked ? 'checked' : ''} />
+                        <span class="echoes-deploy__thumb" style="background-image:url('${escapeAttribute(spriteUrl)}');"></span>
+                        <span class="echoes-deploy__name">${escapeHtml(unitLabel(unitId))}</span>
+                    </label>
+                `;
+            }).join('')
+            : '<p class="echoes-battle-panel__planner-empty">No units in the active team preset. Build your team in Characters first.</p>';
+
+        const capHint = maxPlayerUnits != null
+            ? `<p class="echoes-battle-panel__planner-empty">Deploy up to ${maxPlayerUnits} units for this encounter.</p>`
+            : '';
+
+        elements.combatContent.innerHTML = `
+            <div class="echoes-battle-panel__combat-debug echoes-deploy">
+                <div class="echoes-battle-panel__combat-toolbar">
+                    <div class="echoes-battle-panel__combat-pills">
+                        <span class="echoes-battle-panel__combat-pill">Deploy</span>
+                        <span class="echoes-battle-panel__combat-pill">${escapeHtml(activePreset.name || 'Active team')}</span>
+                    </div>
+                </div>
+                <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
+                    ${escapeHtml(encounter?.name || selectedBattle?.name || 'Encounter')}
+                    — select units from your active team preset to deploy.
+                </div>
+                ${capHint}
+                <div class="echoes-deploy__grid">${deployCards}</div>
+                <div class="echoes-deploy__actions">
+                    <button class="echoes-battle-panel__combat-button" type="button" data-action="cancel-deployment">Back</button>
+                    <button
+                        class="echoes-battle-panel__combat-button"
+                        type="button"
+                        data-action="confirm-deployment"
+                        ${teamUnitIds.length && selectedIds.length ? '' : 'disabled'}
+                    >
+                        Deploy &amp; Start
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    async function initializeBattleHandler(battleId = state.selectedBattleId, options = {}) {
         if (!elements.combatContent) {
             return;
         }
@@ -2306,12 +2431,27 @@
         await prepareBattleSelection();
 
         const selectedBattleId = battleId || state.selectedBattleId;
-        const battleDefinition = window.EchoesOfTheCityBattle.getBattleDefinition?.(selectedBattleId);
-        if (!battleDefinition) {
+        const api = getBattleContentApi();
+        const encounter = typeof api.getBattleDefinition === 'function'
+            ? api.getBattleDefinition(selectedBattleId)
+            : null;
+        if (!encounter) {
             throw new Error(`Battle definition "${selectedBattleId}" is not available.`);
         }
 
+        let battleDefinition = encounter;
+        const playerUnitIds = Array.isArray(options.playerUnitIds) ? options.playerUnitIds.filter(Boolean) : null;
+        if (playerUnitIds?.length && typeof api.buildRuntimeBattleDefinition === 'function') {
+            battleDefinition = api.buildRuntimeBattleDefinition(encounter, playerUnitIds);
+        } else if (!isDebugBattleId(encounter.id) && typeof api.buildRuntimeBattleDefinition === 'function') {
+            const teamIds = getActiveTeamUnitIds();
+            if (teamIds.length) {
+                battleDefinition = api.buildRuntimeBattleDefinition(encounter, teamIds);
+            }
+        }
+
         state.selectedBattleId = battleDefinition.id;
+        state.combatPhase = 'select';
 
         if (isDebugBattleId(battleDefinition.id)) {
             await ensureDebugBattleModuleLoaded();
@@ -2340,7 +2480,46 @@
             return;
         }
 
+        if (state.combatPhase === 'deploy') {
+            renderDeployScreen();
+            return;
+        }
+
         renderBattleStartScreen();
+    }
+
+    async function renderCharacterSelectScreen() {
+        if (!elements.characterScreen) {
+            return;
+        }
+
+        try {
+            await ensureBattleModuleLoaded();
+        } catch (error) {
+            console.error(`${EXTENSION_ID}: team builder module load failed.`, error);
+            elements.characterScreen.innerHTML = `<p class="echoes-team__empty">Failed to load team builder.</p>`;
+            return;
+        }
+
+        const teamBuilder = getTeamBuilder();
+        const api = getBattleContentApi();
+        if (!teamBuilder) {
+            elements.characterScreen.innerHTML = `<p class="echoes-team__empty">Team builder is not available.</p>`;
+            return;
+        }
+
+        ensureTeamPresetsLoaded();
+        const unitList = typeof api.listUnitDefinitions === 'function' ? api.listUnitDefinitions() : [];
+        elements.characterScreen.innerHTML = teamBuilder.renderTeamBuilder(
+            state.teamPresets,
+            unitList,
+            escapeAttribute,
+            escapeHtml,
+            {
+                rosterFilter: state.teamRosterFilter,
+                resolveAssetUrl: resolveExtensionUrl,
+            },
+        );
     }
 
     function resetBattle() {
@@ -2358,15 +2537,53 @@
 
         if (action === 'select-battle' && battleId) {
             state.selectedBattleId = battleId;
+            state.combatPhase = 'select';
             renderBattleStartScreen();
             return;
         }
 
         if (action === 'launch-selected-battle') {
             try {
-                await initializeBattleHandler(state.selectedBattleId);
+                if (isDebugBattleId(state.selectedBattleId)) {
+                    await initializeBattleHandler(state.selectedBattleId);
+                    renderCombatScreen();
+                    return;
+                }
+                state.combatPhase = 'deploy';
+                state.deploySelectedUnitIds = getActiveTeamUnitIds();
+                renderDeployScreen();
             } catch (error) {
                 console.error(`${EXTENSION_ID}: combat module initialization failed.`, error);
+                renderCombatLoadError(error);
+            }
+            return;
+        }
+
+        if (action === 'cancel-deployment') {
+            state.combatPhase = 'select';
+            renderBattleStartScreen();
+            return;
+        }
+
+        if (action === 'confirm-deployment') {
+            try {
+                const selectedIds = Array.isArray(state.deploySelectedUnitIds)
+                    ? state.deploySelectedUnitIds.filter(Boolean)
+                    : [];
+                if (!selectedIds.length) {
+                    throw new Error('Select at least one unit to deploy.');
+                }
+                const encounter = getBattleContentApi().getBattleDefinition?.(state.selectedBattleId);
+                const maxPlayerUnits = Number.isInteger(encounter?.rules?.maxPlayerUnits)
+                    ? encounter.rules.maxPlayerUnits
+                    : null;
+                if (maxPlayerUnits != null && selectedIds.length > maxPlayerUnits) {
+                    throw new Error(`This encounter allows up to ${maxPlayerUnits} player units.`);
+                }
+                await initializeBattleHandler(state.selectedBattleId, { playerUnitIds: selectedIds });
+                renderCombatScreen();
+            } catch (error) {
+                console.error(`${EXTENSION_ID}: deployment failed.`, error);
                 renderCombatLoadError(error);
             }
             return;
@@ -2417,7 +2634,37 @@
         if (debugToggle) {
             state.battleDebugToolsEnabled = Boolean(debugToggle.checked);
             persistBooleanSetting(BATTLE_DEBUG_TOOLS_STORAGE_KEY, state.battleDebugToolsEnabled);
-            renderBattleStartScreen();
+            if (state.combatPhase === 'deploy') {
+                renderDeployScreen();
+            } else {
+                renderBattleStartScreen();
+            }
+            return;
+        }
+
+        const deployToggle = event.target.closest('[data-action="toggle-deploy-unit"]');
+        if (deployToggle) {
+            const unitId = deployToggle.dataset.unitId || '';
+            if (!unitId) {
+                return;
+            }
+            const api = getBattleContentApi();
+            const encounter = api.getBattleDefinition?.(state.selectedBattleId);
+            const maxPlayerUnits = Number.isInteger(encounter?.rules?.maxPlayerUnits)
+                ? encounter.rules.maxPlayerUnits
+                : null;
+            const selected = new Set(state.deploySelectedUnitIds || []);
+            if (deployToggle.checked) {
+                if (maxPlayerUnits != null && selected.size >= maxPlayerUnits && !selected.has(unitId)) {
+                    deployToggle.checked = false;
+                    return;
+                }
+                selected.add(unitId);
+            } else {
+                selected.delete(unitId);
+            }
+            state.deploySelectedUnitIds = [...selected];
+            renderDeployScreen();
             return;
         }
 
@@ -2595,11 +2842,6 @@
                 return;
             }
             updateCreatorBattleJson((draft) => {
-                if (listKind === 'player') {
-                    draft.playerUnitIds = Array.isArray(draft.playerUnitIds) ? draft.playerUnitIds : [];
-                    draft.playerUnitIds.splice(unitIndex, 1);
-                    return;
-                }
                 if (listKind === 'enemy') {
                     draft.enemyUnitIds = Array.isArray(draft.enemyUnitIds) ? draft.enemyUnitIds : [];
                     draft.enemyUnitIds.splice(unitIndex, 1);
@@ -2973,13 +3215,6 @@
             const waveIndexRaw = encounterUnitPick.dataset.waveIndex;
             const waveIndex = waveIndexRaw !== undefined && String(waveIndexRaw) !== '' ? Number(waveIndexRaw) : null;
             updateCreatorBattleJson((draft) => {
-                if (listKind === 'player') {
-                    draft.playerUnitIds = Array.isArray(draft.playerUnitIds) ? draft.playerUnitIds : [];
-                    if (!draft.playerUnitIds.includes(unitId)) {
-                        draft.playerUnitIds.push(unitId);
-                    }
-                    return;
-                }
                 if (listKind === 'enemy') {
                     draft.enemyUnitIds = Array.isArray(draft.enemyUnitIds) ? draft.enemyUnitIds : [];
                     if (!draft.enemyUnitIds.includes(unitId)) {
@@ -3083,6 +3318,15 @@
                         delete entry.side;
                     } else if (field === 'unitId' && !rawValue) {
                         delete entry.unitId;
+                    } else if (field === 'threshold') {
+                        if (!rawValue) {
+                            delete entry.threshold;
+                        } else {
+                            const thresholdValue = Number(rawValue);
+                            if (Number.isFinite(thresholdValue)) {
+                                entry.threshold = thresholdValue;
+                            }
+                        }
                     } else {
                         entry[field] = rawValue;
                     }
@@ -4101,6 +4345,10 @@
         elements.characterTrayButton?.setAttribute('aria-pressed', String(isCharacterSelectOpen));
         elements.combatTrayButton?.setAttribute('aria-pressed', String(isCombatScreenOpen));
         elements.creatorTrayButton?.setAttribute('aria-pressed', String(isCreatorScreenOpen));
+
+        if (isCharacterSelectOpen) {
+            void renderCharacterSelectScreen();
+        }
     }
 
     function syncThemePlayback() {
@@ -4231,6 +4479,95 @@
 
     function handleResize() {
         updateLayoutPosition();
+    }
+
+    async function handleCharacterScreenClick(event) {
+        const actionTarget = event.target.closest('[data-action]');
+        if (!actionTarget) {
+            return;
+        }
+
+        const { action } = actionTarget.dataset;
+        const teamBuilder = getTeamBuilder();
+        if (!teamBuilder) {
+            return;
+        }
+
+        ensureTeamPresetsLoaded();
+        const normalized = teamBuilder.normalizeTeamPresetsState(state.teamPresets);
+
+        if (action === 'team-select-preset') {
+            const presetIndex = Number(actionTarget.dataset.presetIndex);
+            if (!Number.isInteger(presetIndex)) {
+                return;
+            }
+            normalized.activePresetIndex = Math.max(0, Math.min(teamBuilder.MAX_TEAM_PRESETS - 1, presetIndex));
+            state.teamPresets = normalized;
+            saveTeamPresetsState();
+            renderCharacterSelectScreen();
+            return;
+        }
+
+        if (action === 'team-add-unit') {
+            const unitId = actionTarget.dataset.unitId || '';
+            if (!unitId) {
+                return;
+            }
+            const preset = normalized.presets[normalized.activePresetIndex];
+            if (!preset || preset.unitIds.includes(unitId)) {
+                return;
+            }
+            if (preset.unitIds.length >= teamBuilder.MAX_TEAM_SIZE) {
+                return;
+            }
+            preset.unitIds.push(unitId);
+            state.teamPresets = normalized;
+            saveTeamPresetsState();
+            renderCharacterSelectScreen();
+            return;
+        }
+
+        if (action === 'team-remove-unit') {
+            const unitIndex = Number(actionTarget.dataset.unitIndex);
+            if (!Number.isInteger(unitIndex)) {
+                return;
+            }
+            const preset = normalized.presets[normalized.activePresetIndex];
+            if (!preset?.unitIds) {
+                return;
+            }
+            preset.unitIds.splice(unitIndex, 1);
+            state.teamPresets = normalized;
+            saveTeamPresetsState();
+            renderCharacterSelectScreen();
+            return;
+        }
+    }
+
+    function handleCharacterScreenChange(event) {
+        const teamBuilder = getTeamBuilder();
+        if (!teamBuilder) {
+            return;
+        }
+
+        const presetNameInput = event.target.closest('[data-action="team-preset-name"]');
+        if (presetNameInput) {
+            ensureTeamPresetsLoaded();
+            const normalized = teamBuilder.normalizeTeamPresetsState(state.teamPresets);
+            const preset = normalized.presets[normalized.activePresetIndex];
+            if (preset) {
+                preset.name = normalizeStringInput(presetNameInput.value, preset.name);
+                state.teamPresets = normalized;
+                saveTeamPresetsState();
+            }
+            return;
+        }
+
+        const rosterFilter = event.target.closest('[data-action="team-roster-filter"]');
+        if (rosterFilter) {
+            state.teamRosterFilter = rosterFilter.value || '';
+            renderCharacterSelectScreen();
+        }
     }
 
     async function handleCharacterTrayButtonClick() {
@@ -4441,6 +4778,8 @@
         elements.screen = root.querySelector('.echoes-battle-panel__screen');
         elements.mainMenu = root.querySelector('.echoes-battle-panel__main-menu');
         elements.characterSelect = root.querySelector('.echoes-battle-panel__character-select');
+        elements.characterLayout = root.querySelector('.echoes-battle-panel__character-layout');
+        elements.characterScreen = root.querySelector('.echoes-battle-panel__character-screen');
         elements.combatScreen = root.querySelector('.echoes-battle-panel__combat-screen');
         elements.combatContent = root.querySelector('.echoes-battle-panel__combat-content');
         elements.combatTrayButton = root.querySelector('.echoes-battle-panel__tray-button--combat');
@@ -4472,6 +4811,9 @@
         elements.combatContent.addEventListener('dragend', () => state.battleHandler?.handleDragEnd());
         elements.characterTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.characterTrayButton.addEventListener('click', handleCharacterTrayButtonClick);
+        elements.characterScreen?.addEventListener('click', handleCharacterScreenClick);
+        elements.characterScreen?.addEventListener('change', handleCharacterScreenChange);
+        elements.characterScreen?.addEventListener('input', handleCharacterScreenChange);
         elements.creatorTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.creatorTrayButton.addEventListener('click', handleCreatorTrayButtonClick);
         elements.creatorContent.addEventListener('click', handleCreatorContentClick);

@@ -2219,6 +2219,14 @@
                 crossedThreshold = threshold;
                 crossedCount += 1;
                 unit.staggerThresholdIndex += 1;
+                invokeScriptedEvents(targetBattle, 'staggerThresholdCrossed', {
+                    unit,
+                    sourceUnit,
+                    threshold,
+                    staggerLevel: unit.staggerLevel + crossedCount,
+                    previousHp,
+                    nextHp,
+                });
             }
 
             if (!crossedCount) {
@@ -2260,6 +2268,10 @@
             emitEvent(targetBattle, 'unit_stagger_recovered', {
                 unitId: unit.id,
                 unitName: unit.name,
+                previousLevel,
+            });
+            invokeScriptedEvents(targetBattle, 'staggerRecovered', {
+                unit,
                 previousLevel,
             });
         }
@@ -3832,6 +3844,21 @@
             }
             events.forEach((eventDefinition) => {
                 if (!eventDefinition || eventDefinition.trigger !== trigger || !eventDefinition.hook) {
+                    return;
+                }
+                if (eventDefinition.threshold != null) {
+                    const unitForThreshold = extraRuntime.unit || null;
+                    const maxHp = Number(unitForThreshold?.maxHp);
+                    let eventThreshold = Number(eventDefinition.threshold);
+                    let runtimeThreshold = Number(extraRuntime.threshold);
+                    if (eventThreshold > 0 && eventThreshold <= 1 && Number.isFinite(maxHp) && maxHp > 0) {
+                        eventThreshold = Math.round(maxHp * eventThreshold);
+                    }
+                    if (!Number.isFinite(eventThreshold) || eventThreshold !== runtimeThreshold) {
+                        return;
+                    }
+                }
+                if (eventDefinition.unitId && extraRuntime.unit?.id && eventDefinition.unitId !== extraRuntime.unit.id) {
                     return;
                 }
                 const owner = ensureScriptedEventOwner(targetBattle, eventDefinition);

@@ -230,6 +230,8 @@
         attackEnd: 'Attack End',
         turnEnd: 'Turn End',
         unitDefeated: 'Unit Defeated',
+        staggerThresholdCrossed: 'Stagger threshold crossed',
+        staggerRecovered: 'Stagger recovered',
         battleEnd: 'Battle End',
     };
 

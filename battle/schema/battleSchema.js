@@ -1839,7 +1839,8 @@
         };
     }
 
-    function validateBattleDefinition(definition) {
+    function validateBattleDefinition(definition, options = {}) {
+        const requirePlayerParty = options.requirePlayerParty !== false;
         const normalizedDefinition = normalizeBattleDefinition(definition);
         const errors = [];
 
@@ -1849,11 +1850,16 @@
         if (!normalizedDefinition.name || typeof normalizedDefinition.name !== 'string') {
             pushError(errors, 'battle.name', 'must be a non-empty string.');
         }
-        if (!Array.isArray(normalizedDefinition.playerUnits) || !normalizedDefinition.playerUnits.length) {
+        if (requirePlayerParty && (!Array.isArray(normalizedDefinition.playerUnits) || !normalizedDefinition.playerUnits.length)) {
             pushError(errors, 'battle.playerUnits', 'must contain at least one unit.');
         }
+        const waveEnemyUnits = Array.isArray(normalizedDefinition.rules?.waves)
+            ? normalizedDefinition.rules.waves.some((wave) => Array.isArray(wave?.enemyUnits) && wave.enemyUnits.length)
+            : false;
         if (!Array.isArray(normalizedDefinition.enemyUnits) || !normalizedDefinition.enemyUnits.length) {
-            pushError(errors, 'battle.enemyUnits', 'must contain at least one unit.');
+            if (!waveEnemyUnits) {
+                pushError(errors, 'battle.enemyUnits', 'must contain at least one unit (or define enemy waves).');
+            }
         }
 
         const enemyAiProfile = normalizedDefinition.rules?.enemyAiProfile;
@@ -1965,6 +1971,12 @@
                     if (entry.unitId != null && (typeof entry.unitId !== 'string' || !entry.unitId)) {
                         pushError(errors, `${entryPath}.unitId`, 'must be a non-empty string when provided.');
                     }
+                    if (entry.threshold != null) {
+                        const thresholdValue = Number(entry.threshold);
+                        if (!Number.isFinite(thresholdValue) || thresholdValue < 0 || thresholdValue > 1) {
+                            pushError(errors, `${entryPath}.threshold`, 'must be a number between 0 and 1 when provided.');
+                        }
+                    }
                     if (entry.hook == null) {
                         pushError(errors, `${entryPath}.hook`, 'must be provided.');
                     } else {
@@ -1990,6 +2002,10 @@
             normalizedDefinition,
             errors,
         };
+    }
+
+    function validateEncounterDefinition(definition) {
+        return validateBattleDefinition(definition, { requirePlayerParty: false });
     }
 
     function validateUnitDefinition(definition) {
@@ -2087,6 +2103,7 @@
     battleModules.schema = battleModules.schema || {};
     battleModules.schema.normalizeBattleDefinition = normalizeBattleDefinition;
     battleModules.schema.validateBattleDefinition = validateBattleDefinition;
+    battleModules.schema.validateEncounterDefinition = validateEncounterDefinition;
     battleModules.schema.validateUnitDefinition = validateUnitDefinition;
     battleModules.schema.validateStatusDefinition = validateStatusDefinition;
     battleModules.schema.validatePanicStateDefinition = validatePanicStateDefinition;
@@ -2095,6 +2112,7 @@
 
     battleModules.normalizeBattleDefinition = normalizeBattleDefinition;
     battleModules.validateBattleDefinition = validateBattleDefinition;
+    battleModules.validateEncounterDefinition = validateEncounterDefinition;
     battleModules.validateUnitDefinition = validateUnitDefinition;
     battleModules.validateStatusDefinition = validateStatusDefinition;
     battleModules.validatePanicStateDefinition = validatePanicStateDefinition;
@@ -2105,6 +2123,7 @@
         ...window.EchoesOfTheCityBattle,
         normalizeBattleDefinition,
         validateBattleDefinition,
+        validateEncounterDefinition,
         validateUnitDefinition,
         validateStatusDefinition,
         validatePanicStateDefinition,

@@ -11,10 +11,6 @@
         name: 'Echoes Debug Battle',
         description: 'Development encounter assembled from reusable unit definitions.',
         tags: ['debug'],
-        playerUnitIds: [
-            'vergilius',
-            'bamboo-hatted-kim',
-        ],
         enemyUnitIds: [
             'ring-nursefather-hong-lu',
             'dongbaek',

@@ -18,9 +18,6 @@
       "id": "example-minimal-battle",
       "name": "Example Minimal Battle",
       "description": "A minimal battle that reuses shipped units by id.",
-      "playerUnitIds": [
-        "vergilius"
-      ],
       "enemyUnitIds": [
         "dongbaek"
       ],

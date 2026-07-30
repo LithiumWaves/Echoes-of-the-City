@@ -125,18 +125,18 @@ Units must include the required combat fields (`id`, `name`, HP, resistances, sk
 
 ## Battle Definitions (Composed Packs)
 
-For reusable packs, battles should reference units by id using `playerUnitIds` / `enemyUnitIds`:
+For reusable packs, battles should reference **enemy** units by id using `enemyUnitIds` (player units come from team presets at deploy):
 
 ```json
 {
   "id": "example-battle",
   "name": "Example Battle",
   "description": "A battle referencing units by id.",
-  "playerUnitIds": ["example-soldier"],
   "enemyUnitIds": ["dongbaek"],
   "rules": {
     "encounterType": "focused",
     "maxTurns": 10,
+    "maxPlayerUnits": 3,
     "victoryCondition": "defeat-all-enemies",
     "failureCondition": "all-allies-defeated",
     "enemyAiProfile": { "skill": "first", "target": "firstLiving" }

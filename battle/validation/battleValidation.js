@@ -1,6 +1,40 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
 
+    function validateAndNormalizeEncounterDefinition(definition) {
+        const validator = battleModules.schema?.validateEncounterDefinition || battleModules.validateEncounterDefinition;
+        const formatter = battleModules.schema?.formatBattleDefinitionErrors || battleModules.formatBattleDefinitionErrors;
+
+        if (typeof validator !== 'function') {
+            return {
+                normalizedDefinition: definition,
+                errors: [],
+                message: null,
+            };
+        }
+
+        const result = validator(definition);
+        const errors = Array.isArray(result?.errors) ? result.errors : [];
+        const message = errors.length
+            ? (typeof formatter === 'function' ? formatter(errors) : errors.join('\n'))
+            : null;
+
+        return {
+            normalizedDefinition: result?.normalizedDefinition || definition,
+            errors,
+            message,
+        };
+    }
+
+    function assertValidEncounterDefinition(definition) {
+        const { normalizedDefinition, errors, message } = validateAndNormalizeEncounterDefinition(definition);
+        if (errors.length) {
+            throw new Error(message || 'Encounter definition is invalid.');
+        }
+
+        return normalizedDefinition;
+    }
+
     function validateAndNormalizeBattleDefinition(definition) {
         const validator = battleModules.schema?.validateBattleDefinition || battleModules.validateBattleDefinition;
         const formatter = battleModules.schema?.formatBattleDefinitionErrors || battleModules.formatBattleDefinitionErrors;
@@ -138,6 +172,8 @@
     }
 
     battleModules.validation = battleModules.validation || {};
+    battleModules.validation.validateAndNormalizeEncounterDefinition = validateAndNormalizeEncounterDefinition;
+    battleModules.validation.assertValidEncounterDefinition = assertValidEncounterDefinition;
     battleModules.validation.validateAndNormalizeBattleDefinition = validateAndNormalizeBattleDefinition;
     battleModules.validation.assertValidBattleDefinition = assertValidBattleDefinition;
     battleModules.validation.validateUnitDefinition = validateUnitDefinition;
@@ -147,6 +183,8 @@
     battleModules.validation.validatePanicStateDefinition = validatePanicStateDefinition;
     battleModules.validation.assertValidPanicStateDefinition = assertValidPanicStateDefinition;
 
+    battleModules.validateAndNormalizeEncounterDefinition = validateAndNormalizeEncounterDefinition;
+    battleModules.assertValidEncounterDefinition = assertValidEncounterDefinition;
     battleModules.validateAndNormalizeBattleDefinition = validateAndNormalizeBattleDefinition;
     battleModules.assertValidBattleDefinition = assertValidBattleDefinition;
     battleModules.validateUnitDefinition = validateUnitDefinition;
@@ -158,6 +196,8 @@
 
     window.EchoesOfTheCityBattle = {
         ...window.EchoesOfTheCityBattle,
+        validateAndNormalizeEncounterDefinition,
+        assertValidEncounterDefinition,
         validateAndNormalizeBattleDefinition,
         assertValidBattleDefinition,
         validateUnitDefinition,

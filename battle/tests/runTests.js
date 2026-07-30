@@ -182,8 +182,8 @@ function runSuite() {
 
         canon.forEach(({ id }) => {
             const definition = battleModules.content.getBattleDefinition(id);
-            const result = battleModules.validation.validateAndNormalizeBattleDefinition(definition);
-            assert(!result.errors.length, `Battle "${id}" invalid:\n${result.errors.join('\n')}`);
+            const encounterResult = battleModules.validation.validateAndNormalizeEncounterDefinition(definition);
+            assert(!encounterResult.errors.length, `Encounter "${id}" invalid:\n${encounterResult.errors.join('\n')}`);
         });
     });
 
@@ -323,7 +323,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives,
         });
@@ -452,7 +452,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills: [basicSkill],
             passives,
         });
@@ -539,7 +539,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -666,7 +666,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills: [basicSkill],
             passives: id === 'ally' ? [passive] : [],
         });
@@ -777,7 +777,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -886,7 +886,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -994,7 +994,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills: [basicSkill],
             passives,
         });
@@ -1072,7 +1072,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -1188,7 +1188,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives,
         });
@@ -1295,7 +1295,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -1379,7 +1379,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -1457,7 +1457,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -1535,7 +1535,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -1637,7 +1637,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives,
         });
@@ -1707,7 +1707,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -1855,7 +1855,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives,
         });
@@ -1950,7 +1950,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: id === 'w1' ? [
                 {
@@ -2067,7 +2067,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -2158,7 +2158,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
             ...extra,
@@ -2267,7 +2267,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
             ...extra,
@@ -2409,7 +2409,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -2495,7 +2495,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -2573,7 +2573,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -2647,7 +2647,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -2742,7 +2742,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -2789,6 +2789,103 @@ function runSuite() {
         assert(afterMarks.get('evt_turn_end') === 1, `Expected evt_turn_end to be 1, got ${afterMarks.get('evt_turn_end')}`);
         assert(afterMarks.get('evt_unit_defeated') === 1, `Expected evt_unit_defeated to be 1, got ${afterMarks.get('evt_unit_defeated')}`);
         assert(afterMarks.get('evt_battle_end') === 1, `Expected evt_battle_end to be 1, got ${afterMarks.get('evt_battle_end')}`);
+    });
+
+    test('Engine: scripted stagger threshold event fires with optional threshold filter', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(typeof registerStatusDefinition === 'function', 'Expected registerStatusDefinition to exist.');
+
+        registerStatusDefinition({ id: 'evt_stagger_75', label: 'Event Stagger 75' });
+        registerStatusDefinition({
+            id: 'evt_stagger_75',
+            label: 'Event Stagger 75',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+        const finisher = {
+            id: 'finisher',
+            name: 'Finisher',
+            skillType: 'attack',
+            basePower: 99,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+
+        const createUnit = (id, name, skills, speed, hp = 100, staggerThresholds = []) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: hp,
+            sp: 0,
+            speedRange: [speed, speed],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds,
+            sprites: { skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const poke = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'pride',
+            effects: [],
+        };
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'scripted-stagger-threshold',
+                name: 'Scripted Stagger Threshold',
+                playerUnits: [createUnit('ally', 'Ally', [finisher], 5, 100)],
+                enemyUnits: [createUnit('enemy', 'Enemy', [poke], 1, 100, [0.75])],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 10,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    scriptedEvents: [
+                        {
+                            id: 'evt_stagger_75',
+                            trigger: 'staggerThresholdCrossed',
+                            side: 'enemy',
+                            threshold: 0.75,
+                            hook: [{ type: 'applyStatus', target: 'self', statusId: 'evt_stagger_75', count: 1 }],
+                        },
+                    ],
+                },
+            },
+            clamp,
+        });
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('finisher');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const after = engine.getState();
+        const enemy = after.enemyUnits[0];
+        const marks = new Map((enemy.statuses || []).map((status) => [status.id, status.count || 0]));
+        assert(marks.get('evt_stagger_75') === 1, `Expected evt_stagger_75 on enemy, got ${marks.get('evt_stagger_75')}`);
     });
 
     test('Engine: scripted encounter events trigger on waveStart', () => {
@@ -2845,7 +2942,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -2914,7 +3011,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -2976,7 +3073,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -3035,7 +3132,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -3099,7 +3196,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -3193,7 +3290,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -3304,7 +3401,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives,
         });
@@ -3432,7 +3529,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives,
         });
@@ -3531,7 +3628,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -3627,7 +3724,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -3705,7 +3802,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -3875,7 +3972,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -4049,7 +4146,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -4202,7 +4299,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -4347,7 +4444,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -4491,7 +4588,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -4693,7 +4790,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -4848,7 +4945,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -5171,7 +5268,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -5317,7 +5414,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -5414,7 +5511,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -5506,7 +5603,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -5587,7 +5684,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -5679,7 +5776,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -5778,7 +5875,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -5872,7 +5969,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -6066,7 +6163,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             staggerThresholds: [],
-            sprites: { skills: {} },
+            sprites: { idle: 'assets/test.png', skills: {} },
             skills,
             passives: [],
         });
@@ -6138,7 +6235,12 @@ function runSuite() {
 
         const battles = getCanonicalEntries(sourceModules.content.listBattleDefinitions());
         assert(battles.length > 0, 'Expected at least one battle definition.');
-        const battleId = battles[0].id;
+        const battleWithStatuses = battles.find((entry) => {
+            const pack = sourceModules.content.exportBattleContentPack(entry.id);
+            return Array.isArray(pack?.statuses) && pack.statuses.length > 0;
+        });
+        assert(battleWithStatuses, 'Expected at least one battle with exportable status dependencies.');
+        const battleId = battleWithStatuses.id;
 
         const exported = sourceModules.content.exportBattleContentPack(battleId);
         assert(exported && Array.isArray(exported.battles) && exported.battles.length === 1, 'Export must include a battle.');
@@ -6564,6 +6666,112 @@ function runSuite() {
         assert(Array.isArray(resolved.enemyUnits) && resolved.enemyUnits[0]?.id === 'test-wave-enemy', 'Expected top-level enemyUnits from wave 1.');
     });
 
+    test('Content: enemy-only encounter registers and runtime battle merges player party', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = {};
+        require(path.resolve(battleRoot, 'registry/battleRegistry.js'));
+        require(path.resolve(battleRoot, 'schema/battleSchema.js'));
+        require(path.resolve(battleRoot, 'validation/battleValidation.js'));
+        require(path.resolve(battleRoot, 'content/battleContentRegistry.js'));
+
+        const api = global.window.EchoesOfTheCityBattle;
+        const content = api || global.window.EchoesOfTheCityBattleModules?.content;
+        assert(typeof content?.registerBattleDefinition === 'function', 'Expected registerBattleDefinition.');
+        assert(typeof content?.buildRuntimeBattleDefinition === 'function', 'Expected buildRuntimeBattleDefinition.');
+
+        const registerUnitDefinition = content.registerUnitDefinition;
+        registerUnitDefinition({
+            id: 'encounter-merge-ally',
+            name: 'Merge Ally',
+            level: 1,
+            maxHp: 50,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { idle: 'assets/test.png', skills: {} },
+            skills: [{
+                id: 'hit',
+                name: 'Hit',
+                skillType: 'attack',
+                basePower: 1,
+                coinPower: 0,
+                coinCount: 1,
+                damageType: 'slash',
+                sinType: 'wrath',
+                effects: [],
+            }],
+            passives: [],
+        }, { allowOverwrite: true });
+
+        registerUnitDefinition({
+            id: 'encounter-merge-enemy',
+            name: 'Merge Enemy',
+            level: 1,
+            maxHp: 50,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { idle: 'assets/test.png', skills: {} },
+            skills: [{
+                id: 'hit',
+                name: 'Hit',
+                skillType: 'attack',
+                basePower: 1,
+                coinPower: 0,
+                coinCount: 1,
+                damageType: 'slash',
+                sinType: 'wrath',
+                effects: [],
+            }],
+            passives: [],
+        }, { allowOverwrite: true });
+
+        content.registerBattleDefinition({
+            id: 'enemy-only-encounter',
+            name: 'Enemy Only',
+            enemyUnitIds: ['encounter-merge-enemy'],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 10,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+            },
+        }, { allowOverwrite: true });
+
+        const encounter = content.getBattleDefinition('enemy-only-encounter');
+        assert(Array.isArray(encounter.playerUnits) && encounter.playerUnits.length === 0, 'Encounter should have empty playerUnits.');
+
+        const runtime = content.buildRuntimeBattleDefinition(encounter, ['encounter-merge-ally']);
+        assert(Array.isArray(runtime.playerUnits) && runtime.playerUnits.length === 1, 'Runtime battle should have one player unit.');
+        assert(runtime.playerUnits[0]?.id === 'encounter-merge-ally', 'Expected merged player unit id.');
+    });
+
+    test('Team builder: preset state serializes and parses', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = {};
+        require(path.resolve(battleRoot, 'ui/roster/teamBuilderRenderer.js'));
+
+        const teamBuilder = global.window.EchoesOfTheCityTeamBuilder;
+        assert(typeof teamBuilder?.serializeTeamPresetsState === 'function', 'Expected serializeTeamPresetsState.');
+
+        const state = teamBuilder.createDefaultTeamPresetsState();
+        state.presets[0].unitIds = ['vergilius'];
+        const serialized = teamBuilder.serializeTeamPresetsState(state);
+        const parsed = teamBuilder.parseTeamPresetsFromStorage(serialized);
+        assert(parsed.presets.length === teamBuilder.MAX_TEAM_PRESETS, 'Expected eight presets.');
+        assert(parsed.presets[0].unitIds[0] === 'vergilius', 'Expected preset unit id to round-trip.');
+    });
+
     test('Creator UI: default battle definition and encounter builder render', () => {
         const battleRoot = path.resolve(__dirname, '..');
         clearRequireCache(battleRoot);
@@ -6576,7 +6784,7 @@ function runSuite() {
         assert(typeof creatorUi?.createDefaultBattleDefinition === 'function', 'Expected createDefaultBattleDefinition.');
         const defaultBattle = creatorUi.createDefaultBattleDefinition();
         assert(defaultBattle.id === 'new-battle', 'Expected default battle id.');
-        assert(Array.isArray(defaultBattle.playerUnitIds), 'Expected playerUnitIds array.');
+        assert(Array.isArray(defaultBattle.enemyUnitIds), 'Expected enemyUnitIds array.');
         assert(defaultBattle.rules?.enemyAiProfile?.skill === 'cycle', 'Expected default AI skill.');
 
         const catalog = creatorUi.buildCatalog([]);
@@ -6589,11 +6797,12 @@ function runSuite() {
             creatorUi,
             escapeAttr,
             escapeHtml,
-            { hookTriggers: [{ id: 'battleStart', label: 'Battle Start' }] },
+            { hookTriggers: [{ id: 'battleStart', label: 'Battle Start' }, { id: 'staggerThresholdCrossed', label: 'Stagger threshold crossed' }] },
         );
         assert(html.includes('echoes-encounter'), 'Expected encounter builder markup.');
         assert(html.includes('playerUnitIds') === false, 'Markup should not expose raw JSON keys.');
-        assert(html.includes('Player party'), 'Expected player party section.');
+        assert(html.includes('Characters'), 'Expected Characters deploy hint.');
+        assert(html.includes('Enemy setup'), 'Expected enemy setup section.');
     });
 
     process.stdout.write(`\nResult: ${passed} passed, ${failed} failed\n`);

@@ -181,6 +181,16 @@
                 `;
             }).join('');
 
+            const triggerValue = event?.trigger || 'battleStart';
+            const thresholdField = triggerValue === 'staggerThresholdCrossed'
+                ? `
+                    <div class="echoes-creator__field-row">
+                        <label>Threshold (HP %)</label>
+                        <input data-action="creator-scripted-event-field" data-event-index="${eventIndex}" data-field="threshold" inputmode="decimal" value="${escapeAttr(String(event?.threshold ?? ''))}" placeholder="0.75" />
+                    </div>
+                `
+                : '';
+
             return `
                 <article class="echoes-encounter__scripted-event" data-event-index="${eventIndex}">
                     <div class="echoes-creator__field-row echoes-creator__field-row--2">
@@ -188,7 +198,7 @@
                         <input data-action="creator-scripted-event-field" data-event-index="${eventIndex}" data-field="id" value="${escapeAttr(String(event?.id || ''))}" placeholder="evt_battle_start" />
                         <label>Trigger</label>
                         <select data-action="creator-scripted-event-field" data-event-index="${eventIndex}" data-field="trigger" style="width:100%;">
-                            ${creatorUi.buildSelectOptions(triggerOptions, event?.trigger || 'battleStart', escapeAttr)}
+                            ${creatorUi.buildSelectOptions(triggerOptions, triggerValue, escapeAttr)}
                         </select>
                     </div>
                     <div class="echoes-creator__field-row echoes-creator__field-row--2">
@@ -199,6 +209,7 @@
                         <label>Unit ID filter</label>
                         <input data-action="creator-scripted-event-field" data-event-index="${eventIndex}" data-field="unitId" value="${escapeAttr(String(event?.unitId || ''))}" placeholder="Optional unit id" />
                     </div>
+                    ${thresholdField}
                     <div class="echoes-encounter__scripted-actions">
                         ${actionRows || '<span class="echoes-creator__hint">No actions — add one below.</span>'}
                     </div>
@@ -213,7 +224,7 @@
         return `
             <section class="echoes-encounter__scripted">
                 <h3 class="echoes-encounter__section-title">Scripted events</h3>
-                <p class="echoes-creator__hint">Run effect actions when battle lifecycle hooks fire (battle start, wave start, turn end, etc.).</p>
+                <p class="echoes-creator__hint">Run effect actions when battle lifecycle hooks fire (battle start, stagger threshold crossed, turn end, etc.).</p>
                 <div class="echoes-encounter__scripted-list">
                     ${eventCards || '<span class="echoes-creator__hint">No scripted events.</span>'}
                 </div>
@@ -224,12 +235,12 @@
 
     function renderEncounterBuilder(battleDraft, unitList, catalog, creatorUi, escapeAttr, escapeHtml, options = {}) {
         const hookTriggers = Array.isArray(options.hookTriggers) ? options.hookTriggers : [];
-        const playerUnitIds = Array.isArray(battleDraft?.playerUnitIds) ? battleDraft.playerUnitIds : [];
 
         return `
             <div class="echoes-encounter">
-                <p class="echoes-creator__hint">Units become enemies when placed in enemy slots; side is assigned at battle start.</p>
+                <p class="echoes-creator__hint">Player units are chosen in Characters (team presets) and deployed when launching a battle.</p>
                 <div class="echoes-encounter__header">
+                    <h3 class="echoes-encounter__section-title">Encounter info</h3>
                     <div class="echoes-creator__field-row echoes-creator__field-row--2">
                         <label>Encounter ID</label>
                         <input data-action="creator-battle-field" data-field="id" value="${escapeAttr(String(battleDraft?.id || ''))}" placeholder="my-encounter" />
@@ -243,14 +254,12 @@
                 </div>
                 <div class="echoes-encounter__body">
                     <div class="echoes-encounter__column">
-                        <section class="echoes-encounter__party">
-                            <h3 class="echoes-encounter__section-title">Player party</h3>
-                            ${renderUnitPickerRow('player', playerUnitIds, unitList, escapeAttr, escapeHtml)}
-                        </section>
+                        <h3 class="echoes-encounter__section-title">Enemy setup</h3>
+                        <p class="echoes-creator__hint">Units become enemies when placed in enemy slots; side is assigned at battle start.</p>
                         ${renderWavesSection(battleDraft, unitList, escapeAttr, escapeHtml)}
+                        ${renderRulesSection(battleDraft, creatorUi, escapeAttr)}
                     </div>
                     <div class="echoes-encounter__column">
-                        ${renderRulesSection(battleDraft, creatorUi, escapeAttr)}
                         ${renderScriptedEventsSection(battleDraft, catalog, creatorUi, escapeAttr, escapeHtml, hookTriggers)}
                     </div>
                 </div>

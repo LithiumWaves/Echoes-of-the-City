@@ -9,11 +9,7 @@
     const cityGateSkirmishDefinition = {
         id: 'city-gate-skirmish',
         name: 'City Gate Skirmish',
-        description: 'A straightforward live encounter built for the general battle launcher: Vergilius and Bamboo-Hatted Kim face Callisto at the gate.',
-        playerUnitIds: [
-            'vergilius',
-            'bamboo-hatted-kim',
-        ],
+        description: 'A straightforward live encounter built for the general battle launcher: face Callisto at the gate.',
         enemyUnitIds: [
             'ring-nursefather-hong-lu',
         ],

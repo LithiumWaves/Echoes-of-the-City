@@ -319,7 +319,6 @@
             id: 'new-battle',
             name: 'New Encounter',
             description: '',
-            playerUnitIds: [],
             enemyUnitIds: [],
             rules: {
                 encounterType: 'focused',
