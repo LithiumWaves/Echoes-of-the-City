@@ -86,7 +86,11 @@
 
         function cloneBattleState(value) {
             if (typeof window.structuredClone === 'function') {
-                return window.structuredClone(value);
+                try {
+                    return window.structuredClone(value);
+                } catch {
+                    return JSON.parse(JSON.stringify(value));
+                }
             }
 
             return JSON.parse(JSON.stringify(value));

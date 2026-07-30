@@ -1005,8 +1005,22 @@
                                                 <textarea data-action="creator-unit-passive-field" data-index="${index}" data-field="description" rows="2" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(String(passive?.description || ''))}</textarea>
                                             </div>
                                             <div style="display:grid; gap: 0.35rem;">
-                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Hooks (JSON)</label>
-                                                <textarea data-action="creator-unit-passive-hooks" data-index="${index}" rows="6" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(JSON.stringify(passive?.hooks || {}, null, 2))}</textarea>
+                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Hooks</label>
+                                                <div style="display:flex; flex-wrap: wrap; gap: 0.55rem;">
+                                                    ${['battleStart', 'turnStart', 'skillSelected', 'turnEnd', 'battleEnd'].map((hookName) => `
+                                                        <button
+                                                            class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost"
+                                                            type="button"
+                                                            data-action="creator-unit-passive-add-hook-block"
+                                                            data-index="${index}"
+                                                            data-hook-name="${escapeAttribute(hookName)}"
+                                                        >Add ${escapeHtml(hookName)}</button>
+                                                    `).join('')}
+                                                </div>
+                                                <details>
+                                                    <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Raw Hooks JSON</summary>
+                                                    <textarea data-action="creator-unit-passive-hooks" data-index="${index}" rows="6" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35; margin-top: 0.55rem;">${escapeHtml(JSON.stringify(passive?.hooks || {}, null, 2))}</textarea>
+                                                </details>
                                             </div>
                                             <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-remove-passive" data-index="${index}">Remove Passive</button>
                                         </div>
@@ -1069,9 +1083,96 @@
                                                 <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Description</label>
                                                 <textarea data-action="creator-unit-skill-field" data-index="${index}" data-field="description" rows="2" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(String(skill?.description || ''))}</textarea>
                                             </div>
-                                            <div style="display:grid; gap: 0.35rem;">
-                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Effects (JSON)</label>
-                                                <textarea data-action="creator-unit-skill-effects" data-index="${index}" rows="6" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(JSON.stringify(skill?.effects || [], null, 2))}</textarea>
+                                            <div style="display:grid; gap: 0.55rem;">
+                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Effects</label>
+                                                <div style="display:flex; flex-wrap: wrap; gap: 0.55rem;">
+                                                    <button
+                                                        class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost"
+                                                        type="button"
+                                                        data-action="creator-unit-skill-add-effect"
+                                                        data-index="${index}"
+                                                    >Add Effect</button>
+                                                </div>
+                                                <div style="display:grid; gap: 0.55rem;">
+                                                    ${(Array.isArray(skill?.effects) ? skill.effects : []).map((effect, effectIndex) => {
+                                                        const trigger = typeof effect?.trigger === 'string' ? effect.trigger : 'onHit';
+                                                        const type = typeof effect?.type === 'string' ? effect.type : 'applyStatus';
+                                                        const triggers = ['onUse', 'onSelect', 'onHit', 'onClashWin', 'onClashLose', 'onAttackEnd'];
+                                                        const types = ['applyStatus', 'adjustSanity', 'modifyContext'];
+                                                        const triggerOptions = triggers.map((entry) => `<option value="${entry}" ${entry === trigger ? 'selected' : ''}>${entry}</option>`).join('');
+                                                        const typeOptions = types.map((entry) => `<option value="${entry}" ${entry === type ? 'selected' : ''}>${entry}</option>`).join('');
+                                                        const baseRow = `
+                                                            <div style="display:grid; grid-template-columns: 9.5rem 1fr auto; gap: 0.55rem; align-items: center;">
+                                                                <select data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="trigger" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
+                                                                    ${triggerOptions}
+                                                                </select>
+                                                                <select data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="type" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
+                                                                    ${typeOptions}
+                                                                </select>
+                                                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-skill-remove-effect" data-skill-index="${index}" data-effect-index="${effectIndex}">Remove</button>
+                                                            </div>
+                                                        `;
+                                                        if (type === 'applyStatus') {
+                                                            return `
+                                                                <div style="display:grid; gap: 0.45rem; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.15); padding: 0.65rem; border-radius: 0.75rem;">
+                                                                    ${baseRow}
+                                                                    <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem;">
+                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="statusId" value="${escapeAttribute(String(effect?.statusId || ''))}" placeholder="statusId" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                                        <select data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="target" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
+                                                                            <option value="" ${effect?.target ? '' : 'selected'}>target: opponent</option>
+                                                                            <option value="self" ${effect?.target === 'self' ? 'selected' : ''}>target: self</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem;">
+                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="potency" inputmode="numeric" value="${escapeAttribute(String(effect?.potency ?? 0))}" placeholder="potency" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="count" inputmode="numeric" value="${escapeAttribute(String(effect?.count ?? 0))}" placeholder="count" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="coinIndex" inputmode="numeric" value="${escapeAttribute(String(effect?.coinIndex ?? ''))}" placeholder="coinIndex (optional)" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                                    </div>
+                                                                </div>
+                                                            `;
+                                                        }
+                                                        if (type === 'adjustSanity') {
+                                                            return `
+                                                                <div style="display:grid; gap: 0.45rem; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.15); padding: 0.65rem; border-radius: 0.75rem;">
+                                                                    ${baseRow}
+                                                                    <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem;">
+                                                                        <select data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="target" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
+                                                                            <option value="" ${effect?.target ? '' : 'selected'}>target: opponent</option>
+                                                                            <option value="self" ${effect?.target === 'self' ? 'selected' : ''}>target: self</option>
+                                                                        </select>
+                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="value" inputmode="numeric" value="${escapeAttribute(String(effect?.value ?? 0))}" placeholder="value" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="reason" value="${escapeAttribute(String(effect?.reason || ''))}" placeholder="reason (optional)" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                                    </div>
+                                                                </div>
+                                                            `;
+                                                        }
+                                                        if (type === 'modifyContext') {
+                                                            return `
+                                                                <div style="display:grid; gap: 0.45rem; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.15); padding: 0.65rem; border-radius: 0.75rem;">
+                                                                    ${baseRow}
+                                                                    <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem;">
+                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="field" value="${escapeAttribute(String(effect?.field || ''))}" placeholder="field (e.g. dynamicDamageBonus)" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                                        <select data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="operation" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
+                                                                            <option value="add" ${effect?.operation === 'add' ? 'selected' : ''}>add</option>
+                                                                            <option value="set" ${effect?.operation === 'set' ? 'selected' : ''}>set</option>
+                                                                        </select>
+                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="value" inputmode="numeric" value="${escapeAttribute(String(effect?.value ?? 0))}" placeholder="value" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                                    </div>
+                                                                </div>
+                                                            `;
+                                                        }
+                                                        return `
+                                                            <div style="display:grid; gap: 0.45rem; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.15); padding: 0.65rem; border-radius: 0.75rem;">
+                                                                ${baseRow}
+                                                                <span class="echoes-battle-panel__planner-empty" style="text-align:left;">Edit this effect in Raw JSON.</span>
+                                                            </div>
+                                                        `;
+                                                    }).join('')}
+                                                </div>
+                                                <details>
+                                                    <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Raw Effects JSON</summary>
+                                                    <textarea data-action="creator-unit-skill-effects" data-index="${index}" rows="6" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35; margin-top: 0.55rem;">${escapeHtml(JSON.stringify(skill?.effects || [], null, 2))}</textarea>
+                                                </details>
                                             </div>
                                             <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-remove-skill" data-index="${index}">Remove Skill</button>
                                         </div>
@@ -1553,6 +1654,32 @@
             }
         }
 
+        if (action === 'creator-unit-passive-add-hook-block') {
+            const index = Number(actionTarget.dataset.index);
+            const hookName = actionTarget.dataset.hookName || null;
+            if (Number.isInteger(index) && hookName) {
+                updateCreatorUnitJson((draft) => {
+                    draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
+                    const passive = draft.passives[index];
+                    if (!passive || typeof passive !== 'object') {
+                        return;
+                    }
+                    passive.hooks = passive.hooks && typeof passive.hooks === 'object' && !Array.isArray(passive.hooks) ? passive.hooks : {};
+                    const blocks = Array.isArray(passive.hooks[hookName]) ? passive.hooks[hookName] : [];
+                    blocks.push({
+                        id: `${hookName}_${blocks.length + 1}`,
+                        oncePer: 'turn',
+                        conditions: [{ type: 'always' }],
+                        actions: [],
+                    });
+                    passive.hooks[hookName] = blocks;
+                });
+                setCreatorMessage('success', `Added ${hookName} hook block.`);
+                renderCreatorScreen();
+            }
+            return;
+        }
+
         if (action === 'creator-unit-add-skill') {
             updateCreatorUnitJson((draft) => {
                 const nextIndex = Array.isArray(draft.skills) ? draft.skills.length + 1 : 1;
@@ -1571,6 +1698,47 @@
                 });
             });
             renderCreatorScreen();
+        }
+
+        if (action === 'creator-unit-skill-add-effect') {
+            const index = Number(actionTarget.dataset.index);
+            if (Number.isInteger(index)) {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[index];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
+                    skill.effects.push({
+                        trigger: 'onHit',
+                        type: 'applyStatus',
+                        statusId: '',
+                        potency: 1,
+                        count: 1,
+                    });
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        if (action === 'creator-unit-skill-remove-effect') {
+            const skillIndex = Number(actionTarget.dataset.skillIndex);
+            const effectIndex = Number(actionTarget.dataset.effectIndex);
+            if (Number.isInteger(skillIndex) && Number.isInteger(effectIndex)) {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[skillIndex];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
+                    skill.effects.splice(effectIndex, 1);
+                });
+                renderCreatorScreen();
+            }
+            return;
         }
 
         if (action === 'creator-unit-remove-skill') {
@@ -1740,6 +1908,53 @@
                     }
                     if (['basePower', 'coinPower', 'coinCount'].includes(field)) {
                         skill[field] = Math.round(normalizeNumberInput(skillField.value, skill[field] ?? 0));
+                    }
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const skillEffectField = event.target.closest('[data-action="creator-unit-skill-effect-field"]');
+        if (skillEffectField) {
+            const skillIndex = Number(skillEffectField.dataset.skillIndex);
+            const effectIndex = Number(skillEffectField.dataset.effectIndex);
+            const field = skillEffectField.dataset.field || null;
+            if (Number.isInteger(skillIndex) && Number.isInteger(effectIndex) && field) {
+                const rawValue = typeof skillEffectField.value === 'string' ? skillEffectField.value : '';
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[skillIndex];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
+                    const effect = skill.effects[effectIndex];
+                    if (!effect || typeof effect !== 'object') {
+                        return;
+                    }
+                    if (['trigger', 'type', 'statusId', 'reason', 'operation', 'field'].includes(field)) {
+                        effect[field] = normalizeStringInput(rawValue, '');
+                        return;
+                    }
+                    if (field === 'target') {
+                        const nextValue = normalizeStringInput(rawValue, '');
+                        if (!nextValue) {
+                            delete effect.target;
+                            return;
+                        }
+                        effect.target = nextValue;
+                        return;
+                    }
+                    if (['potency', 'count', 'coinIndex', 'value'].includes(field)) {
+                        const normalized = normalizeStringInput(rawValue, '');
+                        if (normalized === '' && field !== 'value') {
+                            delete effect[field];
+                            return;
+                        }
+                        const fallback = Number.isFinite(effect[field]) ? effect[field] : 0;
+                        const nextNumber = Math.round(normalizeNumberInput(rawValue, fallback));
+                        effect[field] = nextNumber;
                     }
                 });
                 renderCreatorScreen();

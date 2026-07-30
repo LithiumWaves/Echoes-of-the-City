@@ -5,7 +5,7 @@
     const PHYSICAL_DAMAGE_TYPES = new Set(['slash', 'pierce', 'blunt']);
     const SIN_TYPES = new Set(['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy']);
     const SKILL_TYPES = new Set(['attack', 'guard', 'evade', 'counter']);
-    const EFFECT_TRIGGERS = new Set(['onSelect', 'onHit', 'onClashWin', 'onClashLose', 'onAttackEnd']);
+    const EFFECT_TRIGGERS = new Set(['onSelect', 'onUse', 'onHit', 'onClashWin', 'onClashLose', 'onAttackEnd']);
     const EFFECT_TYPES = new Set(Object.keys(registry.effectDefinitions || {}));
     const CONTEXT_FIELDS = new Set([
         'coinPowerBonus',
