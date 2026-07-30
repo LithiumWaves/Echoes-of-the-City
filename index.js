@@ -86,6 +86,7 @@
         'battle/validation/battleValidation.js',
         'battle/content/battleContentRegistry.js',
         ...BATTLE_BASE_PACK_SCRIPT_RELATIVE_PATHS,
+        'battle/ui/creator/creatorUiHelpers.js',
         'battle/ui/inspect/inspectState.js',
         'battle/core/damageFormula.js',
         'battle/core/battleEngine.js',
@@ -531,6 +532,311 @@
         return window.EchoesOfTheCityBattleModules?.registry || window.EchoesOfTheCityBattleModules?.battleRegistry || null;
     }
 
+    function getCreatorUi() {
+        return window.EchoesOfTheCityCreatorUi || window.EchoesOfTheCityBattleModules?.creatorUi || null;
+    }
+
+    function getCreatorCatalog() {
+        const registry = getRegistryApi();
+        const statusList = typeof registry?.listStatusDefinitions === 'function'
+            ? registry.listStatusDefinitions()
+            : [];
+        const creatorUi = getCreatorUi();
+        return creatorUi?.buildCatalog(statusList) || {
+            statusList: [],
+            effectTypes: { common: [], rest: [], all: [] },
+            conditionTypes: [],
+            passiveHooks: [],
+            skillTypes: ['attack', 'guard', 'evade', 'counter'],
+            damageTypes: ['slash', 'pierce', 'blunt'],
+            sinTypes: ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'],
+            skillTriggers: ['onSelect', 'onUse', 'onHit', 'onClashWin', 'onClashLose', 'onAttackEnd'],
+        };
+    }
+
+    function normalizeCreatorDraft(entityType, parsed) {
+        const creatorUi = getCreatorUi();
+        if (entityType === 'unit') {
+            const draft = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                ? parsed
+                : (creatorUi?.createDefaultUnitDefinition?.() || createDefaultUnitDefinition());
+            draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
+            draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+            draft.sprites = draft.sprites && typeof draft.sprites === 'object' && !Array.isArray(draft.sprites) ? draft.sprites : {};
+            draft.sprites.skills = draft.sprites.skills && typeof draft.sprites.skills === 'object' && !Array.isArray(draft.sprites.skills) ? draft.sprites.skills : {};
+            draft.resistances = draft.resistances && typeof draft.resistances === 'object' && !Array.isArray(draft.resistances) ? draft.resistances : {};
+            draft.resistances.physical = draft.resistances.physical && typeof draft.resistances.physical === 'object' && !Array.isArray(draft.resistances.physical) ? draft.resistances.physical : {};
+            draft.resistances.sin = draft.resistances.sin && typeof draft.resistances.sin === 'object' && !Array.isArray(draft.resistances.sin) ? draft.resistances.sin : {};
+            draft.speedRange = Array.isArray(draft.speedRange) ? draft.speedRange : [1, 1];
+            draft.staggerThresholds = Array.isArray(draft.staggerThresholds) ? draft.staggerThresholds : [];
+            return draft;
+        }
+        if (entityType === 'status') {
+            const draft = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                ? parsed
+                : (creatorUi?.createDefaultStatusDefinition?.() || { id: 'new-status', label: 'New Status' });
+            draft.hooks = draft.hooks && typeof draft.hooks === 'object' && !Array.isArray(draft.hooks) ? draft.hooks : {};
+            draft.stackModel = draft.stackModel && typeof draft.stackModel === 'object' && !Array.isArray(draft.stackModel) ? draft.stackModel : {};
+            draft.tags = Array.isArray(draft.tags) ? draft.tags : [];
+            return draft;
+        }
+        return parsed;
+    }
+
+    function updateCreatorEntityJson(entityType, mutator) {
+        const parsed = getCreatorParsedJsonOrNull();
+        const draft = normalizeCreatorDraft(entityType, parsed);
+        if (typeof mutator === 'function') {
+            mutator(draft);
+        }
+        state.creatorJsonInput = JSON.stringify(draft, null, 2);
+    }
+
+    function updateCreatorUnitJson(mutator) {
+        updateCreatorEntityJson('unit', mutator);
+    }
+
+    function updateCreatorStatusJson(mutator) {
+        updateCreatorEntityJson('status', mutator);
+    }
+
+    function getCreatorHooksContainer(draft, scope, dataset) {
+        if (scope === 'status') {
+            draft.hooks = draft.hooks && typeof draft.hooks === 'object' && !Array.isArray(draft.hooks) ? draft.hooks : {};
+            return draft.hooks;
+        }
+        if (scope === 'unit-passive') {
+            const passiveIndex = Number(dataset.passiveIndex);
+            draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
+            const passive = draft.passives[passiveIndex];
+            if (!passive || typeof passive !== 'object') {
+                return null;
+            }
+            passive.hooks = passive.hooks && typeof passive.hooks === 'object' && !Array.isArray(passive.hooks) ? passive.hooks : {};
+            return passive.hooks;
+        }
+        return null;
+    }
+
+    function getCreatorHookEntry(hooks, hookName, entryIndex) {
+        const entries = Array.isArray(hooks?.[hookName]) ? hooks[hookName] : [];
+        return entries[entryIndex] || null;
+    }
+
+    function runCreatorHookMutation(entityType, scope, dataset, mutator) {
+        const updater = entityType === 'status' ? updateCreatorStatusJson : updateCreatorUnitJson;
+        updater((draft) => {
+            const hooks = getCreatorHooksContainer(draft, scope, dataset);
+            if (!hooks) {
+                return;
+            }
+            mutator(hooks, draft);
+        });
+    }
+
+    function runCreatorHookEntryMutation(entityType, scope, dataset, mutator) {
+        const hookName = dataset.hookName || null;
+        const entryIndex = Number(dataset.hookEntryIndex);
+        if (!hookName || !Number.isInteger(entryIndex)) {
+            return;
+        }
+        runCreatorHookMutation(entityType, scope, dataset, (hooks) => {
+            const entry = getCreatorHookEntry(hooks, hookName, entryIndex);
+            if (!entry) {
+                return;
+            }
+            mutator(entry, hooks, hookName, entryIndex);
+        });
+    }
+
+    function handleCreatorHookClick(action, actionTarget) {
+        const creatorUi = getCreatorUi();
+        const scope = actionTarget.dataset.creatorScope || null;
+        if (!scope) {
+            return false;
+        }
+        const entityType = scope === 'status' ? 'status' : 'unit';
+        const dataset = actionTarget.dataset;
+        const hookName = dataset.hookName || null;
+        const entryIndex = Number(dataset.hookEntryIndex);
+
+        if (action === 'creator-hook-add-event') {
+            const bar = actionTarget.closest('.echoes-creator__add-hook-bar');
+            const pick = bar?.querySelector('[data-action="creator-hook-pick-event"]');
+            const selectedHook = pick?.value || '';
+            if (!selectedHook) {
+                setCreatorMessage('error', 'Pick a trigger event first.');
+                renderCreatorScreen();
+                return true;
+            }
+            runCreatorHookMutation(entityType, scope, dataset, (hooks) => {
+                if (!Array.isArray(hooks[selectedHook])) {
+                    hooks[selectedHook] = [];
+                }
+                hooks[selectedHook].push({
+                    type: 'applyStatus',
+                    target: 'opponent',
+                    statusId: '',
+                    potency: 1,
+                    count: 1,
+                });
+            });
+            setCreatorMessage('success', `Added ${selectedHook} event.`);
+            renderCreatorScreen();
+            return true;
+        }
+
+        if (action === 'creator-hook-add-simple' && hookName) {
+            runCreatorHookMutation(entityType, scope, dataset, (hooks) => {
+                const entries = Array.isArray(hooks[hookName]) ? hooks[hookName] : [];
+                entries.push({
+                    type: 'applyStatus',
+                    target: 'opponent',
+                    statusId: '',
+                    potency: 1,
+                    count: 1,
+                });
+                hooks[hookName] = entries;
+            });
+            renderCreatorScreen();
+            return true;
+        }
+
+        if (action === 'creator-hook-add-block' && hookName) {
+            runCreatorHookMutation(entityType, scope, dataset, (hooks) => {
+                const entries = Array.isArray(hooks[hookName]) ? hooks[hookName] : [];
+                entries.push({
+                    id: `${hookName}_${entries.length + 1}`,
+                    oncePer: 'turn',
+                    conditions: [{ type: 'always' }],
+                    actions: [{
+                        type: 'applyStatus',
+                        target: 'opponent',
+                        statusId: '',
+                        potency: 1,
+                        count: 1,
+                    }],
+                });
+                hooks[hookName] = entries;
+            });
+            renderCreatorScreen();
+            return true;
+        }
+
+        if (action === 'creator-hook-remove-event' && hookName) {
+            runCreatorHookMutation(entityType, scope, dataset, (hooks) => {
+                delete hooks[hookName];
+            });
+            renderCreatorScreen();
+            return true;
+        }
+
+        if (action === 'creator-hook-remove-block' && hookName && Number.isInteger(entryIndex)) {
+            runCreatorHookMutation(entityType, scope, dataset, (hooks) => {
+                const entries = Array.isArray(hooks[hookName]) ? hooks[hookName] : [];
+                entries.splice(entryIndex, 1);
+                if (!entries.length) {
+                    delete hooks[hookName];
+                } else {
+                    hooks[hookName] = entries;
+                }
+            });
+            renderCreatorScreen();
+            return true;
+        }
+
+        if (action === 'creator-simple-effect-remove' && hookName && Number.isInteger(entryIndex)) {
+            runCreatorHookMutation(entityType, scope, dataset, (hooks) => {
+                const entries = Array.isArray(hooks[hookName]) ? hooks[hookName] : [];
+                entries.splice(entryIndex, 1);
+                if (!entries.length) {
+                    delete hooks[hookName];
+                } else {
+                    hooks[hookName] = entries;
+                }
+            });
+            renderCreatorScreen();
+            return true;
+        }
+
+        if (action === 'creator-hook-add-condition' && hookName && Number.isInteger(entryIndex)) {
+            runCreatorHookEntryMutation(entityType, scope, dataset, (entry) => {
+                if (!creatorUi?.isHookBlock(entry)) {
+                    return;
+                }
+                entry.conditions = Array.isArray(entry.conditions) ? entry.conditions : [];
+                entry.conditions.push({ type: 'always' });
+            });
+            renderCreatorScreen();
+            return true;
+        }
+
+        if (action === 'creator-hook-remove-condition' && hookName && Number.isInteger(entryIndex)) {
+            const condIndex = Number(dataset.conditionIndex);
+            if (!Number.isInteger(condIndex)) {
+                return false;
+            }
+            runCreatorHookEntryMutation(entityType, scope, dataset, (entry) => {
+                if (!creatorUi?.isHookBlock(entry)) {
+                    return;
+                }
+                entry.conditions = Array.isArray(entry.conditions) ? entry.conditions : [];
+                entry.conditions.splice(condIndex, 1);
+            });
+            renderCreatorScreen();
+            return true;
+        }
+
+        if (action === 'creator-hook-add-action' && hookName && Number.isInteger(entryIndex)) {
+            runCreatorHookEntryMutation(entityType, scope, dataset, (entry, hooks) => {
+                if (creatorUi?.isHookBlock(entry)) {
+                    entry.actions = Array.isArray(entry.actions) ? entry.actions : [];
+                    entry.actions.push({
+                        type: 'applyStatus',
+                        target: 'opponent',
+                        statusId: '',
+                        potency: 1,
+                        count: 1,
+                    });
+                    return;
+                }
+                const entries = Array.isArray(hooks[hookName]) ? hooks[hookName] : [];
+                entries[entryIndex] = {
+                    id: `${hookName}_block`,
+                    conditions: [{ type: 'always' }],
+                    actions: [entry, {
+                        type: 'applyStatus',
+                        target: 'opponent',
+                        statusId: '',
+                        potency: 1,
+                        count: 1,
+                    }],
+                };
+                hooks[hookName] = entries;
+            });
+            renderCreatorScreen();
+            return true;
+        }
+
+        if (action === 'creator-hook-remove-action' && hookName && Number.isInteger(entryIndex)) {
+            const actionIndex = Number(dataset.actionIndex);
+            if (!Number.isInteger(actionIndex)) {
+                return false;
+            }
+            runCreatorHookEntryMutation(entityType, scope, dataset, (entry) => {
+                if (!creatorUi?.isHookBlock(entry)) {
+                    return;
+                }
+                entry.actions = Array.isArray(entry.actions) ? entry.actions : [];
+                entry.actions.splice(actionIndex, 1);
+            });
+            renderCreatorScreen();
+            return true;
+        }
+
+        return false;
+    }
+
     function setCreatorMessage(type, text) {
         state.creatorMessage = text
             ? { type, text }
@@ -810,26 +1116,6 @@
         return path;
     }
 
-    function updateCreatorUnitJson(mutator) {
-        const parsed = getCreatorParsedJsonOrNull();
-        const draft = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-            ? parsed
-            : createDefaultUnitDefinition();
-        draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
-        draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
-        draft.sprites = draft.sprites && typeof draft.sprites === 'object' && !Array.isArray(draft.sprites) ? draft.sprites : {};
-        draft.sprites.skills = draft.sprites.skills && typeof draft.sprites.skills === 'object' && !Array.isArray(draft.sprites.skills) ? draft.sprites.skills : {};
-        draft.resistances = draft.resistances && typeof draft.resistances === 'object' && !Array.isArray(draft.resistances) ? draft.resistances : {};
-        draft.resistances.physical = draft.resistances.physical && typeof draft.resistances.physical === 'object' && !Array.isArray(draft.resistances.physical) ? draft.resistances.physical : {};
-        draft.resistances.sin = draft.resistances.sin && typeof draft.resistances.sin === 'object' && !Array.isArray(draft.resistances.sin) ? draft.resistances.sin : {};
-        draft.speedRange = Array.isArray(draft.speedRange) ? draft.speedRange : [1, 1];
-        draft.staggerThresholds = Array.isArray(draft.staggerThresholds) ? draft.staggerThresholds : [];
-        if (typeof mutator === 'function') {
-            mutator(draft);
-        }
-        state.creatorJsonInput = JSON.stringify(draft, null, 2);
-    }
-
     function renderCreatorScreen() {
         if (!elements.creatorContent) {
             return;
@@ -888,23 +1174,40 @@
                 </button>
             `).join('');
 
-        const parsedEditorJson = entityType === 'unit' ? getCreatorParsedJsonOrNull() : null;
-        const unitDraft = entityType === 'unit' && parsedEditorJson && typeof parsedEditorJson === 'object' && !Array.isArray(parsedEditorJson)
-            ? parsedEditorJson
-            : (entityType === 'unit' ? createDefaultUnitDefinition() : null);
+        const catalog = getCreatorCatalog();
+        const creatorUi = getCreatorUi();
+        const parsedEditorJson = (entityType === 'unit' || entityType === 'status') ? getCreatorParsedJsonOrNull() : null;
+        const unitDraft = entityType === 'unit' ? normalizeCreatorDraft('unit', parsedEditorJson) : null;
+        const statusDraft = entityType === 'status' ? normalizeCreatorDraft('status', parsedEditorJson) : null;
         const unitSprites = unitDraft?.sprites && typeof unitDraft.sprites === 'object' && !Array.isArray(unitDraft.sprites) ? unitDraft.sprites : {};
         const unitSkillSprites = unitSprites.skills && typeof unitSprites.skills === 'object' && !Array.isArray(unitSprites.skills) ? unitSprites.skills : {};
         const unitPassives = Array.isArray(unitDraft?.passives) ? unitDraft.passives : [];
         const unitSkills = Array.isArray(unitDraft?.skills) ? unitDraft.skills : [];
+        const statusStack = statusDraft?.stackModel && typeof statusDraft.stackModel === 'object' ? statusDraft.stackModel : {};
+        const statusPotency = statusStack.potency && typeof statusStack.potency === 'object' ? statusStack.potency : {};
+        const statusCount = statusStack.count && typeof statusStack.count === 'object' ? statusStack.count : {};
+        const statusExpireWhen = statusStack.expireWhen && typeof statusStack.expireWhen === 'object' ? statusStack.expireWhen : {};
+        const statusTemplates = creatorUi?.STATUS_TEMPLATES || [];
+
+        const renderEnumSelect = (options, selected, fieldAttrs) => {
+            const opts = creatorUi?.buildSelectOptions(options, selected, escapeAttribute) || options.map((entry) => {
+                const value = typeof entry === 'string' ? entry : entry.value;
+                const label = typeof entry === 'string' ? entry : entry.label;
+                return `<option value="${escapeAttribute(value)}" ${value === selected ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+            }).join('');
+            return `<select ${fieldAttrs} style="width:100%;">${opts}</select>`;
+        };
 
         const unitEditorMarkup = tab === 'editor' && entityType === 'unit'
             ? `
-                <div style="display: grid; gap: 0.85rem;">
+                <div class="echoes-creator" style="display: grid; gap: 0.85rem;">
                     <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
                         <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-unit-new">New Unit</button>
                         <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-validate">Validate</button>
                         <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
                     </div>
+
+                    <p class="echoes-creator__hint">Skills and passives use the same visual builder: pick WHEN it runs, optional IF conditions, then what it DOES.</p>
 
                     <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;">
                         <div style="display: grid; gap: 0.45rem;">
@@ -1004,23 +1307,15 @@
                                                 <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Description</label>
                                                 <textarea data-action="creator-unit-passive-field" data-index="${index}" data-field="description" rows="2" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(String(passive?.description || ''))}</textarea>
                                             </div>
-                                            <div style="display:grid; gap: 0.35rem;">
-                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Hooks</label>
-                                                <div style="display:flex; flex-wrap: wrap; gap: 0.55rem;">
-                                                    ${['battleStart', 'turnStart', 'skillSelected', 'turnEnd', 'battleEnd'].map((hookName) => `
-                                                        <button
-                                                            class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost"
-                                                            type="button"
-                                                            data-action="creator-unit-passive-add-hook-block"
-                                                            data-index="${index}"
-                                                            data-hook-name="${escapeAttribute(hookName)}"
-                                                        >Add ${escapeHtml(hookName)}</button>
-                                                    `).join('')}
-                                                </div>
-                                                <details>
-                                                    <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Raw Hooks JSON</summary>
-                                                    <textarea data-action="creator-unit-passive-hooks" data-index="${index}" rows="6" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35; margin-top: 0.55rem;">${escapeHtml(JSON.stringify(passive?.hooks || {}, null, 2))}</textarea>
-                                                </details>
+                                            <div class="echoes-creator__section">
+                                                <div class="echoes-creator__section-title">Behavior (WHEN → IF → DO)</div>
+                                                ${creatorUi?.renderHooksEditor(
+                                                    passive?.hooks || {},
+                                                    catalog,
+                                                    escapeAttribute,
+                                                    escapeHtml,
+                                                    `data-creator-scope="unit-passive" data-passive-index="${index}"`,
+                                                ) || '<span class="echoes-creator__hint">Creator UI module not loaded.</span>'}
                                             </div>
                                             <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-remove-passive" data-index="${index}">Remove Passive</button>
                                         </div>
@@ -1068,111 +1363,29 @@
                                             <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem;">
                                                 <div style="display:grid; gap: 0.35rem;">
                                                     <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Type</label>
-                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="skillType" value="${escapeAttribute(String(skill?.skillType || 'attack'))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                    ${renderEnumSelect(catalog.skillTypes, skill?.skillType || 'attack', `data-action="creator-unit-skill-field" data-index="${index}" data-field="skillType"`)}
                                                 </div>
                                                 <div style="display:grid; gap: 0.35rem;">
                                                     <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Damage</label>
-                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="damageType" value="${escapeAttribute(String(skill?.damageType || 'slash'))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                    ${renderEnumSelect(catalog.damageTypes, skill?.damageType || 'slash', `data-action="creator-unit-skill-field" data-index="${index}" data-field="damageType"`)}
                                                 </div>
                                                 <div style="display:grid; gap: 0.35rem;">
                                                     <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Sin</label>
-                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="sinType" value="${escapeAttribute(String(skill?.sinType || 'wrath'))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                    ${renderEnumSelect(catalog.sinTypes, skill?.sinType || 'wrath', `data-action="creator-unit-skill-field" data-index="${index}" data-field="sinType"`)}
                                                 </div>
                                             </div>
                                             <div style="display:grid; gap: 0.35rem;">
                                                 <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Description</label>
                                                 <textarea data-action="creator-unit-skill-field" data-index="${index}" data-field="description" rows="2" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(String(skill?.description || ''))}</textarea>
                                             </div>
-                                            <div style="display:grid; gap: 0.55rem;">
-                                                <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Effects</label>
-                                                <div style="display:flex; flex-wrap: wrap; gap: 0.55rem;">
-                                                    <button
-                                                        class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost"
-                                                        type="button"
-                                                        data-action="creator-unit-skill-add-effect"
-                                                        data-index="${index}"
-                                                    >Add Effect</button>
+                                            <div class="echoes-creator__section">
+                                                <div class="echoes-creator__section-title">Skill effects</div>
+                                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-skill-add-effect" data-index="${index}">+ Add effect</button>
+                                                <div style="display:grid; gap: 0.75rem; margin-top: 0.55rem;">
+                                                    ${(Array.isArray(skill?.effects) ? skill.effects : []).map((effect, effectIndex) => (
+                                                        creatorUi?.renderSkillEffectEditor(effect, effectIndex, index, catalog, escapeAttribute, escapeHtml) || ''
+                                                    )).join('')}
                                                 </div>
-                                                <div style="display:grid; gap: 0.55rem;">
-                                                    ${(Array.isArray(skill?.effects) ? skill.effects : []).map((effect, effectIndex) => {
-                                                        const trigger = typeof effect?.trigger === 'string' ? effect.trigger : 'onHit';
-                                                        const type = typeof effect?.type === 'string' ? effect.type : 'applyStatus';
-                                                        const triggers = ['onUse', 'onSelect', 'onHit', 'onClashWin', 'onClashLose', 'onAttackEnd'];
-                                                        const types = ['applyStatus', 'adjustSanity', 'modifyContext'];
-                                                        const triggerOptions = triggers.map((entry) => `<option value="${entry}" ${entry === trigger ? 'selected' : ''}>${entry}</option>`).join('');
-                                                        const typeOptions = types.map((entry) => `<option value="${entry}" ${entry === type ? 'selected' : ''}>${entry}</option>`).join('');
-                                                        const baseRow = `
-                                                            <div style="display:grid; grid-template-columns: 9.5rem 1fr auto; gap: 0.55rem; align-items: center;">
-                                                                <select data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="trigger" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
-                                                                    ${triggerOptions}
-                                                                </select>
-                                                                <select data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="type" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
-                                                                    ${typeOptions}
-                                                                </select>
-                                                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-skill-remove-effect" data-skill-index="${index}" data-effect-index="${effectIndex}">Remove</button>
-                                                            </div>
-                                                        `;
-                                                        if (type === 'applyStatus') {
-                                                            return `
-                                                                <div style="display:grid; gap: 0.45rem; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.15); padding: 0.65rem; border-radius: 0.75rem;">
-                                                                    ${baseRow}
-                                                                    <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem;">
-                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="statusId" value="${escapeAttribute(String(effect?.statusId || ''))}" placeholder="statusId" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                                        <select data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="target" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
-                                                                            <option value="" ${effect?.target ? '' : 'selected'}>target: opponent</option>
-                                                                            <option value="self" ${effect?.target === 'self' ? 'selected' : ''}>target: self</option>
-                                                                        </select>
-                                                                    </div>
-                                                                    <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem;">
-                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="potency" inputmode="numeric" value="${escapeAttribute(String(effect?.potency ?? 0))}" placeholder="potency" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="count" inputmode="numeric" value="${escapeAttribute(String(effect?.count ?? 0))}" placeholder="count" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="coinIndex" inputmode="numeric" value="${escapeAttribute(String(effect?.coinIndex ?? ''))}" placeholder="coinIndex (optional)" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                                    </div>
-                                                                </div>
-                                                            `;
-                                                        }
-                                                        if (type === 'adjustSanity') {
-                                                            return `
-                                                                <div style="display:grid; gap: 0.45rem; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.15); padding: 0.65rem; border-radius: 0.75rem;">
-                                                                    ${baseRow}
-                                                                    <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem;">
-                                                                        <select data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="target" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
-                                                                            <option value="" ${effect?.target ? '' : 'selected'}>target: opponent</option>
-                                                                            <option value="self" ${effect?.target === 'self' ? 'selected' : ''}>target: self</option>
-                                                                        </select>
-                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="value" inputmode="numeric" value="${escapeAttribute(String(effect?.value ?? 0))}" placeholder="value" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="reason" value="${escapeAttribute(String(effect?.reason || ''))}" placeholder="reason (optional)" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                                    </div>
-                                                                </div>
-                                                            `;
-                                                        }
-                                                        if (type === 'modifyContext') {
-                                                            return `
-                                                                <div style="display:grid; gap: 0.45rem; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.15); padding: 0.65rem; border-radius: 0.75rem;">
-                                                                    ${baseRow}
-                                                                    <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem;">
-                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="field" value="${escapeAttribute(String(effect?.field || ''))}" placeholder="field (e.g. dynamicDamageBonus)" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                                        <select data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="operation" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
-                                                                            <option value="add" ${effect?.operation === 'add' ? 'selected' : ''}>add</option>
-                                                                            <option value="set" ${effect?.operation === 'set' ? 'selected' : ''}>set</option>
-                                                                        </select>
-                                                                        <input data-action="creator-unit-skill-effect-field" data-skill-index="${index}" data-effect-index="${effectIndex}" data-field="value" inputmode="numeric" value="${escapeAttribute(String(effect?.value ?? 0))}" placeholder="value" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                                    </div>
-                                                                </div>
-                                                            `;
-                                                        }
-                                                        return `
-                                                            <div style="display:grid; gap: 0.45rem; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.15); padding: 0.65rem; border-radius: 0.75rem;">
-                                                                ${baseRow}
-                                                                <span class="echoes-battle-panel__planner-empty" style="text-align:left;">Edit this effect in Raw JSON.</span>
-                                                            </div>
-                                                        `;
-                                                    }).join('')}
-                                                </div>
-                                                <details>
-                                                    <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Raw Effects JSON</summary>
-                                                    <textarea data-action="creator-unit-skill-effects" data-index="${index}" rows="6" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35; margin-top: 0.55rem;">${escapeHtml(JSON.stringify(skill?.effects || [], null, 2))}</textarea>
-                                                </details>
                                             </div>
                                             <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-remove-skill" data-index="${index}">Remove Skill</button>
                                         </div>
@@ -1195,6 +1408,105 @@
             `
             : '';
 
+        const statusEditorMarkup = tab === 'editor' && entityType === 'status'
+            ? `
+                <div class="echoes-creator" style="display: grid; gap: 0.85rem;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center;">
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-status-new">New Status</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-validate">Validate</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
+                        <select data-action="creator-status-template-pick" style="min-width: 14rem; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
+                            <option value="">— Start from template —</option>
+                            ${statusTemplates.map((template) => `<option value="${escapeAttribute(template.id)}">${escapeHtml(template.label)}</option>`).join('')}
+                        </select>
+                        <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-status-apply-template">Use Template</button>
+                    </div>
+
+                    <p class="echoes-creator__hint">Build status effects visually: pick when they trigger, add conditions, then choose what happens. No JSON required.</p>
+
+                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;">
+                        <div class="echoes-creator__field-row">
+                            <label>Id</label>
+                            <input data-action="creator-status-field" data-field="id" value="${escapeAttribute(String(statusDraft?.id || ''))}" />
+                        </div>
+                        <div class="echoes-creator__field-row">
+                            <label>Display name</label>
+                            <input data-action="creator-status-field" data-field="name" value="${escapeAttribute(String(statusDraft?.name || statusDraft?.label || ''))}" />
+                        </div>
+                        <div class="echoes-creator__field-row">
+                            <label>Label (UI)</label>
+                            <input data-action="creator-status-field" data-field="label" value="${escapeAttribute(String(statusDraft?.label || ''))}" />
+                        </div>
+                        <div class="echoes-creator__field-row">
+                            <label>Icon path</label>
+                            <input data-action="creator-status-field" data-field="iconPath" value="${escapeAttribute(String(statusDraft?.iconPath || ''))}" placeholder="assets/statuseffects/..." />
+                        </div>
+                    </div>
+
+                    <div class="echoes-creator__field-row">
+                        <label>Description (shown to players)</label>
+                        <textarea data-action="creator-status-field" data-field="description" rows="2">${escapeHtml(String(statusDraft?.description || ''))}</textarea>
+                    </div>
+
+                    <details open>
+                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Stack rules</summary>
+                        <div style="display:grid; gap:0.75rem; margin-top:0.75rem;">
+                            <label class="echoes-creator__checkbox">
+                                <input type="checkbox" data-action="creator-status-count-only" ${statusDraft?.countOnly ? 'checked' : ''} />
+                                Count only (no potency — like Damage Up)
+                            </label>
+                            <div style="display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:0.75rem;">
+                                <fieldset class="echoes-creator__fieldset">
+                                    <legend>Potency</legend>
+                                    <label class="echoes-creator__checkbox">
+                                        <input type="checkbox" data-action="creator-status-stack-toggle" data-bucket="potency" ${statusPotency.enabled ? 'checked' : ''} />
+                                        Use potency
+                                    </label>
+                                    <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                                        <input data-action="creator-status-stack-field" data-bucket="potency" data-field="min" inputmode="numeric" value="${escapeAttribute(String(statusPotency.min ?? 0))}" placeholder="Min" />
+                                        <input data-action="creator-status-stack-field" data-bucket="potency" data-field="max" inputmode="numeric" value="${escapeAttribute(String(statusPotency.max ?? 99))}" placeholder="Max" />
+                                    </div>
+                                </fieldset>
+                                <fieldset class="echoes-creator__fieldset">
+                                    <legend>Count</legend>
+                                    <label class="echoes-creator__checkbox">
+                                        <input type="checkbox" data-action="creator-status-stack-toggle" data-bucket="count" ${statusCount.enabled ? 'checked' : ''} />
+                                        Use count
+                                    </label>
+                                    <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                                        <input data-action="creator-status-stack-field" data-bucket="count" data-field="min" inputmode="numeric" value="${escapeAttribute(String(statusCount.min ?? 0))}" placeholder="Min" />
+                                        <input data-action="creator-status-stack-field" data-bucket="count" data-field="max" inputmode="numeric" value="${escapeAttribute(String(statusCount.max ?? 99))}" placeholder="Max" />
+                                    </div>
+                                </fieldset>
+                            </div>
+                            <label class="echoes-creator__checkbox">
+                                <input type="checkbox" data-action="creator-status-expire-count" ${statusExpireWhen.countLte != null ? 'checked' : ''} />
+                                Expire when count reaches 0
+                            </label>
+                        </div>
+                    </details>
+
+                    <details open>
+                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Behavior (WHEN → IF → DO)</summary>
+                        <div style="margin-top:0.75rem;">
+                            ${creatorUi?.renderHooksEditor(
+                                statusDraft?.hooks || {},
+                                catalog,
+                                escapeAttribute,
+                                escapeHtml,
+                                'data-creator-scope="status"',
+                            ) || '<span class="echoes-creator__hint">Creator UI module not loaded.</span>'}
+                        </div>
+                    </details>
+
+                    <details>
+                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Advanced JSON</summary>
+                        <textarea data-action="creator-json-input" rows="12" class="echoes-creator__raw-json" style="margin-top:0.65rem;">${escapeHtml(state.creatorJsonInput || '')}</textarea>
+                    </details>
+                </div>
+            `
+            : '';
+
         const editorControls = tab === 'library'
             ? `
                 <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
@@ -1207,14 +1519,16 @@
                     <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
                     ${entityType === 'battle' ? '<button class="echoes-battle-panel__combat-button" type="button" data-action="creator-playtest">Playtest</button>' : ''}
                 </div>
-                ${entityType === 'unit' ? unitEditorMarkup : `
+                ${entityType === 'unit' ? unitEditorMarkup : ''}
+                ${entityType === 'status' ? statusEditorMarkup : ''}
+                ${entityType === 'battle' ? `
                     <textarea
                         data-action="creator-json-input"
                         rows="12"
-                        style="width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height: 1.35;"
-                        placeholder='Paste a battle / unit / status JSON object here...'
+                        class="echoes-creator__raw-json"
+                        placeholder='Paste a battle JSON object here...'
                     >${escapeHtml(state.creatorJsonInput || '')}</textarea>
-                `}
+                ` : ''}
             `;
 
         elements.creatorContent.innerHTML = `
@@ -1537,6 +1851,40 @@
         }
         const { action } = actionTarget.dataset;
 
+        if (handleCreatorHookClick(action, actionTarget)) {
+            return;
+        }
+
+        if (action === 'creator-status-new') {
+            updateCreatorStatusJson((draft) => {
+                const next = getCreatorUi()?.createDefaultStatusDefinition?.() || { id: 'new-status', label: 'New Status', hooks: {} };
+                Object.keys(draft).forEach((key) => delete draft[key]);
+                Object.assign(draft, next);
+            });
+            setCreatorMessage('success', 'Created a new status draft.');
+            renderCreatorScreen();
+            return;
+        }
+
+        if (action === 'creator-status-apply-template') {
+            const pick = elements.creatorContent?.querySelector('[data-action="creator-status-template-pick"]');
+            const templateId = pick?.value || '';
+            const template = getCreatorUi()?.STATUS_TEMPLATES?.find((entry) => entry.id === templateId);
+            if (!template) {
+                setCreatorMessage('error', 'Pick a template first.');
+                renderCreatorScreen();
+                return;
+            }
+            updateCreatorStatusJson((draft) => {
+                const next = template.definition();
+                Object.keys(draft).forEach((key) => delete draft[key]);
+                Object.assign(draft, next);
+            });
+            setCreatorMessage('success', `Applied template: ${template.label}`);
+            renderCreatorScreen();
+            return;
+        }
+
         if (action === 'creator-tab') {
             state.creatorTab = actionTarget.dataset.tab || 'library';
             renderCreatorScreen();
@@ -1546,6 +1894,7 @@
         if (action === 'creator-type') {
             state.creatorEntityType = actionTarget.dataset.type || 'battle';
             state.creatorSelectedId = null;
+            state.creatorJsonInput = '';
             renderCreatorScreen();
             return;
         }
@@ -1650,31 +1999,6 @@
                     draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
                     draft.passives.splice(index, 1);
                 });
-                renderCreatorScreen();
-            }
-        }
-
-        if (action === 'creator-unit-passive-add-hook-block') {
-            const index = Number(actionTarget.dataset.index);
-            const hookName = actionTarget.dataset.hookName || null;
-            if (Number.isInteger(index) && hookName) {
-                updateCreatorUnitJson((draft) => {
-                    draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
-                    const passive = draft.passives[index];
-                    if (!passive || typeof passive !== 'object') {
-                        return;
-                    }
-                    passive.hooks = passive.hooks && typeof passive.hooks === 'object' && !Array.isArray(passive.hooks) ? passive.hooks : {};
-                    const blocks = Array.isArray(passive.hooks[hookName]) ? passive.hooks[hookName] : [];
-                    blocks.push({
-                        id: `${hookName}_${blocks.length + 1}`,
-                        oncePer: 'turn',
-                        conditions: [{ type: 'always' }],
-                        actions: [],
-                    });
-                    passive.hooks[hookName] = blocks;
-                });
-                setCreatorMessage('success', `Added ${hookName} hook block.`);
                 renderCreatorScreen();
             }
             return;
@@ -1868,6 +2192,157 @@
             return;
         }
 
+        const statusField = event.target.closest('[data-action="creator-status-field"]');
+        if (statusField) {
+            const field = statusField.dataset.field || null;
+            if (field) {
+                updateCreatorStatusJson((draft) => {
+                    draft[field] = normalizeStringInput(statusField.value, '');
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const statusCountOnly = event.target.closest('[data-action="creator-status-count-only"]');
+        if (statusCountOnly) {
+            updateCreatorStatusJson((draft) => {
+                if (statusCountOnly.checked) {
+                    draft.countOnly = true;
+                } else {
+                    delete draft.countOnly;
+                }
+            });
+            renderCreatorScreen();
+            return;
+        }
+
+        const statusStackToggle = event.target.closest('[data-action="creator-status-stack-toggle"]');
+        if (statusStackToggle) {
+            const bucket = statusStackToggle.dataset.bucket || null;
+            if (bucket) {
+                updateCreatorStatusJson((draft) => {
+                    draft.stackModel = draft.stackModel && typeof draft.stackModel === 'object' ? draft.stackModel : {};
+                    if (statusStackToggle.checked) {
+                        draft.stackModel[bucket] = draft.stackModel[bucket] || { enabled: true, min: 0, max: 99, application: 'add' };
+                        draft.stackModel[bucket].enabled = true;
+                    } else {
+                        delete draft.stackModel[bucket];
+                    }
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const statusStackField = event.target.closest('[data-action="creator-status-stack-field"]');
+        if (statusStackField) {
+            const bucket = statusStackField.dataset.bucket || null;
+            const field = statusStackField.dataset.field || null;
+            if (bucket && field) {
+                updateCreatorStatusJson((draft) => {
+                    draft.stackModel = draft.stackModel && typeof draft.stackModel === 'object' ? draft.stackModel : {};
+                    draft.stackModel[bucket] = draft.stackModel[bucket] || { enabled: true, min: 0, max: 99, application: 'add' };
+                    const fallback = Number.isFinite(draft.stackModel[bucket][field]) ? draft.stackModel[bucket][field] : 0;
+                    draft.stackModel[bucket][field] = Math.round(normalizeNumberInput(statusStackField.value, fallback));
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const statusExpireCount = event.target.closest('[data-action="creator-status-expire-count"]');
+        if (statusExpireCount) {
+            updateCreatorStatusJson((draft) => {
+                draft.stackModel = draft.stackModel && typeof draft.stackModel === 'object' ? draft.stackModel : {};
+                if (statusExpireCount.checked) {
+                    draft.stackModel.expireWhen = { countLte: 0 };
+                } else {
+                    delete draft.stackModel.expireWhen;
+                }
+            });
+            renderCreatorScreen();
+            return;
+        }
+
+        const hookFieldTarget = event.target.closest('[data-action="creator-hook-condition-field"], [data-action="creator-hook-action-field"], [data-action="creator-simple-effect-field"], [data-action="creator-hook-block-field"]');
+        if (hookFieldTarget) {
+            const creatorUi = getCreatorUi();
+            const scope = hookFieldTarget.dataset.creatorScope || null;
+            const hookName = hookFieldTarget.dataset.hookName || null;
+            const entryIndex = Number(hookFieldTarget.dataset.hookEntryIndex);
+            const field = hookFieldTarget.dataset.field || null;
+            const rawValue = hookFieldTarget.value ?? '';
+            if (!scope || !hookName || !Number.isInteger(entryIndex) || !field) {
+                return;
+            }
+            const entityType = scope === 'status' ? 'status' : 'unit';
+            const actionName = hookFieldTarget.dataset.action;
+            runCreatorHookEntryMutation(entityType, scope, hookFieldTarget.dataset, (entry) => {
+                if (actionName === 'creator-hook-block-field') {
+                    if (field === 'oncePer') {
+                        if (rawValue) {
+                            entry.oncePer = rawValue;
+                        } else {
+                            delete entry.oncePer;
+                        }
+                    }
+                    return;
+                }
+                if (actionName === 'creator-hook-condition-field') {
+                    const condIndex = Number(hookFieldTarget.dataset.conditionIndex);
+                    if (!Number.isInteger(condIndex)) {
+                        return;
+                    }
+                    entry.conditions = Array.isArray(entry.conditions) ? entry.conditions : [];
+                    const condition = entry.conditions[condIndex];
+                    if (condition) {
+                        creatorUi?.applyConditionFieldUpdate(condition, field, rawValue);
+                    }
+                    return;
+                }
+                const actionIndex = Number(hookFieldTarget.dataset.actionIndex);
+                let effect = entry;
+                if (actionName === 'creator-hook-action-field' && Number.isInteger(actionIndex)) {
+                    entry.actions = Array.isArray(entry.actions) ? entry.actions : [];
+                    effect = entry.actions[actionIndex];
+                }
+                if (effect && creatorUi) {
+                    creatorUi.applyEffectFieldUpdate(effect, field, rawValue);
+                }
+            });
+            renderCreatorScreen();
+            return;
+        }
+
+        const skillEffectField = event.target.closest('[data-action="creator-skill-effect-field"], [data-action="creator-unit-skill-effect-field"]');
+        if (skillEffectField) {
+            const creatorUi = getCreatorUi();
+            const skillIndex = Number(skillEffectField.dataset.skillIndex);
+            const effectIndex = Number(skillEffectField.dataset.effectIndex);
+            const field = skillEffectField.dataset.field || null;
+            if (Number.isInteger(skillIndex) && Number.isInteger(effectIndex) && field) {
+                const rawValue = skillEffectField.value ?? '';
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[skillIndex];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
+                    const effect = skill.effects[effectIndex];
+                    if (!effect || typeof effect !== 'object') {
+                        return;
+                    }
+                    if (creatorUi) {
+                        creatorUi.applyEffectFieldUpdate(effect, field, rawValue);
+                    }
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
         const passiveHooks = event.target.closest('[data-action="creator-unit-passive-hooks"]');
         if (passiveHooks) {
             const index = Number(passiveHooks.dataset.index);
@@ -1908,53 +2383,6 @@
                     }
                     if (['basePower', 'coinPower', 'coinCount'].includes(field)) {
                         skill[field] = Math.round(normalizeNumberInput(skillField.value, skill[field] ?? 0));
-                    }
-                });
-                renderCreatorScreen();
-            }
-            return;
-        }
-
-        const skillEffectField = event.target.closest('[data-action="creator-unit-skill-effect-field"]');
-        if (skillEffectField) {
-            const skillIndex = Number(skillEffectField.dataset.skillIndex);
-            const effectIndex = Number(skillEffectField.dataset.effectIndex);
-            const field = skillEffectField.dataset.field || null;
-            if (Number.isInteger(skillIndex) && Number.isInteger(effectIndex) && field) {
-                const rawValue = typeof skillEffectField.value === 'string' ? skillEffectField.value : '';
-                updateCreatorUnitJson((draft) => {
-                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
-                    const skill = draft.skills[skillIndex];
-                    if (!skill || typeof skill !== 'object') {
-                        return;
-                    }
-                    skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
-                    const effect = skill.effects[effectIndex];
-                    if (!effect || typeof effect !== 'object') {
-                        return;
-                    }
-                    if (['trigger', 'type', 'statusId', 'reason', 'operation', 'field'].includes(field)) {
-                        effect[field] = normalizeStringInput(rawValue, '');
-                        return;
-                    }
-                    if (field === 'target') {
-                        const nextValue = normalizeStringInput(rawValue, '');
-                        if (!nextValue) {
-                            delete effect.target;
-                            return;
-                        }
-                        effect.target = nextValue;
-                        return;
-                    }
-                    if (['potency', 'count', 'coinIndex', 'value'].includes(field)) {
-                        const normalized = normalizeStringInput(rawValue, '');
-                        if (normalized === '' && field !== 'value') {
-                            delete effect[field];
-                            return;
-                        }
-                        const fallback = Number.isFinite(effect[field]) ? effect[field] : 0;
-                        const nextNumber = Math.round(normalizeNumberInput(rawValue, fallback));
-                        effect[field] = nextNumber;
                     }
                 });
                 renderCreatorScreen();
