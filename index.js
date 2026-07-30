@@ -574,7 +574,7 @@
         if (entityType === 'status') {
             const draft = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
                 ? parsed
-                : (creatorUi?.createDefaultStatusDefinition?.() || { id: 'new-status', label: 'New Status' });
+                : (creatorUi?.createDefaultStatusDefinition?.() || createDefaultStatusDefinition());
             draft.hooks = draft.hooks && typeof draft.hooks === 'object' && !Array.isArray(draft.hooks) ? draft.hooks : {};
             draft.stackModel = draft.stackModel && typeof draft.stackModel === 'object' && !Array.isArray(draft.stackModel) ? draft.stackModel : {};
             draft.tags = Array.isArray(draft.tags) ? draft.tags : [];
@@ -1043,6 +1043,34 @@
         return typeof api.getBattleDefinition === 'function' ? api.getBattleDefinition(id) : null;
     }
 
+
+    function createDefaultStatusDefinition() {
+        return {
+            id: 'new_status',
+            name: 'New Status',
+            label: 'New Status',
+            description: 'Describe what this status does.',
+            iconPath: '',
+            countOnly: false,
+            tags: [],
+            stackModel: {
+                potency: { enabled: true, min: 0, max: 99, application: 'add' },
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {
+                turnEnd: [
+                    {
+                        type: 'adjustStatus',
+                        target: 'self',
+                        statusId: 'new_status',
+                        countDelta: -1,
+                    },
+                ],
+            },
+        };
+    }
+
     function createDefaultUnitDefinition() {
         const sinKeys = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
         const sinResistances = Object.fromEntries(sinKeys.map((key) => [key, 1]));
@@ -1195,6 +1223,7 @@
         const unitPassives = Array.isArray(unitDraft?.passives) ? unitDraft.passives : [];
         const unitSkills = Array.isArray(unitDraft?.skills) ? unitDraft.skills : [];
         const statusTemplates = creatorUi?.STATUS_TEMPLATES || [];
+        const statusTags = Array.isArray(statusView?.draft?.tags) ? statusView.draft.tags.join(', ') : '';
 
         const renderEnumSelect = (options, selected, fieldAttrs) => {
             const opts = creatorUi?.buildSelectOptions(options, selected, escapeAttribute) || options.map((entry) => {
@@ -1453,6 +1482,11 @@
                     <div class="echoes-creator__field-row">
                         <label>Description (shown to players)</label>
                         <textarea data-action="creator-status-field" data-field="description" rows="2">${escapeHtml(String(statusView?.draft?.description || ''))}</textarea>
+                    </div>
+
+                    <div class="echoes-creator__field-row">
+                        <label>Tags (comma separated)</label>
+                        <input data-action="creator-status-tags" value="${escapeAttribute(statusTags)}" placeholder="buff, custom, damage" />
                     </div>
 
                     <details open>
@@ -1985,6 +2019,16 @@
             renderCreatorScreen();
         }
 
+        if (action === 'creator-status-new') {
+            updateCreatorStatusJson((draft) => {
+                const next = createDefaultStatusDefinition();
+                Object.keys(draft).forEach((key) => delete draft[key]);
+                Object.assign(draft, next);
+            });
+            setCreatorMessage('success', 'Created a new status draft.');
+            renderCreatorScreen();
+        }
+
         if (action === 'creator-unit-add-passive') {
             updateCreatorUnitJson((draft) => {
                 const nextIndex = Array.isArray(draft.passives) ? draft.passives.length + 1 : 1;
@@ -2107,6 +2151,65 @@
             return;
         }
 
+        const statusField = event.target.closest('[data-action="creator-status-field"]');
+        if (statusField) {
+            const field = statusField.dataset.field || null;
+            if (field) {
+                updateCreatorStatusJson((draft) => {
+                    draft[field] = normalizeStringInput(statusField.value, '');
+                    if (field === 'name' && !draft.label) {
+                        draft.label = draft.name;
+                    }
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const statusCountOnly = event.target.closest('[data-action="creator-status-count-only"]');
+        if (statusCountOnly) {
+            updateCreatorStatusJson((draft) => {
+                draft.countOnly = Boolean(statusCountOnly.checked);
+                if (draft.countOnly && draft.stackModel?.potency) {
+                    draft.stackModel.potency.enabled = false;
+                } else if (draft.stackModel?.potency) {
+                    draft.stackModel.potency.enabled = true;
+                }
+            });
+            renderCreatorScreen();
+            return;
+        }
+
+        const statusTags = event.target.closest('[data-action="creator-status-tags"]');
+        if (statusTags) {
+            updateCreatorStatusJson((draft) => {
+                draft.tags = String(statusTags.value || '')
+                    .split(',')
+                    .map((tag) => tag.trim())
+                    .filter(Boolean);
+            });
+            renderCreatorScreen();
+            return;
+        }
+
+        const statusJsonSection = event.target.closest('[data-action="creator-status-json-section"]');
+        if (statusJsonSection) {
+            const section = statusJsonSection.dataset.section || null;
+            if (section) {
+                try {
+                    const parsed = JSON.parse(statusJsonSection.value || '{}');
+                    updateCreatorStatusJson((draft) => {
+                        draft[section] = parsed;
+                    });
+                    setCreatorMessage('success', `Updated status ${section}.`);
+                } catch (error) {
+                    setCreatorMessage('error', `Invalid ${section} JSON: ${error?.message || error}`);
+                }
+                renderCreatorScreen();
+            }
+            return;
+        }
+
         const unitField = event.target.closest('[data-action="creator-unit-field"]');
         if (unitField) {
             const field = unitField.dataset.field;
@@ -2196,31 +2299,6 @@
                 });
                 renderCreatorScreen();
             }
-            return;
-        }
-
-        const statusField = event.target.closest('[data-action="creator-status-field"]');
-        if (statusField) {
-            const field = statusField.dataset.field || null;
-            if (field) {
-                updateCreatorStatusJson((draft) => {
-                    draft[field] = normalizeStringInput(statusField.value, '');
-                });
-                renderCreatorScreen();
-            }
-            return;
-        }
-
-        const statusCountOnly = event.target.closest('[data-action="creator-status-count-only"]');
-        if (statusCountOnly) {
-            updateCreatorStatusJson((draft) => {
-                if (statusCountOnly.checked) {
-                    draft.countOnly = true;
-                } else {
-                    delete draft.countOnly;
-                }
-            });
-            renderCreatorScreen();
             return;
         }
 
