@@ -157,6 +157,7 @@
         creatorSelectedId: null,
         creatorJsonInput: '',
         creatorMessage: null,
+        creatorPendingOpenLane: null,
     };
 
     const elements = {
@@ -599,11 +600,92 @@
     }
 
     function updateCreatorUnitJson(mutator) {
+        if (state.creatorEntityType === 'unit') {
+            ensureCreatorUnitDraftLoaded();
+        }
         updateCreatorEntityJson('unit', mutator);
     }
 
     function updateCreatorStatusJson(mutator) {
         updateCreatorEntityJson('status', mutator);
+    }
+
+    function ensureCreatorUnitDraftLoaded() {
+        if (state.creatorEntityType !== 'unit') {
+            return;
+        }
+        const raw = String(state.creatorJsonInput || '').trim();
+        if (raw) {
+            return;
+        }
+        if (state.creatorSelectedId) {
+            const definition = getCreatorEntityDefinition('unit', state.creatorSelectedId);
+            if (definition) {
+                state.creatorJsonInput = JSON.stringify(definition, null, 2);
+                return;
+            }
+        }
+        const defaultUnit = getCreatorUi()?.createDefaultUnitDefinition?.() || createDefaultUnitDefinition();
+        state.creatorJsonInput = JSON.stringify(defaultUnit, null, 2);
+    }
+
+    function captureCreatorUiState() {
+        const root = elements.creatorContent;
+        if (!root) {
+            return null;
+        }
+        const openLanes = [];
+        root.querySelectorAll('.echoes-moveset__lane[data-lane-key]').forEach((lane) => {
+            if (lane.open) {
+                openLanes.push(lane.dataset.laneKey || '');
+            }
+        });
+        const openDetails = [];
+        root.querySelectorAll('details[data-creator-details-key]').forEach((details) => {
+            if (details.open) {
+                openDetails.push(details.dataset.creatorDetailsKey || '');
+            }
+        });
+        return {
+            scrollTop: root.scrollTop,
+            skillsRowScrollLeft: root.querySelector('.echoes-moveset__skills-row')?.scrollLeft ?? 0,
+            openLanes,
+            openDetails,
+        };
+    }
+
+    function restoreCreatorUiState(uiState) {
+        const root = elements.creatorContent;
+        if (!root || !uiState) {
+            return;
+        }
+        root.scrollTop = uiState.scrollTop;
+        const skillsRow = root.querySelector('.echoes-moveset__skills-row');
+        if (skillsRow) {
+            skillsRow.scrollLeft = uiState.skillsRowScrollLeft;
+        }
+        if (Array.isArray(uiState.openLanes)) {
+            root.querySelectorAll('.echoes-moveset__lane[data-lane-key]').forEach((lane) => {
+                if (uiState.openLanes.includes(lane.dataset.laneKey)) {
+                    lane.open = true;
+                }
+            });
+        }
+        if (Array.isArray(uiState.openDetails)) {
+            root.querySelectorAll('details[data-creator-details-key]').forEach((details) => {
+                if (uiState.openDetails.includes(details.dataset.creatorDetailsKey)) {
+                    details.open = true;
+                }
+            });
+        }
+        if (state.creatorPendingOpenLane) {
+            root.querySelectorAll('.echoes-moveset__lane[data-lane-key]').forEach((lane) => {
+                if (lane.dataset.laneKey === state.creatorPendingOpenLane) {
+                    lane.open = true;
+                }
+            });
+            state.creatorPendingOpenLane = null;
+        }
     }
 
     function getCreatorHooksContainer(draft, scope, dataset) {
@@ -1166,6 +1248,14 @@
             return;
         }
 
+        const tab = state.creatorTab;
+        const entityType = state.creatorEntityType;
+        if (tab === 'editor' && entityType === 'unit') {
+            ensureCreatorUnitDraftLoaded();
+        }
+
+        const creatorUiState = captureCreatorUiState();
+
         const api = getBattleContentApi();
         const installedPacks = typeof api.listInstalledContentPacks === 'function'
             ? api.listInstalledContentPacks()
@@ -1174,8 +1264,6 @@
         const messageStyles = state.creatorMessage?.type === 'error'
             ? 'background: rgba(120, 24, 24, 0.58); border: 1px solid rgba(255, 110, 110, 0.4);'
             : 'background: rgba(24, 120, 70, 0.42); border: 1px solid rgba(120, 255, 170, 0.35);';
-        const tab = state.creatorTab;
-        const entityType = state.creatorEntityType;
 
         const tabButton = (id, label) => `
             <button
@@ -1499,6 +1587,7 @@
                 </div>
             </div>
         `;
+        restoreCreatorUiState(creatorUiState);
     }
 
     async function prepareBattleSelection() {
@@ -1787,6 +1876,9 @@
         if (!actionTarget) {
             return;
         }
+        if (actionTarget.tagName === 'BUTTON') {
+            event.preventDefault();
+        }
         const { action } = actionTarget.dataset;
 
         if (handleCreatorHookClick(action, actionTarget)) {
@@ -2040,7 +2132,9 @@
         if (action === 'creator-lane-add-effect') {
             const skillIndex = Number(actionTarget.dataset.skillIndex);
             const trigger = actionTarget.dataset.trigger || 'onHit';
-            const coinIndex = Number(actionTarget.dataset.coinIndex);
+            const coinIndexRaw = actionTarget.dataset.coinIndex;
+            const coinIndex = coinIndexRaw !== undefined && String(coinIndexRaw) !== '' ? Number(coinIndexRaw) : null;
+            const laneKey = actionTarget.dataset.laneKey || null;
             if (Number.isInteger(skillIndex)) {
                 updateCreatorUnitJson((draft) => {
                     draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
@@ -2061,6 +2155,9 @@
                     }
                     skill.effects.push(effect);
                 });
+                if (laneKey) {
+                    state.creatorPendingOpenLane = laneKey;
+                }
                 renderCreatorScreen();
             }
             return;

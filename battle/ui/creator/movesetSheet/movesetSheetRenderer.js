@@ -71,10 +71,12 @@
             `;
         }).join('');
 
-        const laneAttrs = `data-action="creator-lane-add-effect" data-skill-index="${skillIndex}" data-trigger="${escapeAttr(laneKey)}"${coinIndex ? ` data-coin-index="${coinIndex}"` : ''}`;
+        const triggerKey = laneKey;
+        const detailsLaneKey = coinIndex ? `${skillIndex}-${triggerKey}-coin-${coinIndex}` : `${skillIndex}-${triggerKey}`;
+        const laneAttrs = `data-action="creator-lane-add-effect" data-skill-index="${skillIndex}" data-trigger="${escapeAttr(triggerKey)}"${coinIndex ? ` data-coin-index="${coinIndex}"` : ''} data-lane-key="${escapeAttr(detailsLaneKey)}"`;
 
         return `
-            <details class="echoes-moveset__lane" ${entries.length ? 'open' : ''}>
+            <details class="echoes-moveset__lane" data-lane-key="${escapeAttr(detailsLaneKey)}" ${entries.length ? 'open' : ''}>
                 <summary class="echoes-moveset__lane-title">${escapeHtml(laneLabel)}</summary>
                 <div class="echoes-moveset__lane-body">
                     ${cards || '<span class="echoes-creator__hint">No effects in this phase.</span>'}
