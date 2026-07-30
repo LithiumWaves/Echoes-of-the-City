@@ -205,6 +205,7 @@
 
     const passiveHookLabels = {
         battleStart: 'Battle Start',
+        waveStart: 'Wave Start',
         turnStart: 'Turn Start',
         beforeCoinRoll: 'Before Coin Roll',
         coinRoll: 'Coin Roll',

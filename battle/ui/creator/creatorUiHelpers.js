@@ -314,6 +314,83 @@
         return STATUS_TEMPLATES[0].definition();
     }
 
+    function createDefaultBattleDefinition() {
+        return {
+            id: 'new-battle',
+            name: 'New Encounter',
+            description: '',
+            playerUnitIds: [],
+            enemyUnitIds: [],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 100,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: {
+                    skill: 'cycle',
+                    target: 'mirror',
+                },
+            },
+        };
+    }
+
+    function renderUnitDefensesPanel(unitDraft, catalog, escapeAttr, escapeHtml) {
+        const physical = unitDraft?.resistances?.physical || {};
+        const sinResist = unitDraft?.resistances?.sin || {};
+        const sinTypes = catalog?.sinTypes || SIN_TYPES;
+        const staggerThresholds = Array.isArray(unitDraft?.staggerThresholds) ? unitDraft.staggerThresholds : [];
+        const physicalTypes = catalog?.damageTypes || DAMAGE_TYPES;
+
+        const physicalRows = physicalTypes.map((type) => `
+            <label>${escapeHtml(type)}<input data-action="creator-unit-resistance" data-resistance-kind="physical" data-resistance-key="${escapeAttr(type)}" inputmode="decimal" value="${escapeAttr(String(physical[type] ?? 1))}" /></label>
+        `).join('');
+
+        const sinRows = sinTypes.map((type) => `
+            <label>${escapeHtml(type)}<input data-action="creator-unit-resistance" data-resistance-kind="sin" data-resistance-key="${escapeAttr(type)}" inputmode="decimal" value="${escapeAttr(String(sinResist[type] ?? 1))}" /></label>
+        `).join('');
+
+        const staggerRows = staggerThresholds.map((threshold, index) => `
+            <div class="echoes-creator__stagger-row">
+                <input data-action="creator-unit-stagger-field" data-stagger-index="${index}" inputmode="decimal" value="${escapeAttr(String(threshold))}" placeholder="0.75" />
+                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-stagger-remove" data-stagger-index="${index}">Remove</button>
+            </div>
+        `).join('');
+
+        return `
+            <details class="echoes-creator__section" open>
+                <summary class="echoes-creator__section-title">Defenses &amp; targeting</summary>
+                <p class="echoes-creator__hint">Resistance multipliers: 1 = normal, 2 = double damage taken, 0.5 = half damage. Stagger thresholds are HP% breakpoints (e.g. 0.75 = 75% HP).</p>
+                <div class="echoes-creator__defenses-grid">
+                    <fieldset class="echoes-creator__fieldset">
+                        <legend>Physical resistances</legend>
+                        <div class="echoes-creator__resistance-grid">${physicalRows}</div>
+                    </fieldset>
+                    <fieldset class="echoes-creator__fieldset">
+                        <legend>Sin resistances</legend>
+                        <div class="echoes-creator__resistance-grid echoes-creator__resistance-grid--sin">${sinRows}</div>
+                    </fieldset>
+                </div>
+                <div class="echoes-creator__field-row echoes-creator__field-row--2" style="margin-top:0.75rem;">
+                    <div class="echoes-creator__field-row">
+                        <label>Deployment order</label>
+                        <input data-action="creator-unit-deployment" inputmode="numeric" value="${escapeAttr(String(unitDraft?.deploymentOrder ?? ''))}" placeholder="Slot priority (optional)" />
+                    </div>
+                    <div class="echoes-creator__field-row">
+                        <label>Slot weight</label>
+                        <input data-action="creator-unit-slot-weight" inputmode="numeric" value="${escapeAttr(String(unitDraft?.slotWeight ?? ''))}" placeholder="AoE weight (optional)" />
+                    </div>
+                </div>
+                <fieldset class="echoes-creator__fieldset" style="margin-top:0.75rem;">
+                    <legend>Stagger thresholds (HP %)</legend>
+                    <div class="echoes-creator__stagger-list">
+                        ${staggerRows || '<span class="echoes-creator__hint">No stagger breakpoints.</span>'}
+                    </div>
+                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-stagger-add">+ Threshold</button>
+                </fieldset>
+            </details>
+        `;
+    }
+
     function normalizeNumberInput(value, fallback) {
         const trimmed = String(value ?? '').trim();
         if (!trimmed) {
@@ -1302,6 +1379,8 @@
         STATUS_TEMPLATES,
         createDefaultUnitDefinition,
         createDefaultStatusDefinition,
+        createDefaultBattleDefinition,
+        renderUnitDefensesPanel,
         buildCatalog,
         isHookBlock,
         renderHooksEditor,

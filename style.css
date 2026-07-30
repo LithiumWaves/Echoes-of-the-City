@@ -658,8 +658,127 @@
     padding: 0.35rem 0.5rem;
 }
 
+.echoes-creator__defenses-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.echoes-creator__resistance-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+}
+
+.echoes-creator__resistance-grid label,
+.echoes-creator__stagger-row {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.85rem;
+}
+
+.echoes-creator__stagger-list {
+    display: grid;
+    gap: 0.45rem;
+    margin-bottom: 0.55rem;
+}
+
+.echoes-creator__stagger-row {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+.echoes-encounter {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.echoes-encounter__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 0.85rem;
+}
+
+.echoes-encounter__column {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.echoes-encounter__section-title {
+    margin: 0 0 0.45rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.echoes-encounter__unit-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-bottom: 0.45rem;
+}
+
+.echoes-encounter__unit-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 0.45rem;
+    background: rgba(8, 10, 14, 0.55);
+}
+
+.echoes-encounter__unit-chip-id {
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+
+.echoes-encounter__unit-chip-remove {
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.75);
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0 0.15rem;
+}
+
+.echoes-encounter__wave-card,
+.echoes-encounter__scripted-event {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.5rem;
+    padding: 0.65rem;
+    display: grid;
+    gap: 0.55rem;
+}
+
+.echoes-encounter__wave-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem;
+    justify-content: space-between;
+}
+
+.echoes-encounter__scripted-action {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.4rem;
+    padding: 0.55rem;
+}
+
+.echoes-encounter__scripted-actions-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
 @media (max-width: 900px) {
     .echoes-moveset__body {
+        grid-template-columns: 1fr;
+    }
+
+    .echoes-encounter__body,
+    .echoes-creator__defenses-grid {
         grid-template-columns: 1fr;
     }
 }

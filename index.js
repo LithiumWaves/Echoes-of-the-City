@@ -88,6 +88,7 @@
         ...BATTLE_BASE_PACK_SCRIPT_RELATIVE_PATHS,
         'battle/ui/creator/creatorUiHelpers.js',
         'battle/ui/creator/movesetSheet/movesetSheetRenderer.js',
+        'battle/ui/creator/encounterBuilder/encounterBuilderRenderer.js',
         'battle/ui/inspect/inspectState.js',
         'battle/core/damageFormula.js',
         'battle/core/plannerSkills.js',
@@ -159,6 +160,7 @@
         creatorMessage: null,
         creatorPendingOpenLane: null,
         creatorUnitDraftCache: null,
+        creatorBattleDraftCache: null,
         creatorRenderLock: false,
     };
 
@@ -545,6 +547,19 @@
         return window.EchoesOfTheCityMovesetSheet || window.EchoesOfTheCityBattleModules?.movesetSheet || null;
     }
 
+    function getEncounterBuilder() {
+        return window.EchoesOfTheCityEncounterBuilder || window.EchoesOfTheCityBattleModules?.encounterBuilder || null;
+    }
+
+    function getCreatorHookTriggers() {
+        const registry = getRegistryApi();
+        const labels = registry?.passiveHookLabels || {};
+        return Object.keys(labels).map((id) => ({
+            id,
+            label: labels[id] || id,
+        }));
+    }
+
     function getCreatorCatalog() {
         const registry = getRegistryApi();
         const statusList = typeof registry?.listStatusDefinitions === 'function'
@@ -580,6 +595,42 @@
             draft.staggerThresholds = Array.isArray(draft.staggerThresholds) ? draft.staggerThresholds : [];
             return draft;
         }
+        if (entityType === 'battle') {
+            const fallback = creatorUi?.createDefaultBattleDefinition?.() || createDefaultBattleDefinition();
+            const draft = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                ? parsed
+                : fallback;
+            draft.playerUnitIds = Array.isArray(draft.playerUnitIds) ? draft.playerUnitIds : [];
+            draft.enemyUnitIds = Array.isArray(draft.enemyUnitIds) ? draft.enemyUnitIds : [];
+            draft.rules = draft.rules && typeof draft.rules === 'object' && !Array.isArray(draft.rules)
+                ? draft.rules
+                : { ...fallback.rules };
+            draft.rules.encounterType = draft.rules.encounterType || 'focused';
+            draft.rules.maxTurns = Number.isFinite(Number(draft.rules.maxTurns)) ? Number(draft.rules.maxTurns) : 100;
+            draft.rules.victoryCondition = draft.rules.victoryCondition || 'defeat-all-enemies';
+            draft.rules.failureCondition = draft.rules.failureCondition || 'all-allies-defeated';
+            draft.rules.enemyAiProfile = draft.rules.enemyAiProfile && typeof draft.rules.enemyAiProfile === 'object'
+                ? draft.rules.enemyAiProfile
+                : { skill: 'cycle', target: 'mirror' };
+            if (Array.isArray(draft.rules.waves)) {
+                draft.rules.waves = draft.rules.waves.map((wave) => {
+                    if (!wave || typeof wave !== 'object' || Array.isArray(wave)) {
+                        return { enemyUnitIds: [] };
+                    }
+                    return {
+                        enemyUnitIds: Array.isArray(wave.enemyUnitIds) ? wave.enemyUnitIds.slice() : [],
+                    };
+                });
+            }
+            if (Array.isArray(draft.rules.scriptedEvents)) {
+                draft.rules.scriptedEvents = draft.rules.scriptedEvents.map((event) => (
+                    event && typeof event === 'object' ? { ...event } : event
+                ));
+            }
+            delete draft.playerUnits;
+            delete draft.enemyUnits;
+            return draft;
+        }
         if (entityType === 'status') {
             const draft = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
                 ? parsed
@@ -608,11 +659,95 @@
         return null;
     }
 
+    function syncBattleEnemyIdsFromWaves(draft) {
+        const waves = draft?.rules?.waves;
+        if (Array.isArray(waves) && waves.length) {
+            const firstIds = waves[0]?.enemyUnitIds;
+            if (Array.isArray(firstIds)) {
+                draft.enemyUnitIds = firstIds.slice();
+            }
+        }
+    }
+
+    function serializeBattleAuthoringDraft(draft) {
+        const copy = cloneCreatorDraft(draft);
+        delete copy.playerUnits;
+        delete copy.enemyUnits;
+        if (copy.rules?.waves) {
+            copy.rules.waves = copy.rules.waves.map((wave) => {
+                const nextWave = { ...wave };
+                delete nextWave.enemyUnits;
+                return nextWave;
+            });
+        }
+        return copy;
+    }
+
+    function battleDefinitionToAuthoringDraft(definition) {
+        const fallback = getCreatorUi()?.createDefaultBattleDefinition?.() || createDefaultBattleDefinition();
+        if (!definition || typeof definition !== 'object' || Array.isArray(definition)) {
+            return normalizeCreatorDraft('battle', fallback);
+        }
+        const draft = {
+            id: definition.id || fallback.id,
+            name: definition.name || fallback.name,
+            description: definition.description || '',
+            playerUnitIds: [],
+            enemyUnitIds: [],
+            rules: {
+                ...fallback.rules,
+                ...(definition.rules && typeof definition.rules === 'object' ? definition.rules : {}),
+            },
+        };
+        if (Array.isArray(definition.playerUnitIds)) {
+            draft.playerUnitIds = definition.playerUnitIds.slice();
+        } else if (Array.isArray(definition.playerUnits)) {
+            draft.playerUnitIds = definition.playerUnits.map((unit) => unit?.id).filter(Boolean);
+        }
+        if (Array.isArray(definition.enemyUnitIds)) {
+            draft.enemyUnitIds = definition.enemyUnitIds.slice();
+        } else if (Array.isArray(definition.enemyUnits)) {
+            draft.enemyUnitIds = definition.enemyUnits.map((unit) => unit?.id).filter(Boolean);
+        }
+        if (Array.isArray(draft.rules.waves)) {
+            draft.rules.waves = draft.rules.waves.map((wave) => {
+                if (!wave || typeof wave !== 'object' || Array.isArray(wave)) {
+                    return { enemyUnitIds: [] };
+                }
+                if (Array.isArray(wave.enemyUnitIds)) {
+                    return { enemyUnitIds: wave.enemyUnitIds.slice() };
+                }
+                if (Array.isArray(wave.enemyUnits)) {
+                    return { enemyUnitIds: wave.enemyUnits.map((unit) => unit?.id).filter(Boolean) };
+                }
+                return { enemyUnitIds: [] };
+            });
+            syncBattleEnemyIdsFromWaves(draft);
+        }
+        return normalizeCreatorDraft('battle', draft);
+    }
+
+    function resolveCreatorBattleParsed() {
+        const parsed = getCreatorParsedJsonOrNull();
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            const normalized = normalizeCreatorDraft('battle', parsed);
+            state.creatorBattleDraftCache = cloneCreatorDraft(serializeBattleAuthoringDraft(normalized));
+            return normalized;
+        }
+        if (state.creatorBattleDraftCache && typeof state.creatorBattleDraftCache === 'object') {
+            return normalizeCreatorDraft('battle', cloneCreatorDraft(state.creatorBattleDraftCache));
+        }
+        return null;
+    }
+
     function updateCreatorEntityJson(entityType, mutator) {
         let parsed = null;
         if (entityType === 'unit') {
             ensureCreatorUnitDraftLoaded();
             parsed = resolveCreatorUnitParsed();
+        } else if (entityType === 'battle') {
+            ensureCreatorBattleDraftLoaded();
+            parsed = resolveCreatorBattleParsed();
         } else {
             parsed = getCreatorParsedJsonOrNull();
         }
@@ -620,10 +755,24 @@
         if (typeof mutator === 'function') {
             mutator(draft);
         }
+        if (entityType === 'battle') {
+            syncBattleEnemyIdsFromWaves(draft);
+            const serialized = serializeBattleAuthoringDraft(draft);
+            state.creatorJsonInput = JSON.stringify(serialized, null, 2);
+            state.creatorBattleDraftCache = cloneCreatorDraft(serialized);
+            return;
+        }
         state.creatorJsonInput = JSON.stringify(draft, null, 2);
         if (entityType === 'unit') {
             state.creatorUnitDraftCache = cloneCreatorDraft(draft);
         }
+    }
+
+    function updateCreatorBattleJson(mutator) {
+        if (state.creatorEntityType === 'battle') {
+            ensureCreatorBattleDraftLoaded();
+        }
+        updateCreatorEntityJson('battle', mutator);
     }
 
     function updateCreatorUnitJson(mutator) {
@@ -656,6 +805,28 @@
         const defaultUnit = getCreatorUi()?.createDefaultUnitDefinition?.() || createDefaultUnitDefinition();
         state.creatorJsonInput = JSON.stringify(defaultUnit, null, 2);
         state.creatorUnitDraftCache = cloneCreatorDraft(defaultUnit);
+    }
+
+    function ensureCreatorBattleDraftLoaded() {
+        if (state.creatorEntityType !== 'battle') {
+            return;
+        }
+        const raw = String(state.creatorJsonInput || '').trim();
+        if (raw) {
+            return;
+        }
+        if (state.creatorSelectedId) {
+            const definition = getCreatorEntityDefinition('battle', state.creatorSelectedId);
+            if (definition) {
+                const authoring = battleDefinitionToAuthoringDraft(definition);
+                state.creatorJsonInput = JSON.stringify(authoring, null, 2);
+                state.creatorBattleDraftCache = cloneCreatorDraft(authoring);
+                return;
+            }
+        }
+        const defaultBattle = getCreatorUi()?.createDefaultBattleDefinition?.() || createDefaultBattleDefinition();
+        state.creatorJsonInput = JSON.stringify(defaultBattle, null, 2);
+        state.creatorBattleDraftCache = cloneCreatorDraft(defaultBattle);
     }
 
     function captureCreatorUiState() {
@@ -833,6 +1004,53 @@
         }
     }
 
+    function patchCreatorEncounterBuilder() {
+        const root = elements.creatorContent;
+        if (!root) {
+            return false;
+        }
+        const existing = root.querySelector('.echoes-encounter');
+        if (!existing) {
+            return false;
+        }
+        const encounterBuilder = getEncounterBuilder();
+        const creatorUi = getCreatorUi();
+        if (!encounterBuilder?.renderEncounterBuilder || !creatorUi) {
+            return false;
+        }
+
+        const uiState = captureCreatorUiState();
+        const battleDraft = normalizeCreatorDraft('battle', resolveCreatorBattleParsed());
+        const catalog = getCreatorCatalog();
+        const unitList = getCreatorListEntries('unit');
+        const wrapper = document.createElement('div');
+        beginCreatorRenderLock();
+        try {
+            wrapper.innerHTML = encounterBuilder.renderEncounterBuilder(
+                battleDraft,
+                unitList,
+                catalog,
+                creatorUi,
+                escapeAttribute,
+                escapeHtml,
+                { hookTriggers: getCreatorHookTriggers() },
+            ).trim();
+            const newEncounter = wrapper.firstElementChild;
+            if (!newEncounter) {
+                return false;
+            }
+
+            existing.replaceWith(newEncounter);
+            scheduleCreatorUiStateRestore(uiState);
+            return true;
+        } catch (error) {
+            console.error(`${EXTENSION_ID}: encounter builder patch failed.`, error);
+            return false;
+        } finally {
+            endCreatorRenderLock();
+        }
+    }
+
     function handleCreatorLaneAddEffect(laneButton) {
         const skillIndex = Number(laneButton.getAttribute('data-skill-index'));
         const trigger = laneButton.getAttribute('data-trigger') || 'onHit';
@@ -911,6 +1129,24 @@
     function rerenderCreatorAfterUnitEdit({ full = false } = {}) {
         if (state.creatorTab === 'editor' && state.creatorEntityType === 'unit') {
             refreshCreatorUnitEditor({ full });
+            return;
+        }
+        renderCreatorScreen();
+    }
+
+    function refreshCreatorBattleEditor({ full = false } = {}) {
+        if (!full && state.creatorTab === 'editor' && state.creatorEntityType === 'battle') {
+            if (patchCreatorEncounterBuilder()) {
+                syncCreatorJsonTextareas();
+                return;
+            }
+        }
+        renderCreatorScreen();
+    }
+
+    function rerenderCreatorAfterBattleEdit({ full = false } = {}) {
+        if (state.creatorTab === 'editor' && state.creatorEntityType === 'battle') {
+            refreshCreatorBattleEditor({ full });
             return;
         }
         renderCreatorScreen();
@@ -1200,19 +1436,33 @@
     }
 
     async function saveCreatorJsonToWorkshop(entityType) {
-        const raw = String(state.creatorJsonInput || '').trim();
-        if (!raw) {
-            setCreatorMessage('error', 'Paste JSON first.');
-            renderCreatorScreen();
-            return;
+        if (entityType === 'battle') {
+            ensureCreatorBattleDraftLoaded();
+        } else if (entityType === 'unit') {
+            ensureCreatorUnitDraftLoaded();
         }
+
         let parsed;
-        try {
-            parsed = JSON.parse(raw);
-        } catch (error) {
-            setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
-            renderCreatorScreen();
-            return;
+        if (entityType === 'battle') {
+            parsed = serializeBattleAuthoringDraft(normalizeCreatorDraft('battle', resolveCreatorBattleParsed()));
+            state.creatorJsonInput = JSON.stringify(parsed, null, 2);
+        } else if (entityType === 'unit') {
+            parsed = normalizeCreatorDraft('unit', resolveCreatorUnitParsed());
+            state.creatorJsonInput = JSON.stringify(parsed, null, 2);
+        } else {
+            const raw = String(state.creatorJsonInput || '').trim();
+            if (!raw) {
+                setCreatorMessage('error', 'Paste JSON first.');
+                renderCreatorScreen();
+                return;
+            }
+            try {
+                parsed = JSON.parse(raw);
+            } catch (error) {
+                setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
+                renderCreatorScreen();
+                return;
+            }
         }
 
         try {
@@ -1259,19 +1509,29 @@
     }
 
     async function validateCreatorJson(entityType) {
-        const raw = String(state.creatorJsonInput || '').trim();
-        if (!raw) {
-            setCreatorMessage('error', 'Paste JSON first.');
-            renderCreatorScreen();
-            return;
-        }
         let parsed;
-        try {
-            parsed = JSON.parse(raw);
-        } catch (error) {
-            setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
-            renderCreatorScreen();
-            return;
+        if (entityType === 'battle') {
+            ensureCreatorBattleDraftLoaded();
+            parsed = serializeBattleAuthoringDraft(normalizeCreatorDraft('battle', resolveCreatorBattleParsed()));
+            state.creatorJsonInput = JSON.stringify(parsed, null, 2);
+        } else if (entityType === 'unit') {
+            ensureCreatorUnitDraftLoaded();
+            parsed = normalizeCreatorDraft('unit', resolveCreatorUnitParsed());
+            state.creatorJsonInput = JSON.stringify(parsed, null, 2);
+        } else {
+            const raw = String(state.creatorJsonInput || '').trim();
+            if (!raw) {
+                setCreatorMessage('error', 'Paste JSON first.');
+                renderCreatorScreen();
+                return;
+            }
+            try {
+                parsed = JSON.parse(raw);
+            } catch (error) {
+                setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
+                renderCreatorScreen();
+                return;
+            }
         }
         try {
             await ensureBattleModuleLoaded();
@@ -1291,8 +1551,11 @@
                     throw new Error(result.errors.join('\n'));
                 }
             } else {
+                const resolvedBattle = typeof api.resolveBattleDefinitionComposition === 'function'
+                    ? api.resolveBattleDefinitionComposition(parsed)
+                    : parsed;
                 const result = typeof api.validateBattleDefinition === 'function'
-                    ? api.validateBattleDefinition(parsed)
+                    ? api.validateBattleDefinition(resolvedBattle)
                     : { errors: [] };
                 if (result.errors?.length) {
                     const formatter = getSchemaApi()?.formatBattleDefinitionErrors;
@@ -1307,17 +1570,11 @@
     }
 
     async function playtestCreatorBattle() {
-        const raw = String(state.creatorJsonInput || '').trim();
-        if (!raw) {
-            setCreatorMessage('error', 'Paste battle JSON first.');
-            renderCreatorScreen();
-            return;
-        }
-        let parsed;
-        try {
-            parsed = JSON.parse(raw);
-        } catch (error) {
-            setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
+        ensureCreatorBattleDraftLoaded();
+        const parsed = serializeBattleAuthoringDraft(normalizeCreatorDraft('battle', resolveCreatorBattleParsed()));
+        state.creatorJsonInput = JSON.stringify(parsed, null, 2);
+        if (!parsed?.id) {
+            setCreatorMessage('error', 'Encounter needs an id before playtest.');
             renderCreatorScreen();
             return;
         }
@@ -1428,6 +1685,27 @@
         };
     }
 
+    function createDefaultBattleDefinition() {
+        const creatorUi = getCreatorUi();
+        if (creatorUi?.createDefaultBattleDefinition) {
+            return creatorUi.createDefaultBattleDefinition();
+        }
+        return {
+            id: 'new-battle',
+            name: 'New Encounter',
+            description: '',
+            playerUnitIds: [],
+            enemyUnitIds: [],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 100,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'cycle', target: 'mirror' },
+            },
+        };
+    }
+
     function getCreatorParsedJsonOrNull() {
         const raw = String(state.creatorJsonInput || '').trim();
         if (!raw) {
@@ -1489,6 +1767,9 @@
         if (tab === 'editor' && entityType === 'unit') {
             ensureCreatorUnitDraftLoaded();
         }
+        if (tab === 'editor' && entityType === 'battle') {
+            ensureCreatorBattleDraftLoaded();
+        }
 
         const creatorUiState = captureCreatorUiState();
 
@@ -1546,10 +1827,13 @@
         const catalog = getCreatorCatalog();
         const creatorUi = getCreatorUi();
         const movesetSheet = getMovesetSheet();
+        const encounterBuilder = getEncounterBuilder();
         const parsedEditorJson = entityType === 'unit'
             ? resolveCreatorUnitParsed()
             : (entityType === 'status' ? getCreatorParsedJsonOrNull() : null);
         const unitDraft = entityType === 'unit' ? normalizeCreatorDraft('unit', parsedEditorJson) : null;
+        const battleDraft = entityType === 'battle' ? normalizeCreatorDraft('battle', resolveCreatorBattleParsed()) : null;
+        const unitListForEncounter = entityType === 'battle' ? getCreatorListEntries('unit') : [];
         const statusView = entityType === 'status' ? getStatusEditorViewModel(parsedEditorJson) : null;
         const unitSprites = unitDraft?.sprites && typeof unitDraft.sprites === 'object' && !Array.isArray(unitDraft.sprites) ? unitDraft.sprites : {};
         const unitSkillSprites = unitSprites.skills && typeof unitSprites.skills === 'object' && !Array.isArray(unitSprites.skills) ? unitSprites.skills : {};
@@ -1651,6 +1935,9 @@
                         </div>
                     </details>
 
+                    ${creatorUi?.renderUnitDefensesPanel?.(unitDraft, catalog, escapeAttribute, escapeHtml)
+                        || ''}
+
                     ${movesetSheet?.renderMovesetSheet(unitDraft, catalog, creatorUi, escapeAttribute, escapeHtml)
                         || '<span class="echoes-creator__hint">Moveset sheet module not loaded.</span>'}
 
@@ -1661,6 +1948,38 @@
                             rows="14"
                             style="width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height: 1.35; margin-top: 0.65rem;"
                             placeholder='Paste a unit JSON object here...'
+                        >${escapeHtml(state.creatorJsonInput || '')}</textarea>
+                    </details>
+                </div>
+            `
+            : '';
+
+        const battleEditorMarkup = tab === 'editor' && entityType === 'battle'
+            ? `
+                <div class="echoes-creator" style="display: grid; gap: 0.85rem;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-battle-new">New Encounter</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-validate">Validate</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
+                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-playtest">Playtest</button>
+                    </div>
+                    ${encounterBuilder?.renderEncounterBuilder(
+                        battleDraft,
+                        unitListForEncounter,
+                        catalog,
+                        creatorUi,
+                        escapeAttribute,
+                        escapeHtml,
+                        { hookTriggers: getCreatorHookTriggers() },
+                    ) || '<span class="echoes-creator__hint">Encounter builder module not loaded.</span>'}
+                    <details>
+                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Raw JSON</summary>
+                        <textarea
+                            data-action="creator-json-input"
+                            rows="14"
+                            class="echoes-creator__raw-json"
+                            style="width: 100%; resize: vertical; margin-top: 0.65rem;"
+                            placeholder='Paste a battle JSON object here...'
                         >${escapeHtml(state.creatorJsonInput || '')}</textarea>
                     </details>
                 </div>
@@ -1778,21 +2097,9 @@
                 </div>
             `
             : `
-                <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
-                    <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-validate">Validate</button>
-                    <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
-                    ${entityType === 'battle' ? '<button class="echoes-battle-panel__combat-button" type="button" data-action="creator-playtest">Playtest</button>' : ''}
-                </div>
                 ${entityType === 'unit' ? unitEditorMarkup : ''}
                 ${entityType === 'status' ? statusEditorMarkup : ''}
-                ${entityType === 'battle' ? `
-                    <textarea
-                        data-action="creator-json-input"
-                        rows="12"
-                        class="echoes-creator__raw-json"
-                        placeholder='Paste a battle JSON object here...'
-                    >${escapeHtml(state.creatorJsonInput || '')}</textarea>
-                ` : ''}
+                ${entityType === 'battle' ? battleEditorMarkup : ''}
             `;
 
         beginCreatorRenderLock();
@@ -2180,6 +2487,7 @@
             state.creatorSelectedId = null;
             state.creatorJsonInput = '';
             state.creatorUnitDraftCache = null;
+            state.creatorBattleDraftCache = null;
             renderCreatorScreen();
             return;
         }
@@ -2191,10 +2499,18 @@
             state.creatorSelectedId = entityId;
             await prepareCreatorSelection();
             const definition = getCreatorEntityDefinition(entityType, entityId);
-            state.creatorJsonInput = definition ? JSON.stringify(definition, null, 2) : '';
-            state.creatorUnitDraftCache = entityType === 'unit' && definition
-                ? cloneCreatorDraft(definition)
-                : null;
+            state.creatorUnitDraftCache = null;
+            state.creatorBattleDraftCache = null;
+            if (entityType === 'unit' && definition) {
+                state.creatorUnitDraftCache = cloneCreatorDraft(definition);
+                state.creatorJsonInput = JSON.stringify(definition, null, 2);
+            } else if (entityType === 'battle' && definition) {
+                const authoring = battleDefinitionToAuthoringDraft(definition);
+                state.creatorBattleDraftCache = cloneCreatorDraft(authoring);
+                state.creatorJsonInput = JSON.stringify(authoring, null, 2);
+            } else {
+                state.creatorJsonInput = definition ? JSON.stringify(definition, null, 2) : '';
+            }
             setCreatorMessage('success', definition ? `Loaded ${entityType} "${entityId}".` : `Missing ${entityType} "${entityId}".`);
             renderCreatorScreen();
             return;
@@ -2254,6 +2570,182 @@
 
         if (action === 'creator-playtest') {
             await playtestCreatorBattle();
+            return;
+        }
+
+        if (action === 'creator-battle-new') {
+            updateCreatorBattleJson((draft) => {
+                const next = createDefaultBattleDefinition();
+                Object.keys(draft).forEach((key) => delete draft[key]);
+                Object.assign(draft, next);
+            });
+            state.creatorSelectedId = null;
+            setCreatorMessage('success', 'Created a new encounter draft.');
+            renderCreatorScreen();
+            return;
+        }
+
+        if (action === 'creator-encounter-remove-unit') {
+            const listKind = actionTarget.dataset.listKind || '';
+            const unitIndex = Number(actionTarget.dataset.unitIndex);
+            const waveIndex = actionTarget.dataset.waveIndex !== undefined && actionTarget.dataset.waveIndex !== ''
+                ? Number(actionTarget.dataset.waveIndex)
+                : null;
+            if (!Number.isInteger(unitIndex)) {
+                return;
+            }
+            updateCreatorBattleJson((draft) => {
+                if (listKind === 'player') {
+                    draft.playerUnitIds = Array.isArray(draft.playerUnitIds) ? draft.playerUnitIds : [];
+                    draft.playerUnitIds.splice(unitIndex, 1);
+                    return;
+                }
+                if (listKind === 'enemy') {
+                    draft.enemyUnitIds = Array.isArray(draft.enemyUnitIds) ? draft.enemyUnitIds : [];
+                    draft.enemyUnitIds.splice(unitIndex, 1);
+                    return;
+                }
+                if (listKind === 'wave-enemy' && Number.isInteger(waveIndex)) {
+                    draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                    draft.rules.waves = Array.isArray(draft.rules.waves) ? draft.rules.waves : [];
+                    const wave = draft.rules.waves[waveIndex];
+                    if (wave?.enemyUnitIds) {
+                        wave.enemyUnitIds.splice(unitIndex, 1);
+                    }
+                }
+            });
+            rerenderCreatorAfterBattleEdit();
+            return;
+        }
+
+        if (action === 'creator-encounter-add-wave') {
+            updateCreatorBattleJson((draft) => {
+                draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                draft.rules.waves = Array.isArray(draft.rules.waves) ? draft.rules.waves : [];
+                draft.rules.waves.push({ enemyUnitIds: [] });
+            });
+            rerenderCreatorAfterBattleEdit();
+            return;
+        }
+
+        if (action === 'creator-encounter-remove-wave') {
+            const waveIndex = Number(actionTarget.dataset.waveIndex);
+            if (!Number.isInteger(waveIndex)) {
+                return;
+            }
+            updateCreatorBattleJson((draft) => {
+                draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                draft.rules.waves = Array.isArray(draft.rules.waves) ? draft.rules.waves : [];
+                draft.rules.waves.splice(waveIndex, 1);
+                if (!draft.rules.waves.length) {
+                    delete draft.rules.waves;
+                }
+            });
+            rerenderCreatorAfterBattleEdit();
+            return;
+        }
+
+        if (action === 'creator-scripted-event-add') {
+            updateCreatorBattleJson((draft) => {
+                draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                draft.rules.scriptedEvents = Array.isArray(draft.rules.scriptedEvents) ? draft.rules.scriptedEvents : [];
+                draft.rules.scriptedEvents.push({
+                    id: `evt_${draft.rules.scriptedEvents.length + 1}`,
+                    trigger: 'battleStart',
+                    side: 'player',
+                    hook: [{
+                        type: 'applyStatus',
+                        target: 'self',
+                        statusId: '',
+                        count: 1,
+                    }],
+                });
+            });
+            rerenderCreatorAfterBattleEdit();
+            return;
+        }
+
+        if (action === 'creator-scripted-event-remove') {
+            const eventIndex = Number(actionTarget.dataset.eventIndex);
+            if (!Number.isInteger(eventIndex)) {
+                return;
+            }
+            updateCreatorBattleJson((draft) => {
+                draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                draft.rules.scriptedEvents = Array.isArray(draft.rules.scriptedEvents) ? draft.rules.scriptedEvents : [];
+                draft.rules.scriptedEvents.splice(eventIndex, 1);
+                if (!draft.rules.scriptedEvents.length) {
+                    delete draft.rules.scriptedEvents;
+                }
+            });
+            rerenderCreatorAfterBattleEdit();
+            return;
+        }
+
+        if (action === 'creator-scripted-event-add-action') {
+            const eventIndex = Number(actionTarget.dataset.eventIndex);
+            if (!Number.isInteger(eventIndex)) {
+                return;
+            }
+            updateCreatorBattleJson((draft) => {
+                draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                draft.rules.scriptedEvents = Array.isArray(draft.rules.scriptedEvents) ? draft.rules.scriptedEvents : [];
+                const event = draft.rules.scriptedEvents[eventIndex];
+                if (!event || typeof event !== 'object') {
+                    return;
+                }
+                event.hook = Array.isArray(event.hook) ? event.hook : [];
+                event.hook.push({
+                    type: 'applyStatus',
+                    target: 'self',
+                    statusId: '',
+                    potency: 1,
+                    count: 1,
+                });
+            });
+            rerenderCreatorAfterBattleEdit();
+            return;
+        }
+
+        if (action === 'creator-scripted-event-remove-action') {
+            const eventIndex = Number(actionTarget.dataset.eventIndex);
+            const actionIndex = Number(actionTarget.dataset.actionIndex);
+            if (!Number.isInteger(eventIndex) || !Number.isInteger(actionIndex)) {
+                return;
+            }
+            updateCreatorBattleJson((draft) => {
+                draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                draft.rules.scriptedEvents = Array.isArray(draft.rules.scriptedEvents) ? draft.rules.scriptedEvents : [];
+                const event = draft.rules.scriptedEvents[eventIndex];
+                if (!event?.hook) {
+                    return;
+                }
+                event.hook.splice(actionIndex, 1);
+            });
+            rerenderCreatorAfterBattleEdit();
+            return;
+        }
+
+        if (action === 'creator-unit-stagger-add') {
+            updateCreatorUnitJson((draft) => {
+                draft.staggerThresholds = Array.isArray(draft.staggerThresholds) ? draft.staggerThresholds : [];
+                draft.staggerThresholds.push(0.5);
+            });
+            rerenderCreatorAfterUnitEdit({ full: true });
+            return;
+        }
+
+        if (action === 'creator-unit-stagger-remove') {
+            const staggerIndex = Number(actionTarget.dataset.staggerIndex);
+            if (!Number.isInteger(staggerIndex)) {
+                return;
+            }
+            updateCreatorUnitJson((draft) => {
+                draft.staggerThresholds = Array.isArray(draft.staggerThresholds) ? draft.staggerThresholds : [];
+                draft.staggerThresholds.splice(staggerIndex, 1);
+            });
+            rerenderCreatorAfterUnitEdit({ full: true });
+            return;
         }
 
         if (action === 'creator-unit-new') {
@@ -2465,9 +2957,237 @@
                 if (state.creatorEntityType === 'unit' && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                     state.creatorUnitDraftCache = cloneCreatorDraft(parsed);
                 }
+                if (state.creatorEntityType === 'battle' && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    state.creatorBattleDraftCache = cloneCreatorDraft(parsed);
+                }
             } catch {
                 // Keep editing; cache retains last valid draft.
             }
+            return;
+        }
+
+        const encounterUnitPick = event.target.closest('[data-action="creator-encounter-unit-pick"]');
+        if (encounterUnitPick && encounterUnitPick.value) {
+            const listKind = encounterUnitPick.dataset.listKind || '';
+            const unitId = encounterUnitPick.value;
+            const waveIndexRaw = encounterUnitPick.dataset.waveIndex;
+            const waveIndex = waveIndexRaw !== undefined && String(waveIndexRaw) !== '' ? Number(waveIndexRaw) : null;
+            updateCreatorBattleJson((draft) => {
+                if (listKind === 'player') {
+                    draft.playerUnitIds = Array.isArray(draft.playerUnitIds) ? draft.playerUnitIds : [];
+                    if (!draft.playerUnitIds.includes(unitId)) {
+                        draft.playerUnitIds.push(unitId);
+                    }
+                    return;
+                }
+                if (listKind === 'enemy') {
+                    draft.enemyUnitIds = Array.isArray(draft.enemyUnitIds) ? draft.enemyUnitIds : [];
+                    if (!draft.enemyUnitIds.includes(unitId)) {
+                        draft.enemyUnitIds.push(unitId);
+                    }
+                    return;
+                }
+                if (listKind === 'wave-enemy' && Number.isInteger(waveIndex)) {
+                    draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                    draft.rules.waves = Array.isArray(draft.rules.waves) ? draft.rules.waves : [];
+                    if (!draft.rules.waves[waveIndex]) {
+                        draft.rules.waves[waveIndex] = { enemyUnitIds: [] };
+                    }
+                    draft.rules.waves[waveIndex].enemyUnitIds = Array.isArray(draft.rules.waves[waveIndex].enemyUnitIds)
+                        ? draft.rules.waves[waveIndex].enemyUnitIds
+                        : [];
+                    if (!draft.rules.waves[waveIndex].enemyUnitIds.includes(unitId)) {
+                        draft.rules.waves[waveIndex].enemyUnitIds.push(unitId);
+                    }
+                }
+            });
+            encounterUnitPick.value = '';
+            rerenderCreatorAfterBattleEdit();
+            return;
+        }
+
+        const encounterMultiWave = event.target.closest('[data-action="creator-encounter-multi-wave"]');
+        if (encounterMultiWave) {
+            updateCreatorBattleJson((draft) => {
+                draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                if (encounterMultiWave.checked) {
+                    const enemyIds = Array.isArray(draft.enemyUnitIds) ? draft.enemyUnitIds.slice() : [];
+                    draft.rules.waves = [{ enemyUnitIds: enemyIds }];
+                } else {
+                    delete draft.rules.waves;
+                }
+            });
+            rerenderCreatorAfterBattleEdit();
+            return;
+        }
+
+        const battleField = event.target.closest('[data-action="creator-battle-field"]');
+        if (battleField) {
+            const field = battleField.dataset.field || null;
+            if (field) {
+                updateCreatorBattleJson((draft) => {
+                    draft[field] = normalizeStringInput(battleField.value, '');
+                });
+                rerenderCreatorAfterBattleEdit();
+            }
+            return;
+        }
+
+        const battleRulesField = event.target.closest('[data-action="creator-battle-rules-field"]');
+        if (battleRulesField) {
+            const field = battleRulesField.dataset.field || null;
+            if (field) {
+                updateCreatorBattleJson((draft) => {
+                    draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                    if (field === 'maxTurns') {
+                        draft.rules.maxTurns = Math.max(1, Math.round(normalizeNumberInput(battleRulesField.value, draft.rules.maxTurns ?? 100)));
+                    } else {
+                        draft.rules[field] = normalizeStringInput(battleRulesField.value, draft.rules[field] || '');
+                    }
+                });
+                rerenderCreatorAfterBattleEdit();
+            }
+            return;
+        }
+
+        const battleAiField = event.target.closest('[data-action="creator-battle-ai-field"]');
+        if (battleAiField) {
+            const field = battleAiField.dataset.field || null;
+            if (field) {
+                updateCreatorBattleJson((draft) => {
+                    draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                    draft.rules.enemyAiProfile = draft.rules.enemyAiProfile && typeof draft.rules.enemyAiProfile === 'object'
+                        ? draft.rules.enemyAiProfile
+                        : { skill: 'cycle', target: 'mirror' };
+                    draft.rules.enemyAiProfile[field] = normalizeStringInput(battleAiField.value, draft.rules.enemyAiProfile[field] || '');
+                });
+                rerenderCreatorAfterBattleEdit();
+            }
+            return;
+        }
+
+        const scriptedEventField = event.target.closest('[data-action="creator-scripted-event-field"]');
+        if (scriptedEventField) {
+            const eventIndex = Number(scriptedEventField.dataset.eventIndex);
+            const field = scriptedEventField.dataset.field || null;
+            if (Number.isInteger(eventIndex) && field) {
+                updateCreatorBattleJson((draft) => {
+                    draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                    draft.rules.scriptedEvents = Array.isArray(draft.rules.scriptedEvents) ? draft.rules.scriptedEvents : [];
+                    const entry = draft.rules.scriptedEvents[eventIndex];
+                    if (!entry || typeof entry !== 'object') {
+                        return;
+                    }
+                    const rawValue = normalizeStringInput(scriptedEventField.value, '');
+                    if (field === 'side' && !rawValue) {
+                        delete entry.side;
+                    } else if (field === 'unitId' && !rawValue) {
+                        delete entry.unitId;
+                    } else {
+                        entry[field] = rawValue;
+                    }
+                });
+                rerenderCreatorAfterBattleEdit();
+            }
+            return;
+        }
+
+        const scriptedEventActionField = event.target.closest('[data-action="creator-scripted-event-action-field"]');
+        if (scriptedEventActionField) {
+            const creatorUi = getCreatorUi();
+            const eventIndex = Number(scriptedEventActionField.dataset.eventIndex);
+            const actionIndex = Number(scriptedEventActionField.dataset.actionIndex);
+            const field = scriptedEventActionField.dataset.field || null;
+            if (Number.isInteger(eventIndex) && Number.isInteger(actionIndex) && (field || scriptedEventActionField.dataset.amountMode)) {
+                const rawValue = scriptedEventActionField.type === 'checkbox'
+                    ? scriptedEventActionField.checked
+                    : (scriptedEventActionField.value ?? '');
+                const amountMode = scriptedEventActionField.dataset.amountMode || null;
+                const amountSubField = scriptedEventActionField.dataset.amountField || null;
+                updateCreatorBattleJson((draft) => {
+                    draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
+                    draft.rules.scriptedEvents = Array.isArray(draft.rules.scriptedEvents) ? draft.rules.scriptedEvents : [];
+                    const entry = draft.rules.scriptedEvents[eventIndex];
+                    if (!entry || typeof entry !== 'object') {
+                        return;
+                    }
+                    entry.hook = Array.isArray(entry.hook) ? entry.hook : [];
+                    const effect = entry.hook[actionIndex];
+                    if (!effect || typeof effect !== 'object') {
+                        return;
+                    }
+                    if (creatorUi) {
+                        creatorUi.applyEffectFieldUpdate(effect, field || 'amount', rawValue, { amountMode, amountSubField });
+                    }
+                });
+                rerenderCreatorAfterBattleEdit();
+            }
+            return;
+        }
+
+        const unitResistance = event.target.closest('[data-action="creator-unit-resistance"]');
+        if (unitResistance) {
+            const kind = unitResistance.dataset.resistanceKind || 'physical';
+            const key = unitResistance.dataset.resistanceKey || '';
+            if (key) {
+                updateCreatorUnitJson((draft) => {
+                    draft.resistances = draft.resistances && typeof draft.resistances === 'object' ? draft.resistances : {};
+                    if (kind === 'physical') {
+                        draft.resistances.physical = draft.resistances.physical && typeof draft.resistances.physical === 'object'
+                            ? draft.resistances.physical
+                            : {};
+                        draft.resistances.physical[key] = normalizeNumberInput(unitResistance.value, 1);
+                    } else {
+                        draft.resistances.sin = draft.resistances.sin && typeof draft.resistances.sin === 'object'
+                            ? draft.resistances.sin
+                            : {};
+                        draft.resistances.sin[key] = normalizeNumberInput(unitResistance.value, 1);
+                    }
+                });
+                rerenderCreatorAfterUnitEdit({ full: true });
+            }
+            return;
+        }
+
+        const staggerField = event.target.closest('[data-action="creator-unit-stagger-field"]');
+        if (staggerField) {
+            const staggerIndex = Number(staggerField.dataset.staggerIndex);
+            if (Number.isInteger(staggerIndex)) {
+                updateCreatorUnitJson((draft) => {
+                    draft.staggerThresholds = Array.isArray(draft.staggerThresholds) ? draft.staggerThresholds : [];
+                    const value = normalizeNumberInput(staggerField.value, 0);
+                    draft.staggerThresholds[staggerIndex] = Math.min(1, Math.max(0, value));
+                });
+                rerenderCreatorAfterUnitEdit({ full: true });
+            }
+            return;
+        }
+
+        const unitDeployment = event.target.closest('[data-action="creator-unit-deployment"]');
+        if (unitDeployment) {
+            updateCreatorUnitJson((draft) => {
+                const trimmed = String(unitDeployment.value ?? '').trim();
+                if (trimmed) {
+                    draft.deploymentOrder = Math.max(1, Math.round(normalizeNumberInput(trimmed, 1)));
+                } else {
+                    delete draft.deploymentOrder;
+                }
+            });
+            rerenderCreatorAfterUnitEdit({ full: true });
+            return;
+        }
+
+        const unitSlotWeight = event.target.closest('[data-action="creator-unit-slot-weight"]');
+        if (unitSlotWeight) {
+            updateCreatorUnitJson((draft) => {
+                const trimmed = String(unitSlotWeight.value ?? '').trim();
+                if (trimmed) {
+                    draft.slotWeight = Math.max(1, Math.round(normalizeNumberInput(trimmed, 1)));
+                } else {
+                    delete draft.slotWeight;
+                }
+            });
+            rerenderCreatorAfterUnitEdit({ full: true });
             return;
         }
 

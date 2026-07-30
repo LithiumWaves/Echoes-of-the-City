@@ -236,19 +236,60 @@
         const sourceDefinition = cloneContentValue(definition || {});
         const playerUnitIds = sourceDefinition.playerUnitIds || sourceDefinition.playerUnitsById || null;
         const enemyUnitIds = sourceDefinition.enemyUnitIds || sourceDefinition.enemyUnitsById || null;
+        const sourceRules = sourceDefinition.rules && typeof sourceDefinition.rules === 'object' && !Array.isArray(sourceDefinition.rules)
+            ? sourceDefinition.rules
+            : {};
+        const sourceWaves = Array.isArray(sourceRules.waves) ? sourceRules.waves : null;
 
-        if (!playerUnitIds && !enemyUnitIds) {
+        const hasWaveIdRefs = sourceWaves?.some((wave) => Array.isArray(wave?.enemyUnitIds) && wave.enemyUnitIds.length);
+        const hasTopLevelIds = Boolean(playerUnitIds || enemyUnitIds);
+
+        if (!hasTopLevelIds && !hasWaveIdRefs) {
             return sourceDefinition;
         }
 
         const resolvedPlayerUnits = resolveUnitList(playerUnitIds, 'battle.playerUnitIds');
         const resolvedEnemyUnits = resolveUnitList(enemyUnitIds, 'battle.enemyUnitIds');
 
-        return {
+        let resolvedWaves = sourceWaves;
+        if (hasWaveIdRefs) {
+            resolvedWaves = sourceWaves.map((wave, waveIndex) => {
+                if (!wave || typeof wave !== 'object' || Array.isArray(wave)) {
+                    return wave;
+                }
+                const waveEnemyIds = wave.enemyUnitIds || wave.enemyUnitsById || null;
+                if (!waveEnemyIds) {
+                    return wave;
+                }
+                const resolvedWaveEnemies = resolveUnitList(
+                    waveEnemyIds,
+                    `battle.rules.waves[${waveIndex}].enemyUnitIds`,
+                );
+                const nextWave = { ...wave };
+                nextWave.enemyUnits = resolvedWaveEnemies;
+                delete nextWave.enemyUnitIds;
+                delete nextWave.enemyUnitsById;
+                return nextWave;
+            });
+        }
+
+        const nextDefinition = {
             ...sourceDefinition,
             playerUnits: resolvedPlayerUnits || sourceDefinition.playerUnits,
             enemyUnits: resolvedEnemyUnits || sourceDefinition.enemyUnits,
         };
+
+        if (resolvedWaves) {
+            nextDefinition.rules = {
+                ...sourceRules,
+                waves: resolvedWaves,
+            };
+            if (!nextDefinition.enemyUnits?.length && Array.isArray(resolvedWaves[0]?.enemyUnits) && resolvedWaves[0].enemyUnits.length) {
+                nextDefinition.enemyUnits = resolvedWaves[0].enemyUnits;
+            }
+        }
+
+        return nextDefinition;
     }
 
     function normalizeContentPackImport(payload) {

@@ -6514,6 +6514,88 @@ function runSuite() {
         assert(active.length === 1 && active[0].id === 'skill-enhanced', `Expected enhanced variant, got ${active[0]?.id}`);
     });
 
+    test('Content: resolveBattleDefinitionComposition resolves wave enemyUnitIds', () => {
+        const battleModules = createBattleEnvironment();
+        const content = battleModules.content;
+        assert(typeof content?.resolveBattleDefinitionComposition === 'function', 'Expected resolveBattleDefinitionComposition.');
+
+        const registerUnitDefinition = content.registerUnitDefinition;
+        registerUnitDefinition({
+            id: 'test-wave-enemy',
+            name: 'Wave Enemy',
+            level: 1,
+            maxHp: 50,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { idle: 'assets/test.png', skills: {} },
+            skills: [{
+                id: 'wave-hit',
+                name: 'Wave Hit',
+                skillType: 'attack',
+                basePower: 1,
+                coinPower: 0,
+                coinCount: 1,
+                damageType: 'slash',
+                sinType: 'wrath',
+                effects: [],
+            }],
+            passives: [],
+        }, { allowOverwrite: true });
+
+        const resolved = content.resolveBattleDefinitionComposition({
+            id: 'wave-id-test',
+            name: 'Wave Id Test',
+            playerUnitIds: ['test-wave-enemy'],
+            rules: {
+                waves: [
+                    { enemyUnitIds: ['test-wave-enemy'] },
+                    { enemyUnitIds: ['test-wave-enemy'] },
+                ],
+            },
+        });
+
+        assert(Array.isArray(resolved.rules?.waves?.[0]?.enemyUnits), 'Expected resolved wave enemyUnits.');
+        assert(resolved.rules.waves[0].enemyUnits[0]?.id === 'test-wave-enemy', 'Expected wave enemy unit id.');
+        assert(Array.isArray(resolved.enemyUnits) && resolved.enemyUnits[0]?.id === 'test-wave-enemy', 'Expected top-level enemyUnits from wave 1.');
+    });
+
+    test('Creator UI: default battle definition and encounter builder render', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = {};
+        require(path.resolve(battleRoot, 'ui/creator/creatorUiHelpers.js'));
+        require(path.resolve(battleRoot, 'ui/creator/encounterBuilder/encounterBuilderRenderer.js'));
+
+        const creatorUi = global.window.EchoesOfTheCityCreatorUi;
+        const encounterBuilder = global.window.EchoesOfTheCityEncounterBuilder;
+        assert(typeof creatorUi?.createDefaultBattleDefinition === 'function', 'Expected createDefaultBattleDefinition.');
+        const defaultBattle = creatorUi.createDefaultBattleDefinition();
+        assert(defaultBattle.id === 'new-battle', 'Expected default battle id.');
+        assert(Array.isArray(defaultBattle.playerUnitIds), 'Expected playerUnitIds array.');
+        assert(defaultBattle.rules?.enemyAiProfile?.skill === 'cycle', 'Expected default AI skill.');
+
+        const catalog = creatorUi.buildCatalog([]);
+        const escapeAttr = (value) => String(value);
+        const escapeHtml = (value) => String(value);
+        const html = encounterBuilder.renderEncounterBuilder(
+            defaultBattle,
+            [{ id: 'vergilius', name: 'Vergilius' }],
+            catalog,
+            creatorUi,
+            escapeAttr,
+            escapeHtml,
+            { hookTriggers: [{ id: 'battleStart', label: 'Battle Start' }] },
+        );
+        assert(html.includes('echoes-encounter'), 'Expected encounter builder markup.');
+        assert(html.includes('playerUnitIds') === false, 'Markup should not expose raw JSON keys.');
+        assert(html.includes('Player party'), 'Expected player party section.');
+    });
+
     process.stdout.write(`\nResult: ${passed} passed, ${failed} failed\n`);
 
     if (failed > 0) {
