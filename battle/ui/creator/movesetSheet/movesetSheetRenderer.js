@@ -73,14 +73,21 @@
 
         const triggerKey = laneKey;
         const detailsLaneKey = coinIndex ? `${skillIndex}-${triggerKey}-coin-${coinIndex}` : `${skillIndex}-${triggerKey}`;
-        const laneAttrs = `data-action="creator-lane-add-effect" data-skill-index="${skillIndex}" data-trigger="${escapeAttr(triggerKey)}"${coinIndex ? ` data-coin-index="${coinIndex}"` : ''} data-lane-key="${escapeAttr(detailsLaneKey)}"`;
 
         return `
             <details class="echoes-moveset__lane" data-lane-key="${escapeAttr(detailsLaneKey)}" ${entries.length ? 'open' : ''}>
                 <summary class="echoes-moveset__lane-title">${escapeHtml(laneLabel)}</summary>
                 <div class="echoes-moveset__lane-body">
                     ${cards || '<span class="echoes-creator__hint">No effects in this phase.</span>'}
-                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${laneAttrs}>+ Add effect</button>
+                    <button
+                        class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost echoes-moveset__lane-add-effect"
+                        type="button"
+                        data-creator-action="lane-add-effect"
+                        data-skill-index="${skillIndex}"
+                        data-trigger="${escapeAttr(triggerKey)}"
+                        ${coinIndex ? `data-coin-index="${coinIndex}"` : ''}
+                        data-lane-key="${escapeAttr(detailsLaneKey)}"
+                    >+ Add effect</button>
                 </div>
             </details>
         `;

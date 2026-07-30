@@ -769,13 +769,18 @@
         const unitDraft = normalizeCreatorDraft('unit', resolveCreatorUnitParsed());
         const catalog = getCreatorCatalog();
         const wrapper = document.createElement('div');
-        wrapper.innerHTML = movesetSheet.renderMovesetSheet(
-            unitDraft,
-            catalog,
-            creatorUi,
-            escapeAttribute,
-            escapeHtml,
-        ).trim();
+        try {
+            wrapper.innerHTML = movesetSheet.renderMovesetSheet(
+                unitDraft,
+                catalog,
+                creatorUi,
+                escapeAttribute,
+                escapeHtml,
+            ).trim();
+        } catch (error) {
+            console.error(`${EXTENSION_ID}: moveset sheet patch failed.`, error);
+            return false;
+        }
         const newMoveset = wrapper.firstElementChild;
         if (!newMoveset) {
             return false;
@@ -784,6 +789,53 @@
         existing.replaceWith(newMoveset);
         scheduleCreatorUiStateRestore(uiState);
         return true;
+    }
+
+    function handleCreatorLaneAddEffect(laneButton) {
+        const skillIndex = Number(laneButton.getAttribute('data-skill-index'));
+        const trigger = laneButton.getAttribute('data-trigger') || 'onHit';
+        const coinIndexRaw = laneButton.getAttribute('data-coin-index');
+        const coinIndex = coinIndexRaw !== null && String(coinIndexRaw) !== '' ? Number(coinIndexRaw) : null;
+        const laneKey = laneButton.getAttribute('data-lane-key') || null;
+
+        if (!Number.isInteger(skillIndex) || skillIndex < 0) {
+            setCreatorMessage('error', 'Could not determine which skill to edit. Try reloading the unit.');
+            return;
+        }
+
+        let added = false;
+        updateCreatorUnitJson((draft) => {
+            draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+            const skill = draft.skills[skillIndex];
+            if (!skill || typeof skill !== 'object') {
+                return;
+            }
+            skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
+            const effect = {
+                trigger,
+                type: 'applyStatus',
+                target: 'opponent',
+                statusId: '',
+                potency: 1,
+                count: 1,
+            };
+            if (trigger === 'onHit' && Number.isInteger(coinIndex) && coinIndex > 0) {
+                effect.coinIndex = coinIndex;
+            }
+            skill.effects.push(effect);
+            added = true;
+        });
+
+        if (!added) {
+            setCreatorMessage('error', `Skill #${skillIndex + 1} was not found in the draft. Select the unit again or add a skill first.`);
+            return;
+        }
+
+        if (laneKey) {
+            state.creatorPendingOpenLane = laneKey;
+        }
+        setCreatorMessage('success', `Added ${trigger} effect.`);
+        rerenderCreatorAfterUnitEdit();
     }
 
     function refreshCreatorUnitEditor({ full = false } = {}) {
@@ -1998,6 +2050,14 @@
     }
 
     async function handleCreatorContentClick(event) {
+        const laneAddButton = event.target.closest('[data-creator-action="lane-add-effect"]');
+        if (laneAddButton) {
+            event.preventDefault();
+            event.stopPropagation();
+            handleCreatorLaneAddEffect(laneAddButton);
+            return;
+        }
+
         const actionTarget = event.target.closest('[data-action]');
         if (!actionTarget) {
             return;
@@ -2262,36 +2322,7 @@
         }
 
         if (action === 'creator-lane-add-effect') {
-            const skillIndex = Number(actionTarget.dataset.skillIndex ?? actionTarget.getAttribute('data-skill-index'));
-            const trigger = actionTarget.dataset.trigger || actionTarget.getAttribute('data-trigger') || 'onHit';
-            const coinIndexRaw = actionTarget.dataset.coinIndex ?? actionTarget.getAttribute('data-coin-index');
-            const coinIndex = coinIndexRaw !== undefined && String(coinIndexRaw) !== '' ? Number(coinIndexRaw) : null;
-            const laneKey = actionTarget.dataset.laneKey || actionTarget.getAttribute('data-lane-key') || null;
-            if (Number.isInteger(skillIndex)) {
-                updateCreatorUnitJson((draft) => {
-                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
-                    const skill = draft.skills[skillIndex];
-                    if (!skill || typeof skill !== 'object') {
-                        return;
-                    }
-                    skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
-                    const effect = {
-                        trigger,
-                        type: 'applyStatus',
-                        statusId: '',
-                        potency: 1,
-                        count: 1,
-                    };
-                    if (trigger === 'onHit' && Number.isInteger(coinIndex) && coinIndex > 0) {
-                        effect.coinIndex = coinIndex;
-                    }
-                    skill.effects.push(effect);
-                });
-                if (laneKey) {
-                    state.creatorPendingOpenLane = laneKey;
-                }
-                rerenderCreatorAfterUnitEdit();
-            }
+            handleCreatorLaneAddEffect(actionTarget);
             return;
         }
 
