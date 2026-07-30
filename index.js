@@ -158,6 +158,7 @@
         creatorJsonInput: '',
         creatorMessage: null,
         creatorPendingOpenLane: null,
+        creatorUnitDraftCache: null,
     };
 
     const elements = {
@@ -590,13 +591,38 @@
         return parsed;
     }
 
-    function updateCreatorEntityJson(entityType, mutator) {
+    function cloneCreatorDraft(value) {
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    function resolveCreatorUnitParsed() {
         const parsed = getCreatorParsedJsonOrNull();
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            state.creatorUnitDraftCache = cloneCreatorDraft(parsed);
+            return parsed;
+        }
+        if (state.creatorUnitDraftCache && typeof state.creatorUnitDraftCache === 'object') {
+            return cloneCreatorDraft(state.creatorUnitDraftCache);
+        }
+        return null;
+    }
+
+    function updateCreatorEntityJson(entityType, mutator) {
+        let parsed = null;
+        if (entityType === 'unit') {
+            ensureCreatorUnitDraftLoaded();
+            parsed = resolveCreatorUnitParsed();
+        } else {
+            parsed = getCreatorParsedJsonOrNull();
+        }
         const draft = normalizeCreatorDraft(entityType, parsed);
         if (typeof mutator === 'function') {
             mutator(draft);
         }
         state.creatorJsonInput = JSON.stringify(draft, null, 2);
+        if (entityType === 'unit') {
+            state.creatorUnitDraftCache = cloneCreatorDraft(draft);
+        }
     }
 
     function updateCreatorUnitJson(mutator) {
@@ -622,11 +648,13 @@
             const definition = getCreatorEntityDefinition('unit', state.creatorSelectedId);
             if (definition) {
                 state.creatorJsonInput = JSON.stringify(definition, null, 2);
+                state.creatorUnitDraftCache = cloneCreatorDraft(definition);
                 return;
             }
         }
         const defaultUnit = getCreatorUi()?.createDefaultUnitDefinition?.() || createDefaultUnitDefinition();
         state.creatorJsonInput = JSON.stringify(defaultUnit, null, 2);
+        state.creatorUnitDraftCache = cloneCreatorDraft(defaultUnit);
     }
 
     function captureCreatorUiState() {
@@ -646,9 +674,13 @@
                 openDetails.push(details.dataset.creatorDetailsKey || '');
             }
         });
+        const combatDebug = root.querySelector('.echoes-battle-panel__combat-debug');
+        const sideColumn = root.querySelector('.echoes-moveset__side-column');
         return {
-            scrollTop: root.scrollTop,
+            creatorContentScrollTop: root.scrollTop,
+            combatDebugScrollTop: combatDebug?.scrollTop ?? 0,
             skillsRowScrollLeft: root.querySelector('.echoes-moveset__skills-row')?.scrollLeft ?? 0,
+            sideColumnScrollTop: sideColumn?.scrollTop ?? 0,
             openLanes,
             openDetails,
         };
@@ -659,10 +691,18 @@
         if (!root || !uiState) {
             return;
         }
-        root.scrollTop = uiState.scrollTop;
+        const combatDebug = root.querySelector('.echoes-battle-panel__combat-debug');
+        if (combatDebug) {
+            combatDebug.scrollTop = uiState.combatDebugScrollTop ?? 0;
+        }
+        root.scrollTop = uiState.creatorContentScrollTop ?? 0;
         const skillsRow = root.querySelector('.echoes-moveset__skills-row');
         if (skillsRow) {
-            skillsRow.scrollLeft = uiState.skillsRowScrollLeft;
+            skillsRow.scrollLeft = uiState.skillsRowScrollLeft ?? 0;
+        }
+        const sideColumn = root.querySelector('.echoes-moveset__side-column');
+        if (sideColumn) {
+            sideColumn.scrollTop = uiState.sideColumnScrollTop ?? 0;
         }
         if (Array.isArray(uiState.openLanes)) {
             root.querySelectorAll('.echoes-moveset__lane[data-lane-key]').forEach((lane) => {
@@ -686,6 +726,90 @@
             });
             state.creatorPendingOpenLane = null;
         }
+    }
+
+    function scheduleCreatorUiStateRestore(uiState) {
+        if (!uiState) {
+            return;
+        }
+        const restore = () => restoreCreatorUiState(uiState);
+        restore();
+        requestAnimationFrame(() => {
+            restore();
+            requestAnimationFrame(restore);
+        });
+    }
+
+    function syncCreatorJsonTextareas() {
+        const root = elements.creatorContent;
+        if (!root) {
+            return;
+        }
+        root.querySelectorAll('[data-action="creator-json-input"]').forEach((textarea) => {
+            textarea.value = state.creatorJsonInput || '';
+        });
+    }
+
+    function patchCreatorMovesetSheet() {
+        const root = elements.creatorContent;
+        if (!root) {
+            return false;
+        }
+        const existing = root.querySelector('.echoes-moveset');
+        if (!existing) {
+            return false;
+        }
+        const movesetSheet = getMovesetSheet();
+        const creatorUi = getCreatorUi();
+        if (!movesetSheet?.renderMovesetSheet || !creatorUi) {
+            return false;
+        }
+
+        const uiState = captureCreatorUiState();
+        const unitDraft = normalizeCreatorDraft('unit', resolveCreatorUnitParsed());
+        const catalog = getCreatorCatalog();
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = movesetSheet.renderMovesetSheet(
+            unitDraft,
+            catalog,
+            creatorUi,
+            escapeAttribute,
+            escapeHtml,
+        ).trim();
+        const newMoveset = wrapper.firstElementChild;
+        if (!newMoveset) {
+            return false;
+        }
+
+        existing.replaceWith(newMoveset);
+        scheduleCreatorUiStateRestore(uiState);
+        return true;
+    }
+
+    function refreshCreatorUnitEditor({ full = false } = {}) {
+        if (!full && state.creatorTab === 'editor' && state.creatorEntityType === 'unit') {
+            if (patchCreatorMovesetSheet()) {
+                syncCreatorJsonTextareas();
+                return;
+            }
+        }
+        renderCreatorScreen();
+    }
+
+    function rerenderCreatorAfterUnitEdit({ full = false } = {}) {
+        if (state.creatorTab === 'editor' && state.creatorEntityType === 'unit') {
+            refreshCreatorUnitEditor({ full });
+            return;
+        }
+        renderCreatorScreen();
+    }
+
+    function rerenderCreatorHookEditor(entityType, scope) {
+        if (entityType === 'unit' && scope === 'unit-passive') {
+            rerenderCreatorAfterUnitEdit();
+            return;
+        }
+        renderCreatorScreen();
     }
 
     function getCreatorHooksContainer(draft, scope, dataset) {
@@ -754,7 +878,7 @@
             const selectedHook = pick?.value || '';
             if (!selectedHook) {
                 setCreatorMessage('error', 'Pick a trigger event first.');
-                renderCreatorScreen();
+                rerenderCreatorHookEditor(entityType, scope);
                 return true;
             }
             runCreatorHookMutation(entityType, scope, dataset, (hooks) => {
@@ -770,7 +894,7 @@
                 });
             });
             setCreatorMessage('success', `Added ${selectedHook} event.`);
-            renderCreatorScreen();
+            rerenderCreatorHookEditor(entityType, scope);
             return true;
         }
 
@@ -786,7 +910,7 @@
                 });
                 hooks[hookName] = entries;
             });
-            renderCreatorScreen();
+            rerenderCreatorHookEditor(entityType, scope);
             return true;
         }
 
@@ -807,7 +931,7 @@
                 });
                 hooks[hookName] = entries;
             });
-            renderCreatorScreen();
+            rerenderCreatorHookEditor(entityType, scope);
             return true;
         }
 
@@ -815,7 +939,7 @@
             runCreatorHookMutation(entityType, scope, dataset, (hooks) => {
                 delete hooks[hookName];
             });
-            renderCreatorScreen();
+            rerenderCreatorHookEditor(entityType, scope);
             return true;
         }
 
@@ -829,7 +953,7 @@
                     hooks[hookName] = entries;
                 }
             });
-            renderCreatorScreen();
+            rerenderCreatorHookEditor(entityType, scope);
             return true;
         }
 
@@ -843,7 +967,7 @@
                     hooks[hookName] = entries;
                 }
             });
-            renderCreatorScreen();
+            rerenderCreatorHookEditor(entityType, scope);
             return true;
         }
 
@@ -855,7 +979,7 @@
                 entry.conditions = Array.isArray(entry.conditions) ? entry.conditions : [];
                 entry.conditions.push({ type: 'always' });
             });
-            renderCreatorScreen();
+            rerenderCreatorHookEditor(entityType, scope);
             return true;
         }
 
@@ -871,7 +995,7 @@
                 entry.conditions = Array.isArray(entry.conditions) ? entry.conditions : [];
                 entry.conditions.splice(condIndex, 1);
             });
-            renderCreatorScreen();
+            rerenderCreatorHookEditor(entityType, scope);
             return true;
         }
 
@@ -902,7 +1026,7 @@
                 };
                 hooks[hookName] = entries;
             });
-            renderCreatorScreen();
+            rerenderCreatorHookEditor(entityType, scope);
             return true;
         }
 
@@ -918,7 +1042,7 @@
                 entry.actions = Array.isArray(entry.actions) ? entry.actions : [];
                 entry.actions.splice(actionIndex, 1);
             });
-            renderCreatorScreen();
+            rerenderCreatorHookEditor(entityType, scope);
             return true;
         }
 
@@ -1310,7 +1434,9 @@
         const catalog = getCreatorCatalog();
         const creatorUi = getCreatorUi();
         const movesetSheet = getMovesetSheet();
-        const parsedEditorJson = (entityType === 'unit' || entityType === 'status') ? getCreatorParsedJsonOrNull() : null;
+        const parsedEditorJson = entityType === 'unit'
+            ? resolveCreatorUnitParsed()
+            : (entityType === 'status' ? getCreatorParsedJsonOrNull() : null);
         const unitDraft = entityType === 'unit' ? normalizeCreatorDraft('unit', parsedEditorJson) : null;
         const statusView = entityType === 'status' ? getStatusEditorViewModel(parsedEditorJson) : null;
         const unitSprites = unitDraft?.sprites && typeof unitDraft.sprites === 'object' && !Array.isArray(unitDraft.sprites) ? unitDraft.sprites : {};
@@ -1587,7 +1713,7 @@
                 </div>
             </div>
         `;
-        restoreCreatorUiState(creatorUiState);
+        scheduleCreatorUiStateRestore(creatorUiState);
     }
 
     async function prepareBattleSelection() {
@@ -1878,8 +2004,9 @@
         }
         if (actionTarget.tagName === 'BUTTON') {
             event.preventDefault();
+            event.stopPropagation();
         }
-        const { action } = actionTarget.dataset;
+        const action = actionTarget.dataset.action || actionTarget.getAttribute('data-action');
 
         if (handleCreatorHookClick(action, actionTarget)) {
             return;
@@ -1925,6 +2052,7 @@
             state.creatorEntityType = actionTarget.dataset.type || 'battle';
             state.creatorSelectedId = null;
             state.creatorJsonInput = '';
+            state.creatorUnitDraftCache = null;
             renderCreatorScreen();
             return;
         }
@@ -1937,6 +2065,9 @@
             await prepareCreatorSelection();
             const definition = getCreatorEntityDefinition(entityType, entityId);
             state.creatorJsonInput = definition ? JSON.stringify(definition, null, 2) : '';
+            state.creatorUnitDraftCache = entityType === 'unit' && definition
+                ? cloneCreatorDraft(definition)
+                : null;
             setCreatorMessage('success', definition ? `Loaded ${entityType} "${entityId}".` : `Missing ${entityType} "${entityId}".`);
             renderCreatorScreen();
             return;
@@ -2029,7 +2160,7 @@
                     hooks: {},
                 });
             });
-            renderCreatorScreen();
+            rerenderCreatorAfterUnitEdit();
         }
 
         if (action === 'creator-unit-remove-passive') {
@@ -2039,7 +2170,7 @@
                     draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
                     draft.passives.splice(index, 1);
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2061,7 +2192,8 @@
                     description: '',
                 });
             });
-            renderCreatorScreen();
+            rerenderCreatorAfterUnitEdit();
+            return;
         }
 
         if (action === 'creator-unit-skill-add-effect') {
@@ -2082,7 +2214,7 @@
                         count: 1,
                     });
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2106,7 +2238,7 @@
                     const last = skill.effects[skill.effects.length - 1];
                     delete last.label;
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2124,17 +2256,17 @@
                     skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
                     skill.effects.splice(effectIndex, 1);
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
 
         if (action === 'creator-lane-add-effect') {
-            const skillIndex = Number(actionTarget.dataset.skillIndex);
-            const trigger = actionTarget.dataset.trigger || 'onHit';
-            const coinIndexRaw = actionTarget.dataset.coinIndex;
+            const skillIndex = Number(actionTarget.dataset.skillIndex ?? actionTarget.getAttribute('data-skill-index'));
+            const trigger = actionTarget.dataset.trigger || actionTarget.getAttribute('data-trigger') || 'onHit';
+            const coinIndexRaw = actionTarget.dataset.coinIndex ?? actionTarget.getAttribute('data-coin-index');
             const coinIndex = coinIndexRaw !== undefined && String(coinIndexRaw) !== '' ? Number(coinIndexRaw) : null;
-            const laneKey = actionTarget.dataset.laneKey || null;
+            const laneKey = actionTarget.dataset.laneKey || actionTarget.getAttribute('data-lane-key') || null;
             if (Number.isInteger(skillIndex)) {
                 updateCreatorUnitJson((draft) => {
                     draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
@@ -2158,7 +2290,7 @@
                 if (laneKey) {
                     state.creatorPendingOpenLane = laneKey;
                 }
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2189,7 +2321,7 @@
                         }],
                     });
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2205,7 +2337,7 @@
                         delete draft.sprites.skills[removedId];
                     }
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
         }
 
@@ -2217,7 +2349,7 @@
                     draft.sprites.skills = draft.sprites.skills && typeof draft.sprites.skills === 'object' && !Array.isArray(draft.sprites.skills) ? draft.sprites.skills : {};
                     delete draft.sprites.skills[skillId];
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit({ full: true });
             }
         }
     }
@@ -2226,6 +2358,14 @@
         const textarea = event.target.closest('[data-action="creator-json-input"]');
         if (textarea) {
             state.creatorJsonInput = textarea.value || '';
+            try {
+                const parsed = JSON.parse(state.creatorJsonInput || '{}');
+                if (state.creatorEntityType === 'unit' && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    state.creatorUnitDraftCache = cloneCreatorDraft(parsed);
+                }
+            } catch {
+                // Keep editing; cache retains last valid draft.
+            }
             return;
         }
 
@@ -2313,7 +2453,7 @@
                     draft.defenseLevel = Math.round(normalizeNumberInput(value, draft.defenseLevel ?? 0));
                 }
             });
-            renderCreatorScreen();
+            rerenderCreatorAfterUnitEdit({ full: true });
             return;
         }
 
@@ -2326,7 +2466,7 @@
                 const next = Math.max(0, Math.round(normalizeNumberInput(speedField.value, fallback)));
                 draft.speedRange[index] = next;
             });
-            renderCreatorScreen();
+            rerenderCreatorAfterUnitEdit({ full: true });
             return;
         }
 
@@ -2338,7 +2478,7 @@
                     draft.sprites = draft.sprites && typeof draft.sprites === 'object' && !Array.isArray(draft.sprites) ? draft.sprites : {};
                     draft.sprites[spriteKey] = normalizeStringInput(spriteField.value, '');
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit({ full: true });
             }
             return;
         }
@@ -2357,7 +2497,7 @@
                     }
                     draft.sprites.skills[skillId] = nextValue;
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit({ full: true });
             }
             return;
         }
@@ -2375,7 +2515,7 @@
                     }
                     passive[field] = normalizeStringInput(passiveField.value, '');
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2476,7 +2616,7 @@
                     creatorUi.applyEffectFieldUpdate(effect, field || 'amount', rawValue, { amountMode, amountSubField });
                 }
             });
-            renderCreatorScreen();
+            rerenderCreatorHookEditor(entityType, scope);
             return;
         }
 
@@ -2505,7 +2645,7 @@
                         creatorUi.applyEffectFieldUpdate(effect, field || 'amount', rawValue, { amountMode, amountSubField });
                     }
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2527,7 +2667,7 @@
                         skill.showInPlanner = false;
                     }
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2576,7 +2716,7 @@
                         delete passive.requirements;
                     }
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2596,7 +2736,7 @@
                         .map((tag) => tag.trim())
                         .filter(Boolean);
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2619,7 +2759,7 @@
                 } catch (error) {
                     setCreatorMessage('error', `Invalid hooks JSON: ${error?.message || error}`);
                 }
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2652,7 +2792,7 @@
                         }
                     }
                 });
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2675,7 +2815,7 @@
                 } catch (error) {
                     setCreatorMessage('error', `Invalid effects JSON: ${error?.message || error}`);
                 }
-                renderCreatorScreen();
+                rerenderCreatorAfterUnitEdit();
             }
             return;
         }
@@ -2696,7 +2836,7 @@
                         draft.sprites[spriteKey] = dataUrl;
                     });
                     setCreatorMessage('success', `Uploaded ${spriteKey} sprite.`);
-                    renderCreatorScreen();
+                    rerenderCreatorAfterUnitEdit({ full: true });
                 };
                 reader.readAsDataURL(file);
             }

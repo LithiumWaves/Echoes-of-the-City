@@ -224,8 +224,10 @@
 }
 
 .echoes-battle-panel__creator-content .echoes-battle-panel__combat-debug {
-    overflow-y: auto;
+    overflow: visible;
     overflow-x: hidden;
+    height: auto;
+    min-height: 100%;
     padding-right: 0.45rem;
     scrollbar-gutter: stable;
 }
