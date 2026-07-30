@@ -409,6 +409,48 @@
     padding: 0.5rem 0;
 }
 
+.echoes-creator__trigger-group {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.55rem;
+    padding: 0.5rem 0.65rem;
+    margin-bottom: 0.5rem;
+}
+
+.echoes-creator__trigger-group-title {
+    cursor: pointer;
+    color: rgba(255, 220, 180, 0.9);
+    font-size: 0.9rem;
+}
+
+.echoes-creator__trigger-group-body {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 0.65rem;
+}
+
+.echoes-creator__quick-add-bar,
+.echoes-creator__skill-effects-list {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.echoes-creator__quick-add-bar {
+    flex-wrap: wrap;
+    align-items: center;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.echoes-creator__filters summary {
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.85rem;
+}
+
+.echoes-creator__amount-editor {
+    display: grid;
+    gap: 0.35rem;
+}
+
 .echoes-battle-panel__combat-debug {
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);

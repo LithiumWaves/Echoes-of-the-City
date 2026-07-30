@@ -1243,7 +1243,7 @@
                         <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
                     </div>
 
-                    <p class="echoes-creator__hint">Skills and passives use the same visual builder: pick WHEN it runs, optional IF conditions, then what it DOES.</p>
+                    <p class="echoes-creator__hint"><strong>Passives &amp; statuses</strong> use trigger → conditions → actions. <strong>Skills</strong> use simpler per-moment effects (on select, on hit, etc.) — use presets or custom effects below.</p>
 
                     <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;">
                         <div style="display: grid; gap: 0.45rem;">
@@ -1344,7 +1344,7 @@
                                                 <textarea data-action="creator-unit-passive-field" data-index="${index}" data-field="description" rows="2" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(String(passive?.description || ''))}</textarea>
                                             </div>
                                             <div class="echoes-creator__section">
-                                                <div class="echoes-creator__section-title">Behavior (WHEN → IF → DO)</div>
+                                                <div class="echoes-creator__section-title">Behavior — when it runs, what it checks, what it does</div>
                                                 ${creatorUi?.renderHooksEditor(
                                                     passive?.hooks || {},
                                                     catalog,
@@ -1410,18 +1410,23 @@
                                                     ${renderEnumSelect(catalog.sinTypes, skill?.sinType || 'wrath', `data-action="creator-unit-skill-field" data-index="${index}" data-field="sinType"`)}
                                                 </div>
                                             </div>
+                                            <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem;">
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Offense level</label>
+                                                    <input data-action="creator-unit-skill-field" data-index="${index}" data-field="offenseLevel" inputmode="numeric" value="${escapeAttribute(String(skill?.offenseLevel ?? ''))}" placeholder="Optional" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                                <div style="display:grid; gap: 0.35rem;">
+                                                    <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Tags (comma separated)</label>
+                                                    <input data-action="creator-unit-skill-tags" data-index="${index}" value="${escapeAttribute(Array.isArray(skill?.tags) ? skill.tags.join(', ') : '')}" placeholder="base, burn, follow-up" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                                </div>
+                                            </div>
                                             <div style="display:grid; gap: 0.35rem;">
                                                 <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Description</label>
                                                 <textarea data-action="creator-unit-skill-field" data-index="${index}" data-field="description" rows="2" style="width:100%; resize: vertical; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height:1.35;">${escapeHtml(String(skill?.description || ''))}</textarea>
                                             </div>
                                             <div class="echoes-creator__section">
                                                 <div class="echoes-creator__section-title">Skill effects</div>
-                                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-skill-add-effect" data-index="${index}">+ Add effect</button>
-                                                <div style="display:grid; gap: 0.75rem; margin-top: 0.55rem;">
-                                                    ${(Array.isArray(skill?.effects) ? skill.effects : []).map((effect, effectIndex) => (
-                                                        creatorUi?.renderSkillEffectEditor(effect, effectIndex, index, catalog, escapeAttribute, escapeHtml) || ''
-                                                    )).join('')}
-                                                </div>
+                                                ${creatorUi?.renderSkillEffectsSection(skill, index, catalog, escapeAttribute, escapeHtml) || '<span class="echoes-creator__hint">Creator UI module not loaded.</span>'}
                                             </div>
                                             <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-remove-skill" data-index="${index}">Remove Skill</button>
                                         </div>
@@ -1528,7 +1533,7 @@
                     </details>
 
                     <details open>
-                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Behavior (WHEN → IF → DO)</summary>
+                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Behavior — triggers &amp; effects</summary>
                         <div style="margin-top:0.75rem;">
                             ${creatorUi?.renderHooksEditor(
                                 statusView?.draft?.hooks || {},
@@ -2076,7 +2081,7 @@
         }
 
         if (action === 'creator-unit-skill-add-effect') {
-            const index = Number(actionTarget.dataset.index);
+            const index = Number(actionTarget.dataset.index ?? actionTarget.dataset.skillIndex);
             if (Number.isInteger(index)) {
                 updateCreatorUnitJson((draft) => {
                     draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
@@ -2092,6 +2097,30 @@
                         potency: 1,
                         count: 1,
                     });
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        if (action === 'creator-skill-add-preset') {
+            const skillIndex = Number(actionTarget.dataset.skillIndex);
+            const presetPick = elements.creatorContent?.querySelector(`[data-action="creator-skill-preset-pick"][data-skill-index="${skillIndex}"]`);
+            const presetIndex = Number(presetPick?.value);
+            const creatorUi = getCreatorUi();
+            const presets = creatorUi?.SKILL_EFFECT_PRESETS || [];
+            const preset = Number.isInteger(presetIndex) ? presets[presetIndex] : null;
+            if (Number.isInteger(skillIndex) && preset) {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[skillIndex];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
+                    skill.effects.push({ ...preset, label: undefined });
+                    const last = skill.effects[skill.effects.length - 1];
+                    delete last.label;
                 });
                 renderCreatorScreen();
             }
@@ -2357,8 +2386,10 @@
             const hookName = hookFieldTarget.dataset.hookName || null;
             const entryIndex = Number(hookFieldTarget.dataset.hookEntryIndex);
             const field = hookFieldTarget.dataset.field || null;
-            const rawValue = hookFieldTarget.value ?? '';
-            if (!scope || !hookName || !Number.isInteger(entryIndex) || !field) {
+            const rawValue = hookFieldTarget.type === 'checkbox' ? hookFieldTarget.checked : (hookFieldTarget.value ?? '');
+            const amountMode = hookFieldTarget.dataset.amountMode || null;
+            const amountSubField = hookFieldTarget.dataset.amountField || null;
+            if (!scope || !hookName || !Number.isInteger(entryIndex) || (!field && !amountMode)) {
                 return;
             }
             const entityType = scope === 'status' ? 'status' : 'unit';
@@ -2393,7 +2424,7 @@
                     effect = entry.actions[actionIndex];
                 }
                 if (effect && creatorUi) {
-                    creatorUi.applyEffectFieldUpdate(effect, field, rawValue);
+                    creatorUi.applyEffectFieldUpdate(effect, field || 'amount', rawValue, { amountMode, amountSubField });
                 }
             });
             renderCreatorScreen();
@@ -2406,8 +2437,10 @@
             const skillIndex = Number(skillEffectField.dataset.skillIndex);
             const effectIndex = Number(skillEffectField.dataset.effectIndex);
             const field = skillEffectField.dataset.field || null;
-            if (Number.isInteger(skillIndex) && Number.isInteger(effectIndex) && field) {
-                const rawValue = skillEffectField.value ?? '';
+            if (Number.isInteger(skillIndex) && Number.isInteger(effectIndex) && (field || skillEffectField.dataset.amountMode)) {
+                const rawValue = skillEffectField.type === 'checkbox' ? skillEffectField.checked : (skillEffectField.value ?? '');
+                const amountMode = skillEffectField.dataset.amountMode || null;
+                const amountSubField = skillEffectField.dataset.amountField || null;
                 updateCreatorUnitJson((draft) => {
                     draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
                     const skill = draft.skills[skillIndex];
@@ -2420,8 +2453,28 @@
                         return;
                     }
                     if (creatorUi) {
-                        creatorUi.applyEffectFieldUpdate(effect, field, rawValue);
+                        creatorUi.applyEffectFieldUpdate(effect, field || 'amount', rawValue, { amountMode, amountSubField });
                     }
+                });
+                renderCreatorScreen();
+            }
+            return;
+        }
+
+        const skillTags = event.target.closest('[data-action="creator-unit-skill-tags"]');
+        if (skillTags) {
+            const index = Number(skillTags.dataset.index);
+            if (Number.isInteger(index)) {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[index];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    skill.tags = String(skillTags.value || '')
+                        .split(',')
+                        .map((tag) => tag.trim())
+                        .filter(Boolean);
                 });
                 renderCreatorScreen();
             }
@@ -2466,8 +2519,14 @@
                         skill[field] = normalizeStringInput(skillField.value, '');
                         return;
                     }
-                    if (['basePower', 'coinPower', 'coinCount'].includes(field)) {
-                        skill[field] = Math.round(normalizeNumberInput(skillField.value, skill[field] ?? 0));
+                    if (['basePower', 'coinPower', 'coinCount', 'offenseLevel'].includes(field)) {
+                        const fallback = skill[field] ?? (field === 'offenseLevel' ? 0 : 0);
+                        const parsed = normalizeNumberInput(skillField.value, fallback);
+                        if (field === 'offenseLevel' && !String(skillField.value ?? '').trim()) {
+                            delete skill.offenseLevel;
+                        } else {
+                            skill[field] = Math.round(parsed);
+                        }
                     }
                 });
                 renderCreatorScreen();

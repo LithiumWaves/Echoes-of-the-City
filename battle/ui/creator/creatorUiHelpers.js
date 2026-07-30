@@ -6,16 +6,27 @@
     const DAMAGE_TYPES = ['slash', 'pierce', 'blunt'];
     const SIN_TYPES = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
     const SKILL_TRIGGERS = ['onSelect', 'onUse', 'onHit', 'onClashWin', 'onClashLose', 'onAttackEnd'];
+    const SKILL_TRIGGER_LABELS = {
+        onSelect: 'When skill is selected (before coins)',
+        onUse: 'When skill is used',
+        onHit: 'When attack hits',
+        onClashWin: 'When clash is won',
+        onClashLose: 'When clash is lost',
+        onAttackEnd: 'When attack ends',
+    };
     const ONCE_PER_OPTIONS = ['battle', 'turn', 'skill', 'coin'];
     const TARGET_OPTIONS = [
         { value: '', label: 'Opponent (default)' },
         { value: 'self', label: 'Self' },
-        { value: 'allAllies', label: 'All Allies' },
-        { value: 'allOpponents', label: 'All Opponents' },
-        { value: 'randomOpponent', label: 'Random Opponent' },
-        { value: 'randomAlly', label: 'Random Ally' },
-        { value: 'lowestHpOpponent', label: 'Lowest HP Opponent' },
-        { value: 'highestHpOpponent', label: 'Highest HP Opponent' },
+        { value: 'opponent', label: 'Opponent' },
+        { value: 'allAllies', label: 'All allies' },
+        { value: 'allOpponents', label: 'All opponents' },
+        { value: 'randomOpponent', label: 'Random opponent' },
+        { value: 'randomAlly', label: 'Random ally' },
+        { value: 'lowestHpOpponent', label: 'Lowest HP opponent' },
+        { value: 'highestHpOpponent', label: 'Highest HP opponent' },
+        { value: 'lowestHpAlly', label: 'Lowest HP ally' },
+        { value: 'highestHpAlly', label: 'Highest HP ally' },
     ];
     const CONTEXT_FIELDS = [
         'dynamicDamageBonus',
@@ -29,45 +40,48 @@
     ];
 
     const CONDITION_LABELS = {
-        always: 'Always (no condition)',
-        hasStatus: 'Target has status',
-        statusPotencyAtLeast: 'Status potency ≥',
-        statusPotencyAtOrBelow: 'Status potency ≤',
-        statusCountAtLeast: 'Status count ≥',
-        statusCountAtOrBelow: 'Status count ≤',
+        always: 'Always (no check)',
+        hasStatus: 'Has status',
+        statusPotencyAtLeast: 'Status potency is at least',
+        statusPotencyAtOrBelow: 'Status potency is at most',
+        statusCountAtLeast: 'Status count is at least',
+        statusCountAtOrBelow: 'Status count is at most',
         skillSinType: 'Skill sin type is',
         skillDamageType: 'Skill damage type is',
         skillType: 'Skill type is',
         skillIdIs: 'Skill ID is',
-        damageAtLeast: 'Damage dealt ≥',
-        hpPercentAtOrBelow: 'HP% ≤',
-        hpPercentAtOrAbove: 'HP% ≥',
-        hpAtOrBelow: 'HP ≤',
-        hpAtOrAbove: 'HP ≥',
-        spAtOrBelow: 'SP ≤',
-        spAtOrAbove: 'SP ≥',
-        speedAtLeast: 'Speed ≥',
-        speedAtOrBelow: 'Speed ≤',
+        skillHasTag: 'Skill has tag',
+        damageAtLeast: 'Damage dealt is at least',
+        hpPercentAtOrBelow: 'HP% is at most',
+        hpPercentAtOrAbove: 'HP% is at least',
+        hpAtOrBelow: 'HP is at most',
+        hpAtOrAbove: 'HP is at least',
+        spAtOrBelow: 'SP is at most',
+        spAtOrAbove: 'SP is at least',
+        speedAtLeast: 'Speed is at least',
+        speedAtOrBelow: 'Speed is at most',
         criticalHit: 'Critical hit',
-        targetStaggered: 'Target staggered',
-        randomChance: 'Random chance %',
+        targetStaggered: 'Target is staggered',
+        randomChance: 'Random chance (%)',
         coinIndex: 'Coin index is',
         skillCoinPowerSign: 'Coin power sign',
         unitSideIs: 'Unit side is',
-        waveAtLeast: 'Wave ≥',
-        waveAtOrBelow: 'Wave ≤',
+        waveAtLeast: 'Wave is at least',
+        waveAtOrBelow: 'Wave is at most',
         hasFlag: 'Has flag',
-        counterAtLeast: 'Counter ≥',
-        counterAtOrBelow: 'Counter ≤',
-        encounterResourceAtLeast: 'Encounter resource ≥',
-        encounterResourceAtOrBelow: 'Encounter resource ≤',
-        unitResourceAtLeast: 'Unit resource ≥',
-        unitResourceAtOrBelow: 'Unit resource ≤',
-        resonanceAtLeast: 'Resonance ≥',
-        resonanceAtOrBelow: 'Resonance ≤',
+        counterAtLeast: 'Counter is at least',
+        counterAtOrBelow: 'Counter is at most',
+        encounterResourceAtLeast: 'Encounter resource is at least',
+        encounterResourceAtOrBelow: 'Encounter resource is at most',
+        unitResourceAtLeast: 'Unit resource is at least',
+        unitResourceAtOrBelow: 'Unit resource is at most',
+        resonanceAtLeast: 'Resonance is at least',
+        resonanceAtOrBelow: 'Resonance is at most',
+        absoluteResonanceAtLeast: 'Absolute resonance is at least',
+        absoluteResonanceAtOrBelow: 'Absolute resonance is at most',
         panicStateIs: 'Panic state is',
-        panicValueAtLeast: 'Panic value ≥',
-        panicValueAtOrBelow: 'Panic value ≤',
+        panicValueAtLeast: 'Panic value is at least',
+        panicValueAtOrBelow: 'Panic value is at most',
         damageSourceIs: 'Damage source is',
         eventStatusIdIs: 'Event status is',
         lastEventTypeIs: 'Last event type is',
@@ -75,22 +89,75 @@
         speedGreaterThan: 'Speed > other target',
     };
 
+    const PASSIVE_HOOK_GROUPS = [
+        {
+            label: 'Turn & battle',
+            hooks: ['battleStart', 'turnStart', 'turnEnd', 'battleEnd', 'unitDefeated'],
+        },
+        {
+            label: 'Combat hits & damage',
+            hooks: ['hitDealt', 'hitTaken', 'damageDealt', 'damageTaken', 'beforeDamage', 'afterDamage', 'attackEnd'],
+        },
+        {
+            label: 'Coins & skills',
+            hooks: ['beforeCoinRoll', 'coinRoll', 'afterCoinRoll', 'skillSelected'],
+        },
+        {
+            label: 'Status events',
+            hooks: ['statusApplied', 'statusChanged', 'statusExpired', 'statusConsumed', 'statusInflicted', 'statusReceived', 'beforeStatusTrigger', 'afterStatusTrigger'],
+        },
+        {
+            label: 'Healing',
+            hooks: ['beforeHeal', 'afterHeal'],
+        },
+    ];
+
+    const COIN_MAP_FIELD_OPTIONS = [
+        { value: 'coinPowerBonusByCoin', label: 'Coin power bonus' },
+        { value: 'criticalBonusByCoin', label: 'Critical bonus' },
+        { value: 'critChanceBonusByCoin', label: 'Crit chance bonus' },
+        { value: 'staticDamageBonusByCoin', label: 'Static damage bonus' },
+        { value: 'dynamicDamageBonusByCoin', label: 'Dynamic damage bonus' },
+        { value: 'clashRoundBonusByCoin', label: 'Clash round bonus' },
+        { value: 'observationBonusByCoin', label: 'Observation bonus' },
+        { value: 'additiveDamageByCoin', label: 'Additive damage' },
+        { value: 'extraCritDamageByCoin', label: 'Extra crit damage' },
+        { value: 'critFinalPowerBonusByCoin', label: 'Crit final power bonus' },
+        { value: 'damageCapByCoin', label: 'Damage cap' },
+    ];
+
     const COMMON_EFFECT_TYPES = [
         'applyStatus',
         'adjustStatus',
         'consumeStatus',
+        'clearStatus',
         'dealFixedDamage',
         'healHp',
         'adjustSanity',
         'modifyContext',
         'modifyCoinMap',
-        'clearStatus',
         'burstTremor',
         'gainShield',
         'modifyOffenseLevel',
         'modifyDefenseLevel',
         'modifySpeed',
+        'modifyPhysicalResistance',
+        'modifySinResistance',
+        'adjustEncounterResource',
+        'adjustUnitResource',
+        'copyStatus',
+        'transferStatus',
+        'convertStatus',
+        'clearStatusesByTag',
         'setFollowUpSkill',
+    ];
+
+    const SKILL_EFFECT_PRESETS = [
+        { label: 'Apply status on hit', trigger: 'onHit', type: 'applyStatus', statusId: '', potency: 1, count: 1 },
+        { label: 'Heal self on hit', trigger: 'onHit', type: 'healHp', target: 'self', value: 5 },
+        { label: 'Coin power bonus (coin 1)', trigger: 'onSelect', type: 'modifyCoinMap', field: 'coinPowerBonusByCoin', coinIndex: 1, value: 2 },
+        { label: 'Damage bonus on select', trigger: 'onSelect', type: 'modifyContext', field: 'dynamicDamageBonus', operation: 'add', value: 3 },
+        { label: 'SP gain on clash win', trigger: 'onClashWin', type: 'adjustSanity', target: 'self', value: 5 },
     ];
 
     const STATUS_TEMPLATES = [
@@ -285,29 +352,98 @@
         return `<select ${attrs} style="width:100%;">${buildSelectOptions(TARGET_OPTIONS, selectedValue || '', escapeAttr)}</select>`;
     }
 
-    function renderAmountField(amount, escapeAttr, attrs = '') {
+    function getAmountMode(amount) {
         if (typeof amount === 'number' && Number.isFinite(amount)) {
-            return `<input ${attrs} inputmode="numeric" value="${escapeAttr(String(amount))}" placeholder="Amount" style="width:100%;" />`;
+            return 'number';
         }
         if (amount && typeof amount === 'object' && amount.statusPotency) {
-            const source = amount.statusPotency;
-            const statusId = source.statusId || '';
-            const target = source.target || 'self';
-            return `
-                <div style="display:grid; gap:0.35rem;">
-                    <span class="echoes-creator__hint">Amount = status potency</span>
-                    <input ${attrs} data-amount-mode="statusPotency" data-amount-field="statusId" value="${escapeAttr(statusId)}" placeholder="Status ID for potency" style="width:100%;" />
-                    <select ${attrs} data-amount-mode="statusPotency" data-amount-field="target" style="width:100%;">
-                        <option value="self" ${target === 'self' ? 'selected' : ''}>Self potency</option>
-                        <option value="opponent" ${target === 'opponent' ? 'selected' : ''}>Opponent potency</option>
-                    </select>
-                </div>
-            `;
+            return 'statusPotency';
         }
-        return `<input ${attrs} inputmode="numeric" value="${escapeAttr(String(amount ?? ''))}" placeholder="Amount (number)" style="width:100%;" />`;
+        if (amount && typeof amount === 'object' && amount.statusCount) {
+            return 'statusCount';
+        }
+        return 'number';
     }
 
-    function renderEffectFields(effect, catalog, escapeAttr, escapeHtml, fieldAttrs) {
+    function renderAmountField(amount, escapeAttr, attrs = '') {
+        const mode = getAmountMode(amount);
+        const numericValue = typeof amount === 'number' ? amount : '';
+        const potencySource = amount?.statusPotency || {};
+        const countSource = amount?.statusCount || {};
+
+        return `
+            <div class="echoes-creator__amount-editor">
+                <select ${attrs} data-field="amountMode" style="width:100%; margin-bottom:0.35rem;">
+                    <option value="number" ${mode === 'number' ? 'selected' : ''}>Fixed number</option>
+                    <option value="statusPotency" ${mode === 'statusPotency' ? 'selected' : ''}>Equals status potency</option>
+                    <option value="statusCount" ${mode === 'statusCount' ? 'selected' : ''}>Equals status count</option>
+                </select>
+                ${mode === 'number'
+                    ? `<input ${attrs} data-field="amount" inputmode="numeric" value="${escapeAttr(String(numericValue))}" placeholder="Amount" style="width:100%;" />`
+                    : mode === 'statusPotency'
+                        ? `
+                            <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                                <input ${attrs} data-amount-mode="statusPotency" data-amount-field="statusId" value="${escapeAttr(String(potencySource.statusId || ''))}" placeholder="Status ID" />
+                                <select ${attrs} data-amount-mode="statusPotency" data-amount-field="target" style="width:100%;">
+                                    <option value="self" ${potencySource.target === 'self' || !potencySource.target ? 'selected' : ''}>Self</option>
+                                    <option value="opponent" ${potencySource.target === 'opponent' ? 'selected' : ''}>Opponent</option>
+                                </select>
+                            </div>
+                        `
+                        : `
+                            <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                                <input ${attrs} data-amount-mode="statusCount" data-amount-field="statusId" value="${escapeAttr(String(countSource.statusId || ''))}" placeholder="Status ID" />
+                                <select ${attrs} data-amount-mode="statusCount" data-amount-field="target" style="width:100%;">
+                                    <option value="self" ${countSource.target === 'self' || !countSource.target ? 'selected' : ''}>Self</option>
+                                    <option value="opponent" ${countSource.target === 'opponent' ? 'selected' : ''}>Opponent</option>
+                                </select>
+                            </div>
+                        `}
+            </div>
+        `;
+    }
+
+    function renderEffectFilters(effect, escapeAttr, fieldAttrs, options = {}) {
+        if (!options.showFilters) {
+            return '';
+        }
+        const coinIndex = effect?.coinIndex ?? '';
+        const criticalOnly = Boolean(effect?.criticalOnly);
+        const outcome = effect?.outcome || '';
+        const minPotency = effect?.minStatusPotency ?? '';
+        const statusSource = effect?.statusSource || 'self';
+
+        return `
+            <details class="echoes-creator__filters">
+                <summary>Optional filters (coin, crit, clash outcome)</summary>
+                <div class="echoes-creator__field-row echoes-creator__field-row--3" style="margin-top:0.5rem;">
+                    <label>Coin #</label>
+                    <input ${fieldAttrs} data-field="coinIndex" inputmode="numeric" value="${escapeAttr(String(coinIndex))}" placeholder="Any coin" />
+                    <label class="echoes-creator__checkbox" style="align-self:center;">
+                        <input type="checkbox" ${fieldAttrs} data-field="criticalOnly" ${criticalOnly ? 'checked' : ''} />
+                        Critical only
+                    </label>
+                    <label>Clash outcome</label>
+                    <select ${fieldAttrs} data-field="outcome" style="width:100%;">
+                        <option value="" ${!outcome ? 'selected' : ''}>Any</option>
+                        <option value="win" ${outcome === 'win' ? 'selected' : ''}>Clash win</option>
+                        <option value="lose" ${outcome === 'lose' ? 'selected' : ''}>Clash lose</option>
+                    </select>
+                </div>
+                <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                    <label>Min status potency</label>
+                    <input ${fieldAttrs} data-field="minStatusPotency" inputmode="numeric" value="${escapeAttr(String(minPotency))}" placeholder="Optional" />
+                    <label>Check on</label>
+                    <select ${fieldAttrs} data-field="statusSource" style="width:100%;">
+                        <option value="self" ${statusSource === 'self' ? 'selected' : ''}>Self</option>
+                        <option value="opponent" ${statusSource === 'opponent' ? 'selected' : ''}>Opponent</option>
+                    </select>
+                </div>
+            </details>
+        `;
+    }
+
+    function renderEffectFields(effect, catalog, escapeAttr, escapeHtml, fieldAttrs, options = {}) {
         const type = effect?.type || 'applyStatus';
         const statusList = catalog.statusList || [];
 
@@ -381,7 +517,7 @@
             specificFields = `
                 <div class="echoes-creator__field-row">
                     <label>Heal amount</label>
-                    <input ${fieldAttrs} data-field="value" inputmode="numeric" value="${escapeAttr(String(effect?.value ?? effect?.amount ?? ''))}" placeholder="HP healed" />
+                    ${renderAmountField(effect?.value ?? effect?.amount, escapeAttr, `${fieldAttrs} data-field="amount"`)}
                 </div>
             `;
             break;
@@ -453,7 +589,7 @@
             specificFields = `
                 <div class="echoes-creator__field-row echoes-creator__field-row--2">
                     <label>Change</label>
-                    <input ${fieldAttrs} data-field="value" inputmode="numeric" value="${escapeAttr(String(effect?.value ?? ''))}" placeholder="± levels" />
+                    ${renderAmountField(effect?.value ?? effect?.amount, escapeAttr, `${fieldAttrs} data-field="amount"`)}
                     <label>Operation</label>
                     <select ${fieldAttrs} data-field="operation" style="width:100%;">
                         <option value="add" ${!effect?.operation || effect?.operation === 'add' ? 'selected' : ''}>Add</option>
@@ -462,9 +598,125 @@
                 </div>
             `;
             break;
+        case 'modifyCoinMap':
+            specificFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                    <label>Coin stat</label>
+                    <select ${fieldAttrs} data-field="field" style="width:100%;">
+                        ${buildSelectOptions(COIN_MAP_FIELD_OPTIONS, effect?.field || 'coinPowerBonusByCoin', escapeAttr)}
+                    </select>
+                    <label>Coin #</label>
+                    <input ${fieldAttrs} data-field="coinIndex" inputmode="numeric" value="${escapeAttr(String(effect?.coinIndex ?? 1))}" placeholder="1" />
+                    <label>Value</label>
+                    <input ${fieldAttrs} data-field="value" inputmode="decimal" value="${escapeAttr(String(effect?.value ?? ''))}" placeholder="Bonus" />
+                </div>
+            `;
+            break;
+        case 'modifyPhysicalResistance':
+            specificFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                    <label>Damage type</label>
+                    <select ${fieldAttrs} data-field="damageType" style="width:100%;">${buildSelectOptions(DAMAGE_TYPES, effect?.damageType || 'slash', escapeAttr)}</select>
+                    <label>Multiplier</label>
+                    <input ${fieldAttrs} data-field="value" inputmode="decimal" value="${escapeAttr(String(effect?.value ?? 1))}" placeholder="1.0" />
+                    <label>Apply to</label>
+                    <select ${fieldAttrs} data-field="operation" style="width:100%;">
+                        <option value="multiplyBase" ${!effect?.operation || effect?.operation === 'multiplyBase' ? 'selected' : ''}>Base resistance</option>
+                        <option value="multiplyCurrent" ${effect?.operation === 'multiplyCurrent' ? 'selected' : ''}>Current resistance</option>
+                    </select>
+                </div>
+            `;
+            break;
+        case 'modifySinResistance':
+            specificFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                    <label>Sin type</label>
+                    <select ${fieldAttrs} data-field="sinType" style="width:100%;">${buildSelectOptions(SIN_TYPES, effect?.sinType || 'wrath', escapeAttr)}</select>
+                    <label>Multiplier</label>
+                    <input ${fieldAttrs} data-field="value" inputmode="decimal" value="${escapeAttr(String(effect?.value ?? 1))}" placeholder="1.0" />
+                    <label>Apply to</label>
+                    <select ${fieldAttrs} data-field="operation" style="width:100%;">
+                        <option value="multiplyBase" ${!effect?.operation || effect?.operation === 'multiplyBase' ? 'selected' : ''}>Base resistance</option>
+                        <option value="multiplyCurrent" ${effect?.operation === 'multiplyCurrent' ? 'selected' : ''}>Current resistance</option>
+                    </select>
+                </div>
+            `;
+            break;
+        case 'clearShield':
+            specificFields = `
+                <div class="echoes-creator__field-row">
+                    <label>Shield ID</label>
+                    <input ${fieldAttrs} data-field="shieldId" value="${escapeAttr(String(effect?.shieldId || ''))}" placeholder="shield-id" />
+                </div>
+            `;
+            break;
+        case 'adjustEncounterResource':
+        case 'spendEncounterResource':
+            specificFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                    <label>Resource ID</label>
+                    <input ${fieldAttrs} data-field="resourceId" value="${escapeAttr(String(effect?.resourceId || ''))}" placeholder="resource-id" />
+                    <label>Amount</label>
+                    <input ${fieldAttrs} data-field="value" inputmode="numeric" value="${escapeAttr(String(effect?.value ?? ''))}" placeholder="± amount" />
+                </div>
+            `;
+            break;
+        case 'adjustUnitResource':
+        case 'spendUnitResource':
+            specificFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                    <label>Resource ID</label>
+                    <input ${fieldAttrs} data-field="resourceId" value="${escapeAttr(String(effect?.resourceId || ''))}" placeholder="resource-id" />
+                    <label>Amount</label>
+                    <input ${fieldAttrs} data-field="value" inputmode="numeric" value="${escapeAttr(String(effect?.value ?? ''))}" placeholder="± amount" />
+                </div>
+            `;
+            break;
+        case 'copyStatus':
+            specificFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                    <label>Status to copy</label>
+                    ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
+                    <label>Copy from</label>
+                    <select ${fieldAttrs} data-field="source" style="width:100%;">
+                        <option value="self" ${effect?.source === 'self' || !effect?.source ? 'selected' : ''}>Self</option>
+                        <option value="opponent" ${effect?.source === 'opponent' ? 'selected' : ''}>Opponent</option>
+                    </select>
+                </div>
+            `;
+            break;
+        case 'transferStatus':
+            specificFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                    <label>Status</label>
+                    ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
+                    <label>Transfer to</label>
+                    ${renderTargetSelect(effect?.destination || '', escapeAttr, `${fieldAttrs} data-field="destination"`)}
+                </div>
+            `;
+            break;
+        case 'convertStatus':
+            specificFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                    <label>From status</label>
+                    ${renderStatusSelect(statusList, effect?.fromStatusId || '', escapeAttr, `${fieldAttrs} data-field="fromStatusId"`)}
+                    <label>To status</label>
+                    ${renderStatusSelect(statusList, effect?.toStatusId || '', escapeAttr, `${fieldAttrs} data-field="toStatusId"`)}
+                </div>
+            `;
+            break;
+        case 'clearStatusesByTag':
+        case 'consumeStatusesByTag':
+            specificFields = `
+                <div class="echoes-creator__field-row">
+                    <label>Status tag</label>
+                    <input ${fieldAttrs} data-field="tag" value="${escapeAttr(String(effect?.tag || ''))}" placeholder="e.g. buff, debuff" />
+                </div>
+            `;
+            break;
         default:
             specificFields = `
-                <div class="echoes-creator__hint">This effect type uses advanced fields. Edit them in Advanced JSON below.</div>
+                <div class="echoes-creator__hint">No form for this action yet — use Expert JSON below, or pick a common action from the list.</div>
             `;
             break;
         }
@@ -472,14 +724,15 @@
         return `
             <div class="echoes-creator__effect-card">
                 <div class="echoes-creator__field-row echoes-creator__field-row--2">
-                    <label>Action</label>
+                    <label>What happens</label>
                     ${typeSelect}
-                    <label>Target</label>
+                    <label>On target</label>
                     ${targetSelect}
                 </div>
                 ${specificFields}
+                ${renderEffectFilters(effect, escapeAttr, fieldAttrs, options)}
                 <details class="echoes-creator__advanced">
-                    <summary>Advanced JSON</summary>
+                    <summary>Expert: edit raw JSON</summary>
                     <textarea ${fieldAttrs} data-field="__raw" rows="4" class="echoes-creator__raw-json">${escapeHtml(JSON.stringify(effect, null, 2))}</textarea>
                 </details>
             </div>
@@ -526,6 +779,10 @@
                 <option value="status" ${condition?.value === 'status' ? 'selected' : ''}>Status</option>
                 <option value="burst" ${condition?.value === 'burst' ? 'selected' : ''}>Burst</option>
             </select>`;
+        } else if (type === 'skillHasTag') {
+            valueFields = `<input ${fieldAttrs} data-field="value" value="${escapeAttr(String(condition?.value || ''))}" placeholder="tag name" style="width:100%;" />`;
+        } else if (type === 'skillIdIs') {
+            valueFields = `<input ${fieldAttrs} data-field="skillId" value="${escapeAttr(String(condition?.skillId || condition?.value || ''))}" placeholder="skill-id" style="width:100%;" />`;
         } else if (type === 'criticalHit' || type === 'targetStaggered') {
             valueFields = `<select ${fieldAttrs} data-field="value" style="width:100%;">
                 <option value="true" ${condition?.value === true ? 'selected' : ''}>Yes</option>
@@ -572,12 +829,25 @@
             valueFields = `<input ${fieldAttrs} data-field="value" value="${escapeAttr(String(condition?.value ?? condition?.skillId ?? ''))}" placeholder="value" style="width:100%;" />`;
         }
 
+        const needsTarget = ['hasStatus', 'statusPotencyAtLeast', 'statusPotencyAtOrBelow', 'statusCountAtLeast', 'statusCountAtOrBelow'].includes(type);
+        const targetField = needsTarget
+            ? `
+                <div class="echoes-creator__field-row" style="margin-top:0.35rem;">
+                    <label>Check on</label>
+                    <select ${fieldAttrs} data-field="target" style="width:100%;">
+                        <option value="self" ${!condition?.target || condition?.target === 'self' ? 'selected' : ''}>Self</option>
+                        <option value="opponent" ${condition?.target === 'opponent' ? 'selected' : ''}>Opponent</option>
+                    </select>
+                </div>
+            `
+            : '';
+
         return `
             <div class="echoes-creator__condition-row">
                 <div class="echoes-creator__field-row echoes-creator__field-row--2">
-                    <label>If</label>
+                    <label>Only if</label>
                     ${typeSelect}
-                    <div>${valueFields}</div>
+                    <div>${valueFields}${targetField}</div>
                 </div>
             </div>
         `;
@@ -619,12 +889,12 @@
                     <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${blockAttrs} data-action="creator-hook-remove-block">Remove block</button>
                 </div>
                 <div class="echoes-creator__section">
-                    <div class="echoes-creator__section-title">WHEN (conditions)</div>
-                    ${conditionRows || '<span class="echoes-creator__hint">No conditions — always runs.</span>'}
+                    <div class="echoes-creator__section-title">Only if ALL of these are true</div>
+                    ${conditionRows || '<span class="echoes-creator__hint">No conditions — this always runs when the trigger fires.</span>'}
                     <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${blockAttrs} data-action="creator-hook-add-condition">+ Add condition</button>
                 </div>
                 <div class="echoes-creator__section">
-                    <div class="echoes-creator__section-title">DO (actions)</div>
+                    <div class="echoes-creator__section-title">Then do this</div>
                     ${actionRows || '<span class="echoes-creator__hint">Add at least one action.</span>'}
                     <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${blockAttrs} data-action="creator-hook-add-action">+ Add action</button>
                 </div>
@@ -695,14 +965,33 @@
     }
 
     function renderAddHookEventBar(passiveHooks, escapeAttr, scopeAttrs) {
+        const grouped = PASSIVE_HOOK_GROUPS.map((group) => {
+            const options = group.hooks
+                .map((hookId) => passiveHooks.find((hook) => hook.id === hookId))
+                .filter(Boolean)
+                .map((hook) => `<option value="${escapeAttr(hook.id)}">${escapeAttr(hook.label)}</option>`)
+                .join('');
+            if (!options) {
+                return '';
+            }
+            return `<optgroup label="${escapeAttr(group.label)}">${options}</optgroup>`;
+        }).join('');
+
+        const usedIds = new Set(PASSIVE_HOOK_GROUPS.flatMap((group) => group.hooks));
+        const extraHooks = passiveHooks
+            .filter((hook) => !usedIds.has(hook.id))
+            .map((hook) => `<option value="${escapeAttr(hook.id)}">${escapeAttr(hook.label)}</option>`)
+            .join('');
+        const extraGroup = extraHooks ? `<optgroup label="Other">${extraHooks}</optgroup>` : '';
+
         return `
             <div class="echoes-creator__add-hook-bar">
-                <label class="echoes-creator__hint">Add trigger event:</label>
+                <label class="echoes-creator__hint">When should this run?</label>
                 <select data-action="creator-hook-pick-event" ${scopeAttrs} style="flex:1; min-width:12rem;">
-                    <option value="">— Pick when this runs —</option>
-                    ${passiveHooks.map((hook) => `<option value="${escapeAttr(hook.id)}">${escapeAttr(hook.label)}</option>`).join('')}
+                    <option value="">— Pick a trigger moment —</option>
+                    ${grouped}${extraGroup}
                 </select>
-                <button class="echoes-battle-panel__combat-button" type="button" ${scopeAttrs} data-action="creator-hook-add-event">Add Event</button>
+                <button class="echoes-battle-panel__combat-button" type="button" ${scopeAttrs} data-action="creator-hook-add-event">Add trigger</button>
             </div>
         `;
     }
@@ -710,7 +999,7 @@
     function renderSkillEffectEditor(effect, effectIndex, skillIndex, catalog, escapeAttr, escapeHtml) {
         const trigger = effect?.trigger || 'onHit';
         const triggerOptions = SKILL_TRIGGERS.map((entry) => {
-            const label = typeof registry.getTriggerLabel === 'function' ? registry.getTriggerLabel(entry) : entry;
+            const label = SKILL_TRIGGER_LABELS[entry] || (typeof registry.getTriggerLabel === 'function' ? registry.getTriggerLabel(entry) : entry);
             return `<option value="${escapeAttr(entry)}" ${entry === trigger ? 'selected' : ''}>${escapeHtml(label)}</option>`;
         }).join('');
 
@@ -721,8 +1010,59 @@
                     <label>When</label>
                     <select ${fieldAttrs} data-field="trigger" style="width:100%;">${triggerOptions}</select>
                 </div>
-                ${renderEffectFields(effect, catalog, escapeAttr, escapeHtml, fieldAttrs)}
+                ${renderEffectFields(effect, catalog, escapeAttr, escapeHtml, fieldAttrs, { showFilters: true })}
                 <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-skill-remove-effect" data-skill-index="${skillIndex}" data-effect-index="${effectIndex}">Remove effect</button>
+            </div>
+        `;
+    }
+
+    function renderSkillEffectsSection(skill, skillIndex, catalog, escapeAttr, escapeHtml) {
+        const effects = Array.isArray(skill?.effects) ? skill.effects : [];
+        const presetOptions = SKILL_EFFECT_PRESETS.map((preset, index) => `
+            <option value="${index}">${escapeHtml(preset.label)}</option>
+        `).join('');
+
+        const grouped = SKILL_TRIGGERS.map((trigger) => {
+            const matching = effects
+                .map((effect, effectIndex) => ({ effect, effectIndex }))
+                .filter(({ effect }) => (effect?.trigger || 'onHit') === trigger);
+            if (!matching.length) {
+                return '';
+            }
+            const label = SKILL_TRIGGER_LABELS[trigger] || trigger;
+            const cards = matching.map(({ effect, effectIndex }) =>
+                renderSkillEffectEditor(effect, effectIndex, skillIndex, catalog, escapeAttr, escapeHtml),
+            ).join('');
+            return `
+                <details class="echoes-creator__trigger-group" open>
+                    <summary class="echoes-creator__trigger-group-title">${escapeHtml(label)}</summary>
+                    <div class="echoes-creator__trigger-group-body">${cards}</div>
+                </details>
+            `;
+        }).join('');
+
+        const ungrouped = effects
+            .map((effect, effectIndex) => ({ effect, effectIndex }))
+            .filter(({ effect }) => !SKILL_TRIGGERS.includes(effect?.trigger || 'onHit'))
+            .map(({ effect, effectIndex }) => renderSkillEffectEditor(effect, effectIndex, skillIndex, catalog, escapeAttr, escapeHtml))
+            .join('');
+
+        return `
+            <div class="echoes-creator__skill-effects">
+                <p class="echoes-creator__hint">Skill effects run at specific moments (on select, on hit, on clash, etc.). Each effect is one action — use Passives or Statuses for complex IF/THEN logic.</p>
+                <div class="echoes-creator__quick-add-bar">
+                    <select data-action="creator-skill-preset-pick" data-skill-index="${skillIndex}" style="flex:1; min-width:12rem;">
+                        <option value="">— Quick add preset —</option>
+                        ${presetOptions}
+                    </select>
+                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-skill-add-preset" data-skill-index="${skillIndex}">Add preset</button>
+                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-skill-add-effect" data-index="${skillIndex}">+ Custom effect</button>
+                </div>
+                <div class="echoes-creator__skill-effects-list">
+                    ${grouped || ungrouped
+                        ? `${grouped}${ungrouped ? `<details class="echoes-creator__trigger-group" open><summary class="echoes-creator__trigger-group-title">Other triggers</summary><div class="echoes-creator__trigger-group-body">${ungrouped}</div></details>` : ''}`
+                        : '<span class="echoes-creator__hint">No effects yet — add a preset or custom effect.</span>'}
+                </div>
             </div>
         `;
     }
@@ -740,8 +1080,42 @@
         };
     }
 
-    function applyEffectFieldUpdate(effect, field, rawValue) {
+    function applyAmountSubfieldUpdate(effect, amountMode, subField, rawValue) {
         if (!effect || typeof effect !== 'object') {
+            return;
+        }
+        const trimmed = String(rawValue ?? '').trim();
+        if (amountMode === 'statusPotency') {
+            effect.amount = effect.amount && typeof effect.amount === 'object' ? effect.amount : {};
+            effect.amount.statusPotency = effect.amount.statusPotency || { target: 'self', statusId: '' };
+            if (subField === 'target') {
+                effect.amount.statusPotency.target = trimmed || 'self';
+            } else if (subField === 'statusId') {
+                effect.amount.statusPotency.statusId = trimmed;
+            }
+            delete effect.value;
+            return;
+        }
+        if (amountMode === 'statusCount') {
+            effect.amount = effect.amount && typeof effect.amount === 'object' ? effect.amount : {};
+            effect.amount.statusCount = effect.amount.statusCount || { target: 'self', statusId: '' };
+            if (subField === 'target') {
+                effect.amount.statusCount.target = trimmed || 'self';
+            } else if (subField === 'statusId') {
+                effect.amount.statusCount.statusId = trimmed;
+            }
+            delete effect.value;
+        }
+    }
+
+    function applyEffectFieldUpdate(effect, field, rawValue, options = {}) {
+        if (!effect || typeof effect !== 'object') {
+            return;
+        }
+        const amountMode = options.amountMode || null;
+        const amountSubField = options.amountSubField || null;
+        if (amountMode && amountSubField) {
+            applyAmountSubfieldUpdate(effect, amountMode, amountSubField, rawValue);
             return;
         }
         if (field === '__raw') {
@@ -751,6 +1125,38 @@
                 Object.assign(effect, parsed);
             } catch {
                 // ignore invalid json while typing
+            }
+            return;
+        }
+        if (field === 'amountMode') {
+            if (rawValue === 'number') {
+                const fallback = typeof effect.amount === 'number' ? effect.amount : (effect.value ?? 0);
+                effect.amount = fallback;
+                delete effect.value;
+            } else if (rawValue === 'statusPotency') {
+                const existing = effect.amount?.statusPotency || {};
+                effect.amount = {
+                    statusPotency: {
+                        statusId: existing.statusId || effect.statusId || '',
+                        target: existing.target || 'self',
+                    },
+                };
+            } else if (rawValue === 'statusCount') {
+                const existing = effect.amount?.statusCount || {};
+                effect.amount = {
+                    statusCount: {
+                        statusId: existing.statusId || effect.statusId || '',
+                        target: existing.target || 'self',
+                    },
+                };
+            }
+            return;
+        }
+        if (field === 'criticalOnly') {
+            if (rawValue === true || rawValue === 'true' || rawValue === 'on') {
+                effect.criticalOnly = true;
+            } else {
+                delete effect.criticalOnly;
             }
             return;
         }
@@ -768,20 +1174,28 @@
             delete effect.target;
             return;
         }
+        if (field === 'outcome' && !rawValue) {
+            delete effect.outcome;
+            return;
+        }
         if (field === 'amount') {
             const trimmed = String(rawValue ?? '').trim();
             if (!trimmed) {
                 delete effect.amount;
+                delete effect.value;
                 return;
             }
             const asNumber = Number(trimmed);
             if (Number.isFinite(asNumber)) {
                 effect.amount = asNumber;
+                if (effect.type === 'healHp' || effect.type === 'healHpPercent') {
+                    effect.value = asNumber;
+                }
                 return;
             }
             return;
         }
-        if (['potency', 'count', 'coinIndex', 'value', 'potencyDelta', 'countDelta', 'cap'].includes(field)) {
+        if (['potency', 'count', 'coinIndex', 'value', 'potencyDelta', 'countDelta', 'cap', 'minStatusPotency'].includes(field)) {
             const trimmed = String(rawValue ?? '').trim();
             if (!trimmed) {
                 delete effect[field];
@@ -817,6 +1231,9 @@
                 Object.keys(condition).forEach((key) => delete condition[key]);
                 condition.type = 'always';
                 return;
+            }
+            if (rawValue === 'skillIdIs') {
+                next.skillId = condition.skillId || condition.value || '';
             }
             Object.keys(condition).forEach((key) => delete condition[key]);
             Object.assign(condition, next);
@@ -854,6 +1271,8 @@
         DAMAGE_TYPES,
         SIN_TYPES,
         SKILL_TRIGGERS,
+        SKILL_TRIGGER_LABELS,
+        SKILL_EFFECT_PRESETS,
         STATUS_TEMPLATES,
         createDefaultUnitDefinition,
         createDefaultStatusDefinition,
@@ -861,6 +1280,7 @@
         isHookBlock,
         renderHooksEditor,
         renderSkillEffectEditor,
+        renderSkillEffectsSection,
         applyEffectFieldUpdate,
         applyConditionFieldUpdate,
         normalizeNumberInput,
