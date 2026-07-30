@@ -97,6 +97,7 @@ Units must include the required combat fields (`id`, `name`, HP, resistances, sk
     "sin": { "wrath": 1, "lust": 1, "sloth": 1, "gluttony": 1, "gloom": 1, "pride": 1, "envy": 1 }
   },
   "sprites": {
+    "splash": "assets/roster/example-soldier-splash.png",
     "idle": "assets/debugsprites/Vergilius_Idle_Sprite.png",
     "moving": "assets/debugsprites/Vergilius_Moving_Sprite.png",
     "hurt": "assets/debugsprites/Vergilius_Hurt_Sprite.png",

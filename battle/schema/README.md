@@ -49,7 +49,8 @@ Required:
 - `name: string`
 - `maxHp: number`
 - `speedRange: [number, number]`
-- `sprites: { idle: string; moving?: string; hurt?: string; guard?: string; evade?: string; skills?: Record<string,string> }`
+- `sprites: { idle: string; splash?: string; moving?: string; hurt?: string; guard?: string; evade?: string; skills?: Record<string,string> }`
+  - `splash` — optional portrait art for roster / team identity cards (combat still uses `idle` and combat sprites)
 - `skills: SkillDefinition[]`
 
 Optional:

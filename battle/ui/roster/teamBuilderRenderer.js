@@ -84,31 +84,106 @@
         return firstSkill?.sinType || 'wrath';
     }
 
-    function renderTeamUnitCard(unitId, unitList, escapeAttr, escapeHtml, options = {}) {
-        const { removable = false, index = 0 } = options;
-        const unit = getUnitDefinition(unitList, unitId);
-        const name = unit?.name || unitId;
-        const level = Number.isFinite(Number(unit?.level)) ? Number(unit.level) : 1;
-        const sinType = getPrimarySinType(unit);
+    function getUnitPortraitUrl(unit, resolveAssetUrl = (value) => value || '') {
+        if (!unit || typeof unit !== 'object') {
+            return '';
+        }
+        const splash = unit.sprites?.splash;
+        if (typeof splash === 'string' && splash.trim()) {
+            return resolveAssetUrl(splash.trim());
+        }
+        const idle = unit.sprites?.idle;
+        if (typeof idle === 'string' && idle.trim()) {
+            return resolveAssetUrl(idle.trim());
+        }
+        return '';
+    }
+
+    function renderIdentityCard(unit, unitList, escapeAttr, escapeHtml, options = {}) {
+        const {
+            variant = 'team',
+            unitId = unit?.id || '',
+            unitIndex = null,
+            removable = false,
+            selectable = false,
+            selected = false,
+            resolveAssetUrl = (value) => value || '',
+        } = options;
+
+        const definition = unit || getUnitDefinition(unitList, unitId);
+        const name = definition?.name || unitId || 'Unknown';
+        const level = Number.isFinite(Number(definition?.level)) ? Number(definition.level) : 1;
+        const sinType = getPrimarySinType(definition);
         const sinColor = SIN_COLORS[sinType] || '#888';
-        const idleSprite = unit?.sprites?.idle || '';
-        const spriteUrl = options.resolveAssetUrl?.(idleSprite) || idleSprite;
+        const portraitUrl = getUnitPortraitUrl(definition, resolveAssetUrl);
+        const sinLabel = String(sinType).charAt(0).toUpperCase();
+        const variantClass = variant === 'roster' ? ' echoes-identity-card--roster' : '';
+        const selectedClass = selected ? ' is-selected' : '';
+        const portraitStyle = portraitUrl
+            ? `background-image:url('${escapeAttr(portraitUrl)}');`
+            : '';
+
+        const removeButton = removable && Number.isInteger(unitIndex)
+            ? `<button class="echoes-identity-card__remove" type="button" data-action="team-remove-unit" data-unit-index="${unitIndex}" title="Remove">×</button>`
+            : '';
+
+        const checkbox = selectable
+            ? `<input class="echoes-identity-card__checkbox" type="checkbox" data-action="toggle-deploy-unit" data-unit-id="${escapeAttr(unitId)}" ${selected ? 'checked' : ''} aria-label="Deploy ${escapeAttr(name)}" />`
+            : '';
+
+        const tagName = selectable ? 'label' : 'article';
 
         return `
-            <article
-                class="echoes-team__card"
+            <${tagName}
+                class="echoes-identity-card${variantClass}${selectedClass}"
                 data-unit-id="${escapeAttr(unitId)}"
-                style="--echoes-team-sin-color:${sinColor};"
+                style="--echoes-identity-sin-color:${sinColor};"
             >
-                <div class="echoes-team__card-thumb" style="background-image:url('${escapeAttr(spriteUrl)}');"></div>
-                <div class="echoes-team__card-body">
-                    <strong class="echoes-team__card-name">${escapeHtml(name)}</strong>
-                    <span class="echoes-team__card-level">Lv. ${escapeHtml(String(level))}</span>
+                ${checkbox}
+                <div class="echoes-identity-card__art" style="${portraitStyle}"></div>
+                <div class="echoes-identity-card__badge" aria-hidden="true">${escapeHtml(sinLabel)}</div>
+                <div class="echoes-identity-card__footer">
+                    <span class="echoes-identity-card__level">Lv. ${escapeHtml(String(level))}</span>
+                    <span class="echoes-identity-card__name">${escapeHtml(name)}</span>
                 </div>
-                ${removable
-                    ? `<button class="echoes-team__card-remove" type="button" data-action="team-remove-unit" data-unit-index="${index}" title="Remove">×</button>`
-                    : ''}
-            </article>
+                ${removeButton}
+            </${tagName}>
+        `;
+    }
+
+    function renderIdentitySlot(slotIndex, unitList, escapeAttr, escapeHtml, options = {}) {
+        const {
+            unitId = null,
+            unitIndex = null,
+            removable = false,
+            resolveAssetUrl = (value) => value || '',
+        } = options;
+
+        if (unitId) {
+            const unit = getUnitDefinition(unitList, unitId);
+            return `
+                <div class="echoes-identity-slot echoes-identity-slot--filled" data-slot-index="${slotIndex}">
+                    ${renderIdentityCard(unit, unitList, escapeAttr, escapeHtml, {
+                        variant: 'team',
+                        unitId,
+                        unitIndex,
+                        removable,
+                        resolveAssetUrl,
+                    })}
+                </div>
+            `;
+        }
+
+        return `
+            <button
+                class="echoes-identity-slot echoes-identity-slot--empty"
+                type="button"
+                data-action="team-focus-roster"
+                data-slot-index="${slotIndex}"
+                aria-label="Empty team slot ${slotIndex + 1}"
+            >
+                <span class="echoes-identity-slot__plus">+</span>
+            </button>
         `;
     }
 
@@ -130,17 +205,22 @@
             </button>
         `).join('');
 
-        const teamCards = (activePreset.unitIds || []).map((unitId, index) => renderTeamUnitCard(unitId, unitList, escapeAttr, escapeHtml, {
-            removable: true,
-            index,
-            resolveAssetUrl,
-        })).join('');
+        const unitIds = Array.isArray(activePreset.unitIds) ? activePreset.unitIds : [];
+        const teamSlots = Array.from({ length: MAX_TEAM_SIZE }, (_, slotIndex) => {
+            const unitId = unitIds[slotIndex] || null;
+            return renderIdentitySlot(slotIndex, unitList, escapeAttr, escapeHtml, {
+                unitId,
+                unitIndex: unitId ? slotIndex : null,
+                removable: Boolean(unitId),
+                resolveAssetUrl,
+            });
+        }).join('');
 
         const rosterUnits = (unitList || []).filter((unit) => {
             if (!unit?.id) {
                 return false;
             }
-            if (activePreset.unitIds.includes(unit.id)) {
+            if (unitIds.includes(unit.id)) {
                 return false;
             }
             if (!rosterFilter) {
@@ -150,25 +230,20 @@
             return label.includes(rosterFilter);
         });
 
-        const rosterRows = rosterUnits.map((unit) => {
-            const sinType = getPrimarySinType(unit);
-            const sinColor = SIN_COLORS[sinType] || '#888';
-            const idleSprite = unit?.sprites?.idle || '';
-            const spriteUrl = resolveAssetUrl(idleSprite);
-            return `
-                <button
-                    class="echoes-team__roster-row"
-                    type="button"
-                    data-action="team-add-unit"
-                    data-unit-id="${escapeAttr(unit.id)}"
-                    style="--echoes-team-sin-color:${sinColor};"
-                >
-                    <span class="echoes-team__roster-thumb" style="background-image:url('${escapeAttr(spriteUrl)}');"></span>
-                    <span class="echoes-team__roster-label">${escapeHtml(unit.name || unit.id)}</span>
-                    <span class="echoes-team__roster-add">+</span>
-                </button>
-            `;
-        }).join('');
+        const rosterCards = rosterUnits.map((unit) => `
+            <button
+                class="echoes-identity-roster-pick"
+                type="button"
+                data-action="team-add-unit"
+                data-unit-id="${escapeAttr(unit.id)}"
+            >
+                ${renderIdentityCard(unit, unitList, escapeAttr, escapeHtml, {
+                    variant: 'roster',
+                    unitId: unit.id,
+                    resolveAssetUrl,
+                })}
+            </button>
+        `).join('');
 
         return `
             <div class="echoes-team">
@@ -181,12 +256,12 @@
                             placeholder="Teams #${activeIndex + 1}"
                         />
                     </label>
-                    <span class="echoes-team__count">${activePreset.unitIds.length} / ${MAX_TEAM_SIZE}</span>
+                    <span class="echoes-team__count">${unitIds.length} / ${MAX_TEAM_SIZE}</span>
                 </header>
                 <div class="echoes-team__layout">
                     <nav class="echoes-team__presets" aria-label="Team presets">${presetTabs}</nav>
-                    <section class="echoes-team__grid" aria-label="Active team">
-                        ${teamCards || '<p class="echoes-team__empty">Add units from the roster on the right.</p>'}
+                    <section class="echoes-team__grid echoes-identity-grid" aria-label="Active team">
+                        ${teamSlots}
                     </section>
                     <aside class="echoes-team__roster" aria-label="Unit roster">
                         <input
@@ -196,8 +271,8 @@
                             placeholder="Search units…"
                             value="${escapeAttr(options.rosterFilter || '')}"
                         />
-                        <div class="echoes-team__roster-list">
-                            ${rosterRows || '<p class="echoes-team__empty">No units available.</p>'}
+                        <div class="echoes-team__roster-list echoes-identity-roster-list">
+                            ${rosterCards || '<p class="echoes-team__empty">No units available.</p>'}
                         </div>
                     </aside>
                 </div>
@@ -209,10 +284,14 @@
         TEAM_PRESETS_STORAGE_KEY,
         MAX_TEAM_PRESETS,
         MAX_TEAM_SIZE,
+        SIN_COLORS,
         createDefaultTeamPresetsState,
         normalizeTeamPresetsState,
         parseTeamPresetsFromStorage,
         serializeTeamPresetsState,
+        getUnitPortraitUrl,
+        renderIdentityCard,
+        renderIdentitySlot,
         renderTeamBuilder,
     };
 

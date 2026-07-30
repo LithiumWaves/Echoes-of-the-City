@@ -6772,6 +6772,98 @@ function runSuite() {
         assert(parsed.presets[0].unitIds[0] === 'vergilius', 'Expected preset unit id to round-trip.');
     });
 
+    test('Schema: unit sprites.splash is optional', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = {};
+        require(path.resolve(battleRoot, 'registry/battleRegistry.js'));
+        require(path.resolve(battleRoot, 'schema/battleSchema.js'));
+
+        const validateUnitDefinition = global.window.EchoesOfTheCityBattle.validateUnitDefinition;
+        assert(typeof validateUnitDefinition === 'function', 'Expected validateUnitDefinition.');
+
+        const baseUnit = {
+            id: 'splash-test-unit',
+            name: 'Splash Test',
+            level: 1,
+            maxHp: 50,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { idle: 'assets/test.png', skills: {} },
+            skills: [{
+                id: 'hit',
+                name: 'Hit',
+                skillType: 'attack',
+                basePower: 1,
+                coinPower: 0,
+                coinCount: 1,
+                damageType: 'slash',
+                sinType: 'wrath',
+                effects: [],
+            }],
+            passives: [],
+        };
+
+        const withSplash = validateUnitDefinition({
+            ...baseUnit,
+            sprites: { ...baseUnit.sprites, splash: 'assets/roster/splash.png' },
+        });
+        assert(!withSplash.errors.length, `Expected splash to be valid: ${withSplash.errors.join(', ')}`);
+
+        const badSplash = validateUnitDefinition({
+            ...baseUnit,
+            sprites: { ...baseUnit.sprites, splash: '' },
+        });
+        assert(badSplash.errors.length > 0, 'Expected empty splash string to fail validation.');
+    });
+
+    test('Team builder: identity cards and portrait URL fallback', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = {};
+        require(path.resolve(battleRoot, 'ui/roster/teamBuilderRenderer.js'));
+
+        const teamBuilder = global.window.EchoesOfTheCityTeamBuilder;
+        const unitList = [{
+            id: 'card-unit',
+            name: 'Card Unit',
+            level: 12,
+            sprites: {
+                splash: 'assets/roster/card-splash.png',
+                idle: 'assets/test-idle.png',
+                skills: {},
+            },
+            skills: [{ id: 'hit', sinType: 'pride', skillType: 'attack', basePower: 1, coinPower: 0, coinCount: 1, damageType: 'slash', effects: [] }],
+        }];
+
+        const portraitFromSplash = teamBuilder.getUnitPortraitUrl(unitList[0], (value) => `resolved:${value}`);
+        assert(portraitFromSplash === 'resolved:assets/roster/card-splash.png', 'Expected splash portrait URL.');
+
+        const portraitFromIdle = teamBuilder.getUnitPortraitUrl({
+            ...unitList[0],
+            sprites: { idle: 'assets/fallback.png', skills: {} },
+        }, (value) => `resolved:${value}`);
+        assert(portraitFromIdle === 'resolved:assets/fallback.png', 'Expected idle fallback portrait URL.');
+
+        const escapeAttr = (value) => String(value);
+        const escapeHtml = (value) => String(value);
+        const state = teamBuilder.createDefaultTeamPresetsState();
+        state.presets[0].unitIds = ['card-unit'];
+
+        const html = teamBuilder.renderTeamBuilder(state, unitList, escapeAttr, escapeHtml, {
+            resolveAssetUrl: (value) => `resolved:${value}`,
+        });
+        assert(html.includes('echoes-identity-card'), 'Expected identity card markup.');
+        assert(html.includes('echoes-identity-slot--empty'), 'Expected empty identity slots.');
+        assert((html.match(/echoes-identity-slot/g) || []).length >= teamBuilder.MAX_TEAM_SIZE, 'Expected fixed slot containers.');
+        assert(html.includes('resolved:assets/roster/card-splash.png'), 'Expected splash art in card background.');
+    });
+
     test('Creator UI: default battle definition and encounter builder render', () => {
         const battleRoot = path.resolve(__dirname, '..');
         clearRequireCache(battleRoot);
@@ -6782,6 +6874,8 @@ function runSuite() {
         const creatorUi = global.window.EchoesOfTheCityCreatorUi;
         const encounterBuilder = global.window.EchoesOfTheCityEncounterBuilder;
         assert(typeof creatorUi?.createDefaultBattleDefinition === 'function', 'Expected createDefaultBattleDefinition.');
+        const defaultUnit = creatorUi.createDefaultUnitDefinition();
+        assert(defaultUnit.sprites?.splash === '', 'Expected default unit splash field.');
         const defaultBattle = creatorUi.createDefaultBattleDefinition();
         assert(defaultBattle.id === 'new-battle', 'Expected default battle id.');
         assert(Array.isArray(defaultBattle.enemyUnitIds), 'Expected enemyUnitIds array.');

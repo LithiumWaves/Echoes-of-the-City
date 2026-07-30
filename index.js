@@ -1728,6 +1728,7 @@
             },
             passives: [],
             sprites: {
+                splash: '',
                 idle: '',
                 moving: '',
                 hurt: '',
@@ -1956,6 +1957,14 @@
                     <details open>
                         <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Sprites</summary>
                         <div style="display: grid; gap: 0.75rem; margin-top: 0.75rem;">
+                            <div style="display: grid; gap: 0.55rem;">
+                                <span class="echoes-battle-panel__planner-empty" style="text-align:left;">Splash art (roster card)</span>
+                                <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.55rem; align-items: center;">
+                                    <input data-action="creator-unit-sprite" data-sprite-key="splash" value="${escapeAttribute(String(unitSprites?.splash || ''))}" placeholder="assets/... or URL or data:" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
+                                    <input type="file" accept="image/*" data-action="creator-upload-sprite" data-sprite-key="splash" style="max-width: 14rem;" />
+                                </div>
+                                ${unitSprites?.splash ? `<img src="${escapeAttribute(resolveCreatorSpriteUrl(unitSprites.splash))}" alt="splash" style="max-height: 16rem; max-width: 100%; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.2); padding: 0.35rem;" />` : ''}
+                            </div>
                             ${['idle', 'moving', 'hurt', 'guard', 'evade'].map((key) => `
                                 <div style="display: grid; grid-template-columns: 7rem minmax(0, 1fr) auto; gap: 0.55rem; align-items: center;">
                                     <span class="echoes-battle-panel__planner-empty" style="text-align:left;">${escapeHtml(key)}</span>
@@ -2369,24 +2378,21 @@
         const selectedIds = Array.isArray(state.deploySelectedUnitIds) ? state.deploySelectedUnitIds : [];
         const teamUnitIds = Array.isArray(activePreset.unitIds) ? activePreset.unitIds : [];
 
-        const unitLabel = (unitId) => {
-            const entry = unitList.find((unit) => unit?.id === unitId);
-            return entry?.name || unitId;
-        };
-
         const deployCards = teamUnitIds.length
             ? teamUnitIds.map((unitId) => {
-                const checked = selectedIds.includes(unitId);
+                const teamBuilder = getTeamBuilder();
                 const unit = unitList.find((entry) => entry?.id === unitId);
-                const idleSprite = unit?.sprites?.idle || '';
-                const spriteUrl = idleSprite ? resolveExtensionUrl(idleSprite) : '';
-                return `
-                    <label class="echoes-deploy__card${checked ? ' is-selected' : ''}" data-unit-id="${escapeAttribute(unitId)}">
-                        <input type="checkbox" data-action="toggle-deploy-unit" data-unit-id="${escapeAttribute(unitId)}" ${checked ? 'checked' : ''} />
-                        <span class="echoes-deploy__thumb" style="background-image:url('${escapeAttribute(spriteUrl)}');"></span>
-                        <span class="echoes-deploy__name">${escapeHtml(unitLabel(unitId))}</span>
-                    </label>
-                `;
+                const checked = selectedIds.includes(unitId);
+                if (teamBuilder?.renderIdentityCard) {
+                    return teamBuilder.renderIdentityCard(unit, unitList, escapeAttribute, escapeHtml, {
+                        variant: 'deploy',
+                        unitId,
+                        selectable: true,
+                        selected: checked,
+                        resolveAssetUrl: resolveExtensionUrl,
+                    });
+                }
+                return '';
             }).join('')
             : '<p class="echoes-battle-panel__planner-empty">No units in the active team preset. Build your team in Characters first.</p>';
 
@@ -2407,7 +2413,7 @@
                     — select units from your active team preset to deploy.
                 </div>
                 ${capHint}
-                <div class="echoes-deploy__grid">${deployCards}</div>
+                <div class="echoes-deploy__grid echoes-identity-grid echoes-identity-grid--deploy">${deployCards}</div>
                 <div class="echoes-deploy__actions">
                     <button class="echoes-battle-panel__combat-button" type="button" data-action="cancel-deployment">Back</button>
                     <button
@@ -4505,6 +4511,16 @@
             state.teamPresets = normalized;
             saveTeamPresetsState();
             renderCharacterSelectScreen();
+            return;
+        }
+
+        if (action === 'team-focus-roster') {
+            state.teamRosterFilter = '';
+            renderCharacterSelectScreen();
+            const rosterSearch = elements.characterScreen?.querySelector('[data-action="team-roster-filter"]');
+            if (rosterSearch) {
+                rosterSearch.focus();
+            }
             return;
         }
 

@@ -299,6 +299,7 @@
             },
             passives: [],
             sprites: {
+                splash: '',
                 idle: '',
                 moving: '',
                 hurt: '',
