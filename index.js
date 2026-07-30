@@ -1116,6 +1116,17 @@
         return path;
     }
 
+    function getStatusEditorViewModel(parsedEditorJson) {
+        const draft = normalizeCreatorDraft('status', parsedEditorJson);
+        const stack = draft.stackModel && typeof draft.stackModel === 'object' ? draft.stackModel : {};
+        return {
+            draft,
+            potency: stack.potency && typeof stack.potency === 'object' ? stack.potency : {},
+            count: stack.count && typeof stack.count === 'object' ? stack.count : {},
+            expireWhen: stack.expireWhen && typeof stack.expireWhen === 'object' ? stack.expireWhen : {},
+        };
+    }
+
     function renderCreatorScreen() {
         if (!elements.creatorContent) {
             return;
@@ -1178,15 +1189,11 @@
         const creatorUi = getCreatorUi();
         const parsedEditorJson = (entityType === 'unit' || entityType === 'status') ? getCreatorParsedJsonOrNull() : null;
         const unitDraft = entityType === 'unit' ? normalizeCreatorDraft('unit', parsedEditorJson) : null;
-        const statusDraft = entityType === 'status' ? normalizeCreatorDraft('status', parsedEditorJson) : null;
+        const statusView = entityType === 'status' ? getStatusEditorViewModel(parsedEditorJson) : null;
         const unitSprites = unitDraft?.sprites && typeof unitDraft.sprites === 'object' && !Array.isArray(unitDraft.sprites) ? unitDraft.sprites : {};
         const unitSkillSprites = unitSprites.skills && typeof unitSprites.skills === 'object' && !Array.isArray(unitSprites.skills) ? unitSprites.skills : {};
         const unitPassives = Array.isArray(unitDraft?.passives) ? unitDraft.passives : [];
         const unitSkills = Array.isArray(unitDraft?.skills) ? unitDraft.skills : [];
-        const statusStack = statusDraft?.stackModel && typeof statusDraft.stackModel === 'object' ? statusDraft.stackModel : {};
-        const statusPotency = statusStack.potency && typeof statusStack.potency === 'object' ? statusStack.potency : {};
-        const statusCount = statusStack.count && typeof statusStack.count === 'object' ? statusStack.count : {};
-        const statusExpireWhen = statusStack.expireWhen && typeof statusStack.expireWhen === 'object' ? statusStack.expireWhen : {};
         const statusTemplates = creatorUi?.STATUS_TEMPLATES || [];
 
         const renderEnumSelect = (options, selected, fieldAttrs) => {
@@ -1427,60 +1434,60 @@
                     <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;">
                         <div class="echoes-creator__field-row">
                             <label>Id</label>
-                            <input data-action="creator-status-field" data-field="id" value="${escapeAttribute(String(statusDraft?.id || ''))}" />
+                            <input data-action="creator-status-field" data-field="id" value="${escapeAttribute(String(statusView?.draft?.id || ''))}" />
                         </div>
                         <div class="echoes-creator__field-row">
                             <label>Display name</label>
-                            <input data-action="creator-status-field" data-field="name" value="${escapeAttribute(String(statusDraft?.name || statusDraft?.label || ''))}" />
+                            <input data-action="creator-status-field" data-field="name" value="${escapeAttribute(String(statusView?.draft?.name || statusView?.draft?.label || ''))}" />
                         </div>
                         <div class="echoes-creator__field-row">
                             <label>Label (UI)</label>
-                            <input data-action="creator-status-field" data-field="label" value="${escapeAttribute(String(statusDraft?.label || ''))}" />
+                            <input data-action="creator-status-field" data-field="label" value="${escapeAttribute(String(statusView?.draft?.label || ''))}" />
                         </div>
                         <div class="echoes-creator__field-row">
                             <label>Icon path</label>
-                            <input data-action="creator-status-field" data-field="iconPath" value="${escapeAttribute(String(statusDraft?.iconPath || ''))}" placeholder="assets/statuseffects/..." />
+                            <input data-action="creator-status-field" data-field="iconPath" value="${escapeAttribute(String(statusView?.draft?.iconPath || ''))}" placeholder="assets/statuseffects/..." />
                         </div>
                     </div>
 
                     <div class="echoes-creator__field-row">
                         <label>Description (shown to players)</label>
-                        <textarea data-action="creator-status-field" data-field="description" rows="2">${escapeHtml(String(statusDraft?.description || ''))}</textarea>
+                        <textarea data-action="creator-status-field" data-field="description" rows="2">${escapeHtml(String(statusView?.draft?.description || ''))}</textarea>
                     </div>
 
                     <details open>
                         <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Stack rules</summary>
                         <div style="display:grid; gap:0.75rem; margin-top:0.75rem;">
                             <label class="echoes-creator__checkbox">
-                                <input type="checkbox" data-action="creator-status-count-only" ${statusDraft?.countOnly ? 'checked' : ''} />
+                                <input type="checkbox" data-action="creator-status-count-only" ${statusView?.draft?.countOnly ? 'checked' : ''} />
                                 Count only (no potency — like Damage Up)
                             </label>
                             <div style="display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:0.75rem;">
                                 <fieldset class="echoes-creator__fieldset">
                                     <legend>Potency</legend>
                                     <label class="echoes-creator__checkbox">
-                                        <input type="checkbox" data-action="creator-status-stack-toggle" data-bucket="potency" ${statusPotency.enabled ? 'checked' : ''} />
+                                        <input type="checkbox" data-action="creator-status-stack-toggle" data-bucket="potency" ${statusView?.potency?.enabled ? 'checked' : ''} />
                                         Use potency
                                     </label>
                                     <div class="echoes-creator__field-row echoes-creator__field-row--2">
-                                        <input data-action="creator-status-stack-field" data-bucket="potency" data-field="min" inputmode="numeric" value="${escapeAttribute(String(statusPotency.min ?? 0))}" placeholder="Min" />
-                                        <input data-action="creator-status-stack-field" data-bucket="potency" data-field="max" inputmode="numeric" value="${escapeAttribute(String(statusPotency.max ?? 99))}" placeholder="Max" />
+                                        <input data-action="creator-status-stack-field" data-bucket="potency" data-field="min" inputmode="numeric" value="${escapeAttribute(String(statusView?.potency?.min ?? 0))}" placeholder="Min" />
+                                        <input data-action="creator-status-stack-field" data-bucket="potency" data-field="max" inputmode="numeric" value="${escapeAttribute(String(statusView?.potency?.max ?? 99))}" placeholder="Max" />
                                     </div>
                                 </fieldset>
                                 <fieldset class="echoes-creator__fieldset">
                                     <legend>Count</legend>
                                     <label class="echoes-creator__checkbox">
-                                        <input type="checkbox" data-action="creator-status-stack-toggle" data-bucket="count" ${statusCount.enabled ? 'checked' : ''} />
+                                        <input type="checkbox" data-action="creator-status-stack-toggle" data-bucket="count" ${statusView?.count?.enabled ? 'checked' : ''} />
                                         Use count
                                     </label>
                                     <div class="echoes-creator__field-row echoes-creator__field-row--2">
-                                        <input data-action="creator-status-stack-field" data-bucket="count" data-field="min" inputmode="numeric" value="${escapeAttribute(String(statusCount.min ?? 0))}" placeholder="Min" />
-                                        <input data-action="creator-status-stack-field" data-bucket="count" data-field="max" inputmode="numeric" value="${escapeAttribute(String(statusCount.max ?? 99))}" placeholder="Max" />
+                                        <input data-action="creator-status-stack-field" data-bucket="count" data-field="min" inputmode="numeric" value="${escapeAttribute(String(statusView?.count?.min ?? 0))}" placeholder="Min" />
+                                        <input data-action="creator-status-stack-field" data-bucket="count" data-field="max" inputmode="numeric" value="${escapeAttribute(String(statusView?.count?.max ?? 99))}" placeholder="Max" />
                                     </div>
                                 </fieldset>
                             </div>
                             <label class="echoes-creator__checkbox">
-                                <input type="checkbox" data-action="creator-status-expire-count" ${statusExpireWhen.countLte != null ? 'checked' : ''} />
+                                <input type="checkbox" data-action="creator-status-expire-count" ${statusView?.expireWhen?.countLte != null ? 'checked' : ''} />
                                 Expire when count reaches 0
                             </label>
                         </div>
@@ -1490,7 +1497,7 @@
                         <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Behavior (WHEN → IF → DO)</summary>
                         <div style="margin-top:0.75rem;">
                             ${creatorUi?.renderHooksEditor(
-                                statusDraft?.hooks || {},
+                                statusView?.draft?.hooks || {},
                                 catalog,
                                 escapeAttribute,
                                 escapeHtml,
