@@ -2307,12 +2307,23 @@
     }
 }
 
+.echoes-battle-panel__character-select-content {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        url("./assets/characterstab/teammenubg.png") center / cover no-repeat,
+        #020202;
+}
+
 .echoes-battle-panel__character-layout {
     position: absolute;
     left: 3.2%;
     right: 1.9%;
     top: 5.7%;
     bottom: 16.4%;
+    z-index: 1;
     display: flex;
     align-items: stretch;
     justify-content: flex-start;
@@ -2567,7 +2578,10 @@
 }
 
 .echoes-team__preset-tab--lc:hover {
-    filter: brightness(1.05);
+    filter: brightness(1.08);
+    box-shadow:
+        0 0 10px rgba(255, 140, 40, 0.55),
+        0 0 18px rgba(255, 100, 30, 0.28);
 }
 
 .echoes-team__grid,
@@ -2654,6 +2668,7 @@
     border: 1px solid rgba(255, 180, 100, 0.18);
     background: rgba(8, 8, 10, 0.35);
     color: rgba(240, 216, 168, 0.45);
+    transition: box-shadow 120ms ease, background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
 .echoes-identity-slot--empty:hover {
@@ -2662,9 +2677,13 @@
 }
 
 .echoes-identity-slot--lc.echoes-identity-slot--empty:hover {
-    border-color: rgba(255, 180, 100, 0.42);
+    border-color: rgba(255, 160, 80, 0.55);
     background: rgba(16, 12, 10, 0.5);
     color: rgba(255, 220, 180, 0.85);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 140, 40, 0.45),
+        0 0 14px rgba(255, 140, 40, 0.45),
+        0 0 20px rgba(255, 100, 30, 0.22);
 }
 
 .echoes-identity-slot__plus {
@@ -2696,6 +2715,14 @@
     border: none;
     background: transparent;
     box-shadow: none;
+    transition: box-shadow 120ms ease, filter 120ms ease;
+}
+
+.echoes-identity-card--team:hover {
+    box-shadow:
+        0 0 14px rgba(255, 140, 40, 0.5),
+        0 0 22px rgba(255, 100, 30, 0.25);
+    filter: brightness(1.06);
 }
 
 .echoes-identity-card--roster {
@@ -2862,10 +2889,19 @@
 .echoes-identity-roster-pick:hover .echoes-identity-card {
     filter: brightness(1.08);
     transform: scale(1.02);
+    box-shadow:
+        0 0 14px rgba(255, 140, 40, 0.5),
+        0 0 22px rgba(255, 100, 30, 0.25);
 }
 
 .echoes-identity-roster-pick .echoes-identity-card {
-    transition: transform 120ms ease, filter 120ms ease;
+    transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .echoes-identity-roster-pick:hover .echoes-identity-card {
+        transform: none;
+    }
 }
 
 .echoes-team__roster {

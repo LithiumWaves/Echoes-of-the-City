@@ -4431,6 +4431,33 @@
         }
     }
 
+    function playTeamUiSound(kind) {
+        if (!state.audioUnlocked) {
+            return;
+        }
+
+        const volume = kind === 'hover' ? 0.38 : 0.88;
+        if (playBufferedAudio('uiClick', volume)) {
+            return;
+        }
+
+        const relativePath = COMBAT_AUDIO_PATHS.uiClick;
+        if (!relativePath) {
+            return;
+        }
+
+        try {
+            const audioInstance = new Audio(resolveExtensionUrl(relativePath));
+            audioInstance.volume = volume;
+            const playPromise = audioInstance.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+                playPromise.catch(() => {});
+            }
+        } catch (error) {
+            console.debug(`${EXTENSION_ID}: team ui audio playback skipped.`, error);
+        }
+    }
+
     function playSound(name, options = {}) {
         const { requireAudioEnabled = false } = options;
 
@@ -4712,6 +4739,16 @@
             return;
         }
 
+        const teamClickActions = new Set([
+            'team-select-preset',
+            'team-focus-roster',
+            'team-add-unit',
+            'team-remove-unit',
+        ]);
+        if (teamClickActions.has(action)) {
+            playTeamUiSound('click');
+        }
+
         ensureTeamPresetsLoaded();
         const normalized = teamBuilder.normalizeTeamPresetsState(state.teamPresets);
 
@@ -4771,6 +4808,26 @@
             renderCharacterSelectScreen();
             return;
         }
+    }
+
+    function handleCharacterScreenMouseEnter(event) {
+        if (!state.audioEnabled) {
+            return;
+        }
+
+        const hoverTarget = event.target.closest(
+            '.echoes-team__preset-tab, .echoes-identity-roster-pick, .echoes-identity-slot--lc, .echoes-identity-card--team',
+        );
+        if (!hoverTarget) {
+            return;
+        }
+
+        const relatedTarget = event.relatedTarget;
+        if (relatedTarget && hoverTarget.contains(relatedTarget)) {
+            return;
+        }
+
+        playTeamUiSound('hover');
     }
 
     function handleCharacterScreenChange(event) {
@@ -4950,6 +5007,7 @@
                             <div class="echoes-battle-panel__content"></div>
                         </div>
                         <div class="echoes-battle-panel__character-select" aria-hidden="true">
+                            <div class="echoes-battle-panel__character-select-content"></div>
                             <div class="echoes-battle-panel__character-layout">
                                 <div class="echoes-battle-panel__roster-menu">
                                     <div class="echoes-battle-panel__roster-menu-content"></div>
@@ -5049,6 +5107,7 @@
         elements.characterTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.characterTrayButton.addEventListener('click', handleCharacterTrayButtonClick);
         elements.characterLayout?.addEventListener('click', handleCharacterScreenClick);
+        elements.characterLayout?.addEventListener('mouseenter', handleCharacterScreenMouseEnter, true);
         elements.characterLayout?.addEventListener('change', handleCharacterScreenChange);
         elements.characterLayout?.addEventListener('input', handleCharacterScreenChange);
         elements.creatorTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
