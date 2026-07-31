@@ -7404,6 +7404,94 @@ function runSuite() {
         assert(dashboardHtml.includes('echoes-lc-portrait-row'), 'Expected portrait row.');
     });
 
+    test('LC UI: clash bar markup and playback helpers', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = {};
+        require(path.resolve(battleRoot, 'ui/combat/lcCombatUi.js'));
+
+        const lcCombatUi = global.window.EchoesOfTheCityLcCombatUi;
+        const mockSkill = {
+            id: 'clash-hit',
+            name: 'Clash Hit',
+            skillType: 'attack',
+            basePower: 10,
+            coinPower: 2,
+            coinCount: 3,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const leftUnit = {
+            id: 'clash-ally',
+            name: 'Ally',
+            sprites: { idle: 'assets/ally.png', skills: {} },
+            skills: [mockSkill],
+        };
+        const rightUnit = {
+            id: 'clash-enemy',
+            name: 'Enemy',
+            sprites: { splash: 'assets/enemy-splash.png', skills: {} },
+            skills: [mockSkill],
+        };
+        const battle = {
+            playerUnits: [leftUnit],
+            enemyUnits: [rightUnit],
+            playerSlots: [{ id: 'p1', unitId: 'clash-ally', side: 'player', index: 0 }],
+            enemySlots: [{ id: 'e1', unitId: 'clash-enemy', side: 'enemy', index: 0 }],
+        };
+        const entry = {
+            engagementType: 'clash',
+            leftSlotId: 'p1',
+            rightSlotId: 'e1',
+            leftSkillId: 'clash-hit',
+            rightSkillId: 'clash-hit',
+            leftSkillName: 'Clash Hit',
+            rightSkillName: 'Clash Hit',
+            leftDisplayPower: 16,
+            rightDisplayPower: 12,
+            rounds: [{ leftPower: 18, rightPower: 14, result: 'left-win', leftFlips: 'H', rightFlips: 'T' }],
+            hits: [],
+        };
+        const uiState = {
+            playback: {
+                isRunning: true,
+                entry,
+                entryIndex: 0,
+                totalEntries: 1,
+                phase: 'round-reveal',
+                roundIndex: 0,
+                hitIndex: -1,
+                leftBroken: 0,
+                rightBroken: 0,
+            },
+        };
+        const deps = {
+            escapeHtml: (value) => String(value),
+            escapeAttribute: (value) => String(value),
+            getSlotById: (b, id) => [...b.playerSlots, ...b.enemySlots].find((slot) => slot.id === id) || null,
+            getUnitById: (b, id) => [...b.playerUnits, ...b.enemyUnits].find((unit) => unit.id === id) || null,
+            getSkillById: (unit, id) => unit?.skills?.find((skill) => skill.id === id) || null,
+            resolveAssetUrl: (value) => `resolved:${value}`,
+            renderPlaybackCoinTrack: (skill) => skill ? '<span class="echoes-battle-panel__playback-coin is-heads"></span>' : '',
+            getPlaybackValueState: () => ({ leftValue: 18, rightValue: 14 }),
+        };
+
+        const clashHtml = lcCombatUi.renderLcClashStage(battle, uiState, deps);
+        assert(clashHtml.includes('echoes-lc-clash-bar'), 'Expected LC clash bar.');
+        assert(clashHtml.includes('echoes-lc-clash-bar__portrait'), 'Expected clash portraits.');
+        assert(clashHtml.includes('echoes-lc-clash-bar__title'), 'Expected clash title.');
+        assert(clashHtml.includes('CLASH'), 'Expected CLASH label.');
+        assert(clashHtml.includes('>18<'), 'Expected left clash power.');
+        assert(clashHtml.includes('>14<'), 'Expected right clash power.');
+        assert(clashHtml.includes('echoes-battle-panel__playback-coin'), 'Expected coin track in clash bar.');
+        assert(clashHtml.includes('resolved:assets/enemy-splash.png'), 'Expected portrait URL resolution.');
+
+        assert(typeof lcCombatUi.shouldUseLcClashPlayback === 'function', 'Expected shouldUseLcClashPlayback export.');
+        assert(lcCombatUi.shouldUseLcClashPlayback(uiState.playback), 'Expected clash playback to use LC UI.');
+        assert(!lcCombatUi.shouldUseLcClashPlayback({ isRunning: true, entry: { engagementType: 'attack' } }), 'Expected non-clash to skip LC UI.');
+    });
+
     process.stdout.write(`\nResult: ${passed} passed, ${failed} failed\n`);
 
     if (failed > 0) {

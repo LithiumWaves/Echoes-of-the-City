@@ -762,6 +762,13 @@
             `;
         }
 
+        function shouldUseLcClashPlayback(playback) {
+            return Boolean(
+                lcCombatUi?.shouldUseLcClashPlayback?.(playback)
+                && lcCombatUi?.renderLcClashStage,
+            );
+        }
+
         function renderPlaybackOverlay(battle, uiState) {
             const playback = uiState?.playback;
             const resolvedBattle = getResolvedBattle(battle, uiState);
@@ -770,6 +777,25 @@
             }
 
             const entry = playback.entry;
+            const isLcClash = shouldUseLcClashPlayback(playback);
+
+            if (isLcClash) {
+                return `
+                    <div class="echoes-battle-panel__playback-overlay is-lc-clash">
+                        ${lcCombatUi.renderLcClashStage(resolvedBattle, uiState, {
+                            escapeHtml: (value) => String(value),
+                            escapeAttribute,
+                            getSlotById,
+                            getUnitById,
+                            getSkillById,
+                            resolveAssetUrl,
+                            renderPlaybackCoinTrack,
+                            getPlaybackValueState,
+                        })}
+                    </div>
+                `;
+            }
+
             const leftSlot = getSlotById(resolvedBattle, entry.leftSlotId);
             const rightSlot = getSlotById(resolvedBattle, entry.rightSlotId);
             if (!leftSlot || !rightSlot) {
@@ -793,28 +819,14 @@
                             : playback.phase === 'attack-hit'
                                 ? `Attack ${playback.hitIndex + 1}`
                                 : 'Resolution';
-            const isLcClash = entry.engagementType === 'clash' && lcCombatUi?.renderLcClashStage;
 
             return `
-                <div class="echoes-battle-panel__playback-overlay${isLcClash ? ' is-lc-clash' : ''}">
-                    ${isLcClash
-                        ? lcCombatUi.renderLcClashStage(resolvedBattle, uiState, {
-                            escapeHtml: (value) => String(value),
-                            escapeAttribute,
-                            getSlotById,
-                            getUnitById,
-                            getSkillById,
-                            resolveAssetUrl,
-                            renderPlaybackCoinTrack,
-                            getPlaybackValueState,
-                        })
-                        : ''}
+                <div class="echoes-battle-panel__playback-overlay">
                     <div class="echoes-battle-panel__playback-banner">
                         <span>Resolving ${playback.entryIndex + 1} / ${playback.totalEntries}</span>
                         <strong>${statusLabel}</strong>
                     </div>
-                    ${!isLcClash ? renderPlaybackValueBadges(leftPosition, rightPosition, playback, entry) : ''}
-                    ${!isLcClash ? `
+                    ${renderPlaybackValueBadges(leftPosition, rightPosition, playback, entry)}
                     <div class="echoes-battle-panel__playback-panel echoes-battle-panel__playback-panel--left" style="left: ${Math.max(6, leftPosition.x - 8)}%; top: ${Math.max(14, leftPosition.y - 28)}%;">
                         <span>${leftUnit?.name || 'Left Unit'}</span>
                         <strong>${leftSkill?.name || 'No Clash'}</strong>
@@ -831,7 +843,6 @@
                             ${renderPlaybackCoinTrack(rightSkill, 'right', playback, entry)}
                         </div>
                     </div>
-                    ` : ''}
                 </div>
             `;
         }
@@ -839,6 +850,9 @@
         function renderResolutionCard(battle, activePlayerSlot, uiState) {
             const playback = uiState?.playback;
             if (playback?.isRunning && playback.entry) {
+                if (shouldUseLcClashPlayback(playback)) {
+                    return '';
+                }
                 const entry = playback.entry;
                 return `
                     <div class="echoes-battle-panel__combat-result-card is-resolved is-playback">
