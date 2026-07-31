@@ -189,6 +189,7 @@
         creatorRenderLock: false,
         teamPresets: null,
         teamRosterFilter: '',
+        teamDragPayload: null,
         combatPhase: 'select',
         deploySelectedUnitIds: [],
         selectedDriveChapterId: null,
@@ -689,7 +690,7 @@
 
     function getActiveTeamUnitIds() {
         const preset = getActiveTeamPreset();
-        return Array.isArray(preset.unitIds) ? preset.unitIds.slice() : [];
+        return Array.isArray(preset.unitIds) ? preset.unitIds.filter((id) => id) : [];
     }
 
     function getEncounterBuilder() {
@@ -2434,7 +2435,9 @@
             ? Math.min(encounterCap, COMBAT_MAX_PLAYER_UNITS)
             : COMBAT_MAX_PLAYER_UNITS;
         const selectedIds = Array.isArray(state.deploySelectedUnitIds) ? state.deploySelectedUnitIds : [];
-        const teamUnitIds = Array.isArray(activePreset.unitIds) ? activePreset.unitIds : [];
+        const teamUnitIds = Array.isArray(activePreset.unitIds)
+            ? activePreset.unitIds.filter((id) => id)
+            : [];
 
         const deployCards = teamUnitIds.length
             ? teamUnitIds.map((unitId) => {
@@ -4743,13 +4746,17 @@
                 return;
             }
             const preset = normalized.presets[normalized.activePresetIndex];
-            if (!preset || preset.unitIds.includes(unitId)) {
+            if (!preset) {
                 return;
             }
-            if (preset.unitIds.length >= teamBuilder.MAX_TEAM_SIZE) {
+            teamBuilder.ensureFixedTeamSlots(preset);
+            const emptyIndex = preset.unitIds.findIndex((id) => !id);
+            if (emptyIndex < 0) {
                 return;
             }
-            preset.unitIds.push(unitId);
+            if (!teamBuilder.addTeamUnitAtSlot(preset, unitId, emptyIndex)) {
+                return;
+            }
             state.teamPresets = normalized;
             saveTeamPresetsState();
             renderCharacterSelectScreen();
@@ -4765,12 +4772,158 @@
             if (!preset?.unitIds) {
                 return;
             }
-            preset.unitIds.splice(unitIndex, 1);
+            teamBuilder.ensureFixedTeamSlots(preset);
+            if (unitIndex < 0 || unitIndex >= teamBuilder.MAX_TEAM_SIZE) {
+                return;
+            }
+            preset.unitIds[unitIndex] = null;
             state.teamPresets = normalized;
             saveTeamPresetsState();
             renderCharacterSelectScreen();
             return;
         }
+    }
+
+    function clearTeamDragState() {
+        state.teamDragPayload = null;
+        elements.characterLayout?.querySelectorAll('.is-dragging, .is-drop-hover').forEach((node) => {
+            node.classList.remove('is-dragging', 'is-drop-hover');
+        });
+        elements.characterLayout?.classList.remove('is-team-dragging');
+    }
+
+    function handleCharacterScreenDragStart(event) {
+        const teamDragCard = event.target.closest('[data-drag-team-unit="true"]');
+        const rosterPick = event.target.closest('[data-drag-roster-unit="true"]');
+
+        if (teamDragCard) {
+            const slotIndex = Number(teamDragCard.dataset.slotIndex);
+            const unitId = teamDragCard.dataset.unitId || '';
+            if (!Number.isInteger(slotIndex) || !unitId) {
+                return;
+            }
+            state.teamDragPayload = { kind: 'team-slot', unitId, fromSlotIndex: slotIndex };
+            teamDragCard.classList.add('is-dragging');
+            elements.characterLayout?.classList.add('is-team-dragging');
+            if (event.dataTransfer) {
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', JSON.stringify(state.teamDragPayload));
+            }
+            return;
+        }
+
+        if (rosterPick) {
+            const unitId = rosterPick.dataset.unitId || '';
+            if (!unitId) {
+                return;
+            }
+            state.teamDragPayload = { kind: 'roster-unit', unitId };
+            rosterPick.classList.add('is-dragging');
+            elements.characterLayout?.classList.add('is-team-dragging');
+            if (event.dataTransfer) {
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', JSON.stringify(state.teamDragPayload));
+            }
+        }
+    }
+
+    function getTeamDragDropTarget(event) {
+        return event.target.closest('[data-drop-target="team-slot"]');
+    }
+
+    function handleCharacterScreenDragOver(event) {
+        if (!state.teamDragPayload) {
+            return;
+        }
+        const dropTarget = getTeamDragDropTarget(event);
+        if (!dropTarget) {
+            return;
+        }
+        event.preventDefault();
+        dropTarget.classList.add('is-drop-hover');
+        if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = 'move';
+        }
+    }
+
+    function handleCharacterScreenDragEnter(event) {
+        if (!state.teamDragPayload) {
+            return;
+        }
+        const dropTarget = getTeamDragDropTarget(event);
+        if (!dropTarget) {
+            return;
+        }
+        event.preventDefault();
+        dropTarget.classList.add('is-drop-hover');
+    }
+
+    function handleCharacterScreenDragLeave(event) {
+        const dropTarget = getTeamDragDropTarget(event);
+        if (!dropTarget) {
+            return;
+        }
+        const relatedTarget = event.relatedTarget;
+        if (relatedTarget && dropTarget.contains(relatedTarget)) {
+            return;
+        }
+        dropTarget.classList.remove('is-drop-hover');
+    }
+
+    function handleCharacterScreenDrop(event) {
+        if (!state.teamDragPayload) {
+            return;
+        }
+
+        const dropTarget = getTeamDragDropTarget(event);
+        if (!dropTarget) {
+            return;
+        }
+
+        event.preventDefault();
+        dropTarget.classList.remove('is-drop-hover');
+
+        const teamBuilder = getTeamBuilder();
+        if (!teamBuilder) {
+            clearTeamDragState();
+            return;
+        }
+
+        const slotIndex = Number(dropTarget.dataset.slotIndex);
+        if (!Number.isInteger(slotIndex)) {
+            clearTeamDragState();
+            return;
+        }
+
+        ensureTeamPresetsLoaded();
+        const normalized = teamBuilder.normalizeTeamPresetsState(state.teamPresets);
+        const preset = normalized.presets[normalized.activePresetIndex];
+        if (!preset) {
+            clearTeamDragState();
+            return;
+        }
+
+        teamBuilder.ensureFixedTeamSlots(preset);
+        const payload = state.teamDragPayload;
+
+        let changed = false;
+        if (payload.kind === 'team-slot') {
+            changed = teamBuilder.moveTeamUnit(preset, payload.fromSlotIndex, slotIndex);
+        } else if (payload.kind === 'roster-unit') {
+            changed = teamBuilder.placeTeamUnitInSlot(preset, payload.unitId, slotIndex);
+        }
+
+        if (changed) {
+            state.teamPresets = normalized;
+            saveTeamPresetsState();
+            renderCharacterSelectScreen();
+        }
+
+        clearTeamDragState();
+    }
+
+    function handleCharacterScreenDragEnd() {
+        clearTeamDragState();
     }
 
     function handleCharacterScreenChange(event) {
@@ -5051,6 +5204,12 @@
         elements.characterLayout?.addEventListener('click', handleCharacterScreenClick);
         elements.characterLayout?.addEventListener('change', handleCharacterScreenChange);
         elements.characterLayout?.addEventListener('input', handleCharacterScreenChange);
+        elements.characterLayout?.addEventListener('dragstart', handleCharacterScreenDragStart);
+        elements.characterLayout?.addEventListener('dragover', handleCharacterScreenDragOver);
+        elements.characterLayout?.addEventListener('dragenter', handleCharacterScreenDragEnter);
+        elements.characterLayout?.addEventListener('dragleave', handleCharacterScreenDragLeave);
+        elements.characterLayout?.addEventListener('drop', handleCharacterScreenDrop);
+        elements.characterLayout?.addEventListener('dragend', handleCharacterScreenDragEnd);
         elements.creatorTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.creatorTrayButton.addEventListener('click', handleCreatorTrayButtonClick);
         elements.creatorContent.addEventListener('click', handleCreatorContentClick);

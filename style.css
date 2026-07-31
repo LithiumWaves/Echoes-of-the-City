@@ -2342,6 +2342,8 @@
     gap: 0.06rem;
     padding: 0;
     overflow: hidden;
+    transform: scale(0.92);
+    transform-origin: center top;
 }
 
 .echoes-battle-panel__roster-menu-content .echoes-team__preset-tab--lc {
@@ -2382,12 +2384,16 @@
 
 .echoes-team--lc {
     inset: 0;
-    --lc-name-left: 3.5%;
-    --lc-name-top: 7.6%;
-    --lc-name-width: 28%;
-    --lc-name-height: 5.2%;
+    --echoes-lc-brass: #8b5a2b;
+    --echoes-lc-gold: #e8c547;
+    --echoes-lc-panel: #12100e;
+    --echoes-lc-duel: #ff8c2a;
+    --lc-header-top: 7.4%;
+    --lc-header-left: 3.5%;
+    --lc-header-right: 22.8%;
+    --lc-header-height: 8.5%;
     --lc-grid-left: 3.5%;
-    --lc-grid-top: 15.5%;
+    --lc-grid-top: 17.2%;
     --lc-grid-right: 22.8%;
     --lc-grid-bottom: 11.2%;
     --lc-roster-right: 2.6%;
@@ -2402,19 +2408,52 @@
     min-height: 0;
     height: 100%;
     display: block;
+    transition: opacity 180ms ease;
+}
+
+.echoes-team__lc-panel {
+    border: 1px solid color-mix(in srgb, var(--echoes-lc-brass) 55%, transparent);
+    background:
+        linear-gradient(165deg, rgba(28, 22, 18, 0.55), rgba(10, 8, 7, 0.72)),
+        rgba(8, 6, 5, 0.35);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 200, 140, 0.08),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.echoes-team__lc-vignette::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        radial-gradient(circle at 50% 40%, transparent 35%, rgba(0, 0, 0, 0.28) 100%);
+}
+
+.echoes-team__zone-header {
+    position: absolute;
+    left: var(--lc-header-left);
+    top: var(--lc-header-top);
+    right: var(--lc-header-right);
+    height: var(--lc-header-height);
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    z-index: 2;
+    min-width: 0;
 }
 
 .echoes-team__zone-name {
-    position: absolute;
-    left: var(--lc-name-left);
-    top: var(--lc-name-top);
-    width: var(--lc-name-width);
-    height: var(--lc-name-height);
+    position: relative;
+    flex: 0 0 28%;
+    height: 100%;
+    min-width: 0;
     display: flex;
     align-items: center;
-    padding: 0 0.65rem 0 0.5rem;
+    padding: 0 0.75rem 0 0.55rem;
     box-sizing: border-box;
-    background: rgba(8, 6, 5, 0.72);
+    background: var(--echoes-team-name-tab-url, url("./assets/characterstab/teamsbutton.png")) center / 100% 100% no-repeat;
     border: none;
     box-shadow: none;
 }
@@ -2426,6 +2465,65 @@
     font-size: 0.7rem;
     color: rgba(240, 200, 140, 0.65);
     pointer-events: none;
+}
+
+.echoes-team__team-meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.echoes-team__team-count {
+    flex: 0 0 auto;
+    padding: 0.18rem 0.45rem;
+    border: 1px solid color-mix(in srgb, var(--echoes-lc-gold) 35%, transparent);
+    border-radius: 0.25rem;
+    background: rgba(8, 6, 5, 0.65);
+    color: var(--echoes-lc-gold);
+    font: 700 0.62rem/1.2 "Segoe UI", system-ui, sans-serif;
+    letter-spacing: 0.04em;
+}
+
+.echoes-team__sin-chips {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.28rem;
+}
+
+.echoes-team__sin-chips-empty {
+    font: 600 0.58rem/1.2 "Segoe UI", system-ui, sans-serif;
+    color: rgba(240, 216, 168, 0.45);
+    letter-spacing: 0.03em;
+}
+
+.echoes-team__sin-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.12rem 0.35rem;
+    border-radius: 0.35rem;
+    background: color-mix(in srgb, var(--echoes-lc-sin-color, #888) 22%, rgba(8, 6, 5, 0.85));
+    border: 1px solid color-mix(in srgb, var(--echoes-lc-sin-color, #888) 45%, transparent);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.echoes-team__sin-chip__droplet {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 999px;
+    background: var(--echoes-lc-sin-color, #888);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--echoes-lc-sin-color, #888) 50%, transparent);
+}
+
+.echoes-team__sin-chip__label,
+.echoes-team__sin-chip__count {
+    font: 700 0.58rem/1 "Segoe UI", system-ui, sans-serif;
+    color: #f0d8a8;
 }
 
 .echoes-team__preset-name-input {
@@ -2452,6 +2550,16 @@
     bottom: var(--lc-grid-bottom);
     z-index: 0;
     pointer-events: none;
+}
+
+.echoes-team__zone-grid::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.22;
+    background: var(--echoes-team-grid-bg-url, url("./assets/characterstab/teammenubg.png")) center / 100% 100% no-repeat;
 }
 
 .echoes-team__zone-grid .echoes-team__grid {
@@ -2651,9 +2759,27 @@
     aspect-ratio: auto;
     width: 100%;
     height: 100%;
-    border: 1px solid rgba(255, 180, 100, 0.18);
-    background: rgba(8, 8, 10, 0.35);
-    color: rgba(240, 216, 168, 0.45);
+    position: relative;
+    border: none;
+    background: rgba(8, 8, 10, 0.25);
+    color: rgba(240, 216, 168, 0.55);
+    transition: box-shadow 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.echoes-identity-slot__frame {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.42;
+    background: var(--echoes-identity-slot-frame-url, url("./assets/characterstab/Uptie_4_Frame_000.png")) center / 100% 100% no-repeat;
+}
+
+.echoes-identity-slot.is-drop-hover,
+.echoes-identity-slot--lc.echoes-identity-slot--empty.is-drop-hover {
+    box-shadow:
+        inset 0 0 0 2px color-mix(in srgb, var(--echoes-lc-gold) 75%, transparent),
+        0 0 12px color-mix(in srgb, var(--echoes-lc-duel) 35%, transparent);
+    background: rgba(16, 12, 10, 0.45);
 }
 
 .echoes-identity-slot--empty:hover {
@@ -2730,9 +2856,59 @@
 }
 
 .echoes-identity-card--team .echoes-identity-card__art {
-    inset: 12% 11% 18% 11%;
+    inset: 10% 9% 16% 9%;
     border-radius: 2px;
     z-index: 1;
+    background-color: rgba(0, 0, 0, 0.35);
+}
+
+.echoes-identity-card__badge--droplet {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: transparent;
+    box-shadow: none;
+}
+
+.echoes-identity-card__badge-droplet {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: var(--echoes-identity-sin-color, #888);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--echoes-identity-sin-color, #888) 50%, transparent);
+}
+
+.echoes-identity-card__badge-label {
+    position: relative;
+    z-index: 1;
+    font: 700 0.52rem/1 "Segoe UI", system-ui, sans-serif;
+    color: #111;
+}
+
+.echoes-identity-card--team .echoes-identity-card__badge {
+    top: 7%;
+    right: 9%;
+    z-index: 3;
+    width: 1.2rem;
+    height: 1.2rem;
+    font-size: 0;
+    line-height: 0;
+}
+
+.echoes-identity-card--team .echoes-identity-card__footer {
+    left: 9%;
+    right: 9%;
+    bottom: 9%;
+    padding: 0.22rem 0.15rem 0.12rem;
+    z-index: 3;
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.62) 40%, rgba(0, 0, 0, 0.9) 100%);
+}
+
+.echoes-identity-card--team.is-dragging,
+.echoes-identity-roster-pick.is-dragging .echoes-identity-card {
+    opacity: 0.65;
+    transform: scale(0.97);
 }
 
 .echoes-identity-card__badge {
@@ -2749,16 +2925,6 @@
     box-shadow: 0 0 6px rgba(0, 0, 0, 0.45);
 }
 
-.echoes-identity-card--team .echoes-identity-card__badge {
-    top: 8%;
-    right: 10%;
-    z-index: 3;
-    width: 1.15rem;
-    height: 1.15rem;
-    font-size: 0.55rem;
-    line-height: 1.15rem;
-}
-
 .echoes-identity-card__footer {
     position: absolute;
     left: 0;
@@ -2768,15 +2934,6 @@
     background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.82) 38%, rgba(0, 0, 0, 0.94) 100%);
     display: grid;
     gap: 0.12rem;
-}
-
-.echoes-identity-card--team .echoes-identity-card__footer {
-    left: 11%;
-    right: 11%;
-    bottom: 10%;
-    padding: 0.2rem 0.15rem 0.1rem;
-    z-index: 3;
-    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.55) 45%, rgba(0, 0, 0, 0.82) 100%);
 }
 
 .echoes-identity-card__level {
@@ -2884,19 +3041,89 @@
     top: var(--lc-roster-top);
     width: var(--lc-roster-width);
     bottom: var(--lc-roster-bottom);
-    padding-top: 0;
-    border: 1px solid rgba(255, 180, 100, 0.14);
-    background: rgba(8, 10, 14, 0.22);
     padding: 0.35rem 0.3rem;
+    border: none;
+    background: transparent;
+    gap: 0.3rem;
+}
+
+.echoes-team__roster-search-wrap {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.echoes-team__roster-search-label {
+    font: 700 0.58rem/1.2 "Segoe UI", system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(240, 200, 140, 0.65);
 }
 
 .echoes-team__roster-search {
     width: 100%;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(8, 10, 14, 0.72);
-    color: inherit;
+    border: 1px solid color-mix(in srgb, var(--echoes-lc-brass) 45%, transparent);
+    background: rgba(8, 6, 5, 0.72);
+    color: #f0d8a8;
     padding: 0.35rem 0.5rem;
     font: inherit;
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.35);
+}
+
+.echoes-team__roster-search:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--echoes-lc-gold) 55%, transparent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--echoes-lc-gold) 25%, transparent);
+}
+
+.echoes-team__roster-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 6rem;
+    padding: 0.65rem;
+    text-align: center;
+}
+
+.echoes-team__roster-empty__icon {
+    font-size: 1.1rem;
+    color: color-mix(in srgb, var(--echoes-lc-gold) 55%, transparent);
+    opacity: 0.7;
+}
+
+.echoes-team__roster-empty__title {
+    margin: 0;
+    font: 700 0.68rem/1.3 "Segoe UI", system-ui, sans-serif;
+    color: #f0d8a8;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.echoes-team__roster-empty__hint {
+    margin: 0;
+    font: 500 0.58rem/1.35 "Segoe UI", system-ui, sans-serif;
+    color: rgba(240, 216, 168, 0.5);
+}
+
+.echoes-battle-panel__character-layout.is-team-dragging .echoes-identity-slot--empty {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--echoes-lc-gold) 25%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .echoes-team__lc-body,
+    .echoes-identity-roster-pick .echoes-identity-card,
+    .echoes-identity-slot--lc.echoes-identity-slot--empty,
+    .echoes-identity-card--team.is-dragging,
+    .echoes-identity-roster-pick.is-dragging .echoes-identity-card {
+        transition: none;
+    }
+
+    .echoes-identity-roster-pick:hover .echoes-identity-card,
+    .echoes-identity-card--team.is-dragging,
+    .echoes-identity-roster-pick.is-dragging .echoes-identity-card {
+        transform: none;
+    }
 }
 
 .echoes-team__roster-list {
