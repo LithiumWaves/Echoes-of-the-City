@@ -7264,6 +7264,10 @@ function runSuite() {
         assert((html.match(/echoes-identity-slot/g) || []).length >= teamBuilder.MAX_TEAM_SIZE, 'Expected fixed slot containers.');
         assert(html.includes('resolved:assets/roster/card-splash.png'), 'Expected splash art in card background.');
         assert(html.includes('echoes-team--lc'), 'Expected LC team root class.');
+        assert(html.includes('echoes-team__zone-name'), 'Expected LC zone name markup.');
+        assert(html.includes('echoes-team__zone-grid'), 'Expected LC zone grid wrapper.');
+        assert(!html.includes('echoes-team__center'), 'Expected no legacy center wrapper.');
+        assert(!html.includes('echoes-team__grid-header'), 'Expected no legacy grid header.');
         assert(html.includes('echoes-team__presets--lc'), 'Expected LC preset rail class.');
         assert(html.includes('rosterbutton.png'), 'Expected rosterbutton asset in preset tabs.');
         assert(teamBuilder.TEAM_MENU_ASSETS?.gridBackground?.includes('teammenubg.png'), 'Expected teammenubg grid background asset path.');

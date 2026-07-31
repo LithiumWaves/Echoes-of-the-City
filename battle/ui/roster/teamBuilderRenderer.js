@@ -272,30 +272,26 @@
         return `
             <div class="echoes-team echoes-team--lc">
                 <div class="echoes-team__lc-body">
+                    <div class="echoes-team__zone-name">
+                        <input
+                            class="echoes-team__preset-name-input"
+                            data-action="team-preset-name"
+                            value="${escapeAttr(activePreset.name || '')}"
+                            placeholder="Teams #${activeIndex + 1}"
+                            aria-label="Team name"
+                        />
+                    </div>
                     <nav class="echoes-team__presets echoes-team__presets--lc" aria-label="Team presets">
-                        <div class="echoes-team__presets-heading">Teams</div>
                         ${presetTabs}
                     </nav>
-                    <section class="echoes-team__center">
-                        <div class="echoes-team__grid-header">
-                            <label class="echoes-team__preset-name">
-                                <input
-                                    class="echoes-team__preset-name-input"
-                                    data-action="team-preset-name"
-                                    value="${escapeAttr(activePreset.name || '')}"
-                                    placeholder="Teams #${activeIndex + 1}"
-                                    aria-label="Team name"
-                                />
-                            </label>
-                            <span class="echoes-team__count">${unitIds.length} / ${MAX_TEAM_SIZE}</span>
-                        </div>
+                    <div class="echoes-team__zone-grid">
                         <section
                             class="echoes-team__grid echoes-identity-grid echoes-identity-grid--lc"
                             aria-label="Active team"
                         >
                             ${teamSlots}
                         </section>
-                    </section>
+                    </div>
                     <aside class="echoes-team__roster echoes-team__roster--lc" aria-label="Unit roster">
                         <input
                             class="echoes-team__roster-search"

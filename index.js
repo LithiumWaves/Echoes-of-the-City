@@ -4934,7 +4934,6 @@
                             <div class="echoes-battle-panel__character-layout">
                                 <div class="echoes-battle-panel__roster-menu"></div>
                                 <div class="echoes-battle-panel__character-screen">
-                                    <div class="echoes-battle-panel__character-screen-bg" aria-hidden="true"></div>
                                     <div class="echoes-battle-panel__no-character"></div>
                                     <div class="echoes-battle-panel__character-screen-content"></div>
                                 </div>
