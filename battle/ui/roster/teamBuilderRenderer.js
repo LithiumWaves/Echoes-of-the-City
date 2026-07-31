@@ -208,12 +208,6 @@
     function renderPresetRail(teamState, escapeAttr, escapeHtml, options = {}) {
         const normalized = normalizeTeamPresetsState(teamState);
         const activeIndex = normalized.activePresetIndex;
-        const resolveAssetUrl = options.resolveAssetUrl || ((value) => value || '');
-
-        const presetButtonUrl = resolveAssetUrl(TEAM_MENU_ASSETS.presetButton);
-        const presetButtonStyle = presetButtonUrl
-            ? `--echoes-team-preset-button-url:url('${escapeAttr(presetButtonUrl)}');`
-            : '';
 
         const presetTabs = normalized.presets.map((preset, index) => `
             <button
@@ -221,7 +215,6 @@
                 type="button"
                 data-action="team-select-preset"
                 data-preset-index="${index}"
-                style="${presetButtonStyle}"
             >
                 <span class="echoes-team__preset-tab-label">${escapeHtml(preset.name || `Teams #${index + 1}`)}</span>
             </button>

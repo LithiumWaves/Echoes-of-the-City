@@ -7265,7 +7265,8 @@ function runSuite() {
 
         const presetRailHtml = teamBuilder.renderPresetRail(state, escapeAttr, escapeHtml, renderOptions);
         assert(presetRailHtml.includes('echoes-team__presets--lc'), 'Expected LC preset rail class in renderPresetRail.');
-        assert(presetRailHtml.includes('rosterbutton.png'), 'Expected rosterbutton asset in preset rail.');
+        assert(!presetRailHtml.includes('echoes-team-preset-button-url'), 'Preset rail should not use rosterbutton inline style.');
+        assert(!presetRailHtml.includes('rosterbutton.png'), 'Preset rail should not embed rosterbutton asset.');
         assert(!presetRailHtml.includes('echoes-team__zone-grid'), 'Preset rail should not include zone grid.');
 
         const teamMainHtml = teamBuilder.renderTeamMain(state, unitList, escapeAttr, escapeHtml, renderOptions);
@@ -7283,7 +7284,7 @@ function runSuite() {
         assert(!html.includes('echoes-team__center'), 'Expected no legacy center wrapper.');
         assert(!html.includes('echoes-team__grid-header'), 'Expected no legacy grid header.');
         assert(html.includes('echoes-team__presets--lc'), 'Expected LC preset rail class.');
-        assert(html.includes('rosterbutton.png'), 'Expected rosterbutton asset in preset tabs.');
+        assert(!html.includes('echoes-team-preset-button-url'), 'Expected no rosterbutton inline style on preset tabs.');
         assert(teamBuilder.TEAM_MENU_ASSETS?.gridBackground?.includes('teammenubg.png'), 'Expected teammenubg grid background asset path.');
         assert(html.includes('Uptie_4_Frame_000.png'), 'Expected uptie frame asset on team cards.');
         assert(html.includes('echoes-identity-card__frame'), 'Expected identity card frame markup.');
