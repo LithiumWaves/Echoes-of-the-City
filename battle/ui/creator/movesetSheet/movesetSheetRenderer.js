@@ -93,6 +93,37 @@
         `;
     }
 
+    function renderVariantConditionsSection(skill, skillIndex, catalog, creatorUi, escapeAttr, escapeHtml) {
+        const conditions = Array.isArray(skill?.variantConditions) ? skill.variantConditions : [];
+        const variantPriority = Number(skill?.variantPriority);
+        const showSection = conditions.length > 0
+            || (Number.isFinite(variantPriority) && variantPriority > 0);
+
+        if (!showSection) {
+            return '';
+        }
+
+        const conditionRows = conditions.map((condition, condIndex) => {
+            const fieldAttrs = `data-action="creator-skill-variant-condition-field" data-skill-index="${skillIndex}" data-condition-index="${condIndex}"`;
+            return `
+                <div class="echoes-creator__condition-wrap">
+                    ${creatorUi.renderConditionRow(condition, catalog, escapeAttr, escapeHtml, fieldAttrs)}
+                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-skill-variant-remove-condition" data-skill-index="${skillIndex}" data-condition-index="${condIndex}">Remove condition</button>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <details class="echoes-moveset__variant-conditions" open>
+                <summary class="echoes-moveset__lane-title">Variant activation (all conditions must pass)</summary>
+                <div class="echoes-moveset__variant-conditions-body">
+                    ${conditionRows || '<span class="echoes-creator__hint">No conditions — this variant is inactive until you add one.</span>'}
+                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-skill-variant-add-condition" data-skill-index="${skillIndex}">+ Add condition</button>
+                </div>
+            </details>
+        `;
+    }
+
     function renderSkillCard(skill, skillIndex, catalog, creatorUi, escapeAttr, escapeHtml) {
         const sinType = skill?.sinType || 'wrath';
         const sinColor = SIN_COLORS[sinType] || '#888';
@@ -164,6 +195,7 @@
                     <label class="echoes-creator__checkbox"><input type="checkbox" data-action="creator-unit-skill-toggle" data-index="${skillIndex}" data-field="showInPlanner" ${!hiddenInPlanner ? 'checked' : ''} /> Show in planner</label>
                     <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-skill-add-variant" data-index="${skillIndex}">+ Variant</button>
                 </div>
+                ${renderVariantConditionsSection(skill, skillIndex, catalog, creatorUi, escapeAttr, escapeHtml)}
                 ${followUpEffect ? `<div class="echoes-creator__hint">Follow-up: ${escapeHtml(String(followUpEffect.skillId || ''))}</div>` : ''}
                 <textarea class="echoes-moveset__skill-desc" data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="description" rows="2" placeholder="Player-facing description">${escapeHtml(String(skill?.description || ''))}</textarea>
                 <div class="echoes-moveset__lanes">
@@ -286,6 +318,7 @@
         renderSkillCard,
         renderPassiveCard,
         renderMechanicsPanel,
+        renderVariantConditionsSection,
     };
 
     battleModules.movesetSheet = MovesetSheet;

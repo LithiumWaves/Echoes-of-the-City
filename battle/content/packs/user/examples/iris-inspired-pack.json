@@ -1,0 +1,349 @@
+{
+  "manifest": {
+    "id": "example-iris-inspired-pack",
+    "name": "Iris-Inspired Example Pack",
+    "version": "1.0.0",
+    "engineVersion": "dev",
+    "authors": [
+      "Echoes of the City"
+    ],
+    "description": "A simplified Iris-style homebrew kit: Insight and Executioner's Mark statuses, bleed/poise variant skills, guard/counter, and resonance-gated passives.",
+    "dependencies": [],
+    "featureFlags": {}
+  },
+  "statuses": [
+    {
+      "id": "iris-insight",
+      "label": "Iris's Insight",
+      "description": "For this turn: Attack skills gain +1 Final Power per Count. Expires at Turn End.",
+      "countOnly": true,
+      "stackModel": {
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 10,
+          "application": "add"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
+      },
+      "hooks": {
+        "skillSelected": [
+          {
+            "conditions": [
+              {
+                "type": "skillType",
+                "value": "attack"
+              }
+            ],
+            "actions": [
+              {
+                "type": "modifyContext",
+                "target": "self",
+                "field": "flatPowerBonus",
+                "operation": "addStatusCountScaled",
+                "statusId": "iris-insight",
+                "multiplier": 1
+              }
+            ]
+          }
+        ],
+        "turnEnd": [
+          {
+            "actions": [
+              {
+                "type": "consumeStatus",
+                "target": "self",
+                "statusId": "iris-insight"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "executioners-mark",
+      "label": "Executioner's Mark",
+      "description": "Bleed skills deal +2 Final Power per Mark Count on the target.",
+      "countOnly": true,
+      "stackModel": {
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 10,
+          "application": "add"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
+      },
+      "hooks": {}
+    }
+  ],
+  "units": [
+    {
+      "id": "iris-inspired",
+      "name": "Iris (Inspired)",
+      "level": 45,
+      "maxHp": 280,
+      "sp": 0,
+      "speedRange": [
+        3,
+        6
+      ],
+      "defenseLevel": 40,
+      "staggerThresholds": [
+        0.66,
+        0.33
+      ],
+      "resistances": {
+        "physical": {
+          "slash": 1,
+          "pierce": 1,
+          "blunt": 1
+        },
+        "sin": {
+          "wrath": 1,
+          "lust": 1,
+          "sloth": 0.75,
+          "gluttony": 1,
+          "gloom": 1,
+          "pride": 1,
+          "envy": 1
+        }
+      },
+      "passives": [
+        {
+          "id": "iris-owned-insight",
+          "name": "Keen Eye",
+          "description": "Owned passive: gain 1 Iris's Insight Count at battle start.",
+          "requirements": {
+            "owned": true
+          },
+          "hooks": {
+            "battleStart": [
+              {
+                "type": "applyStatus",
+                "target": "self",
+                "statusId": "iris-insight",
+                "count": 1
+              }
+            ]
+          }
+        },
+        {
+          "id": "iris-resonance-sloth",
+          "name": "Sloth Resonance",
+          "description": "With 3+ Sloth Resonance, gain 1 Poise Count at turn start.",
+          "requirements": {
+            "resonance": {
+              "sinType": "sloth",
+              "minimum": 3
+            }
+          },
+          "hooks": {
+            "turnStart": [
+              {
+                "type": "applyStatus",
+                "target": "self",
+                "statusId": "poise",
+                "count": 1
+              }
+            ]
+          }
+        }
+      ],
+      "sprites": {
+        "idle": "assets/debugsprites/Vergilius_Idle_Sprite.png",
+        "moving": "assets/debugsprites/Vergilius_Moving_Sprite.png",
+        "hurt": "assets/debugsprites/Vergilius_Hurt_Sprite.png",
+        "guard": "assets/debugsprites/Vergilius_Guard_Sprite.png",
+        "skills": {
+          "calculated-strike": "assets/debugsprites/Vergilius_Skill_1.gif",
+          "executioners-mercy": "assets/debugsprites/Vergilius_Skill_2.gif",
+          "bleeding-cut": "assets/debugsprites/Vergilius_Skill_2.gif",
+          "iris-guard": "assets/debugsprites/Vergilius_Skill_3.gif",
+          "iris-counter": "assets/debugsprites/Vergilius_Skill_3.gif"
+        }
+      },
+      "skills": [
+        {
+          "id": "calculated-strike",
+          "name": "Calculated Strike",
+          "skillSlot": "slot-1",
+          "variantPriority": 0,
+          "skillType": "attack",
+          "basePower": 8,
+          "coinPower": 3,
+          "coinCount": 2,
+          "damageType": "slash",
+          "sinType": "sloth",
+          "offenseLevel": 0,
+          "effects": [
+            {
+              "trigger": "onSelect",
+              "type": "applyStatus",
+              "target": "self",
+              "statusId": "iris-insight",
+              "count": 1
+            },
+            {
+              "trigger": "onHit",
+              "type": "applyStatus",
+              "statusId": "bleed",
+              "potency": 3,
+              "count": 1,
+              "coinIndex": 2
+            }
+          ],
+          "description": "Skill 1 base form. Builds Insight and applies Bleed on the second coin."
+        },
+        {
+          "id": "executioners-mercy",
+          "name": "Executioner's Mercy",
+          "skillSlot": "slot-1",
+          "variantPriority": 2,
+          "variantConditions": [
+            {
+              "type": "statusCountAtLeast",
+              "target": "self",
+              "statusId": "iris-insight",
+              "value": 3
+            }
+          ],
+          "skillType": "attack",
+          "basePower": 14,
+          "coinPower": 5,
+          "coinCount": 2,
+          "damageType": "slash",
+          "sinType": "sloth",
+          "offenseLevel": 1,
+          "effects": [
+            {
+              "trigger": "onSelect",
+              "type": "modifyContext",
+              "field": "dynamicDamageBonus",
+              "operation": "add",
+              "value": 0.2
+            },
+            {
+              "trigger": "onHit",
+              "type": "applyStatus",
+              "statusId": "executioners-mark",
+              "count": 2,
+              "coinIndex": 2
+            },
+            {
+              "trigger": "onHit",
+              "type": "queueStatus",
+              "statusId": "paralysis",
+              "count": 1,
+              "coinIndex": 2
+            }
+          ],
+          "description": "Skill 1 variant when Insight Count is 3+. Execute bonus vs low-HP foes; applies Mark and Paralysis."
+        },
+        {
+          "id": "bleeding-cut",
+          "name": "Bleeding Cut",
+          "skillType": "attack",
+          "basePower": 10,
+          "coinPower": 4,
+          "coinCount": 3,
+          "damageType": "slash",
+          "sinType": "gluttony",
+          "offenseLevel": 0,
+          "effects": [
+            {
+              "trigger": "onHit",
+              "type": "applyStatus",
+              "statusId": "bleed",
+              "potency": 5,
+              "count": 2,
+              "coinIndex": 1
+            },
+            {
+              "trigger": "onHit",
+              "type": "applyStatus",
+              "target": "self",
+              "statusId": "poise",
+              "count": 1,
+              "coinIndex": 3
+            },
+            {
+              "trigger": "onClashWin",
+              "type": "applyStatus",
+              "target": "self",
+              "statusId": "fragile",
+              "count": 1
+            }
+          ],
+          "description": "Skill 2. Bleed chain with Poise on the final coin and Fragile on clash win."
+        },
+        {
+          "id": "iris-guard",
+          "name": "Guard",
+          "skillType": "guard",
+          "basePower": 6,
+          "coinPower": 2,
+          "coinCount": 1,
+          "damageType": "slash",
+          "sinType": "pride",
+          "offenseLevel": 0,
+          "effects": [
+            {
+              "trigger": "onSelect",
+              "type": "applyStatus",
+              "target": "self",
+              "statusId": "protection",
+              "count": 2
+            }
+          ],
+          "description": "Defense skill. Gain Protection Count."
+        },
+        {
+          "id": "iris-counter",
+          "name": "Counter",
+          "skillType": "counter",
+          "basePower": 10,
+          "coinPower": 3,
+          "coinCount": 1,
+          "damageType": "slash",
+          "sinType": "pride",
+          "offenseLevel": 0,
+          "effects": [
+            {
+              "trigger": "onHit",
+              "type": "applyStatus",
+              "statusId": "bleed",
+              "potency": 4,
+              "count": 1
+            }
+          ],
+          "description": "Defense skill. Counterattack that applies Bleed."
+        }
+      ]
+    }
+  ],
+  "battles": [
+    {
+      "id": "iris-inspired-smoke",
+      "name": "Iris-Inspired Smoke Test",
+      "description": "Deploy Iris (Inspired) from a team preset against Dongbaek to playtest the homebrew kit.",
+      "enemyUnitIds": [
+        "dongbaek"
+      ],
+      "rules": {
+        "encounterType": "focused",
+        "maxTurns": 20,
+        "victoryCondition": "defeat-all-enemies",
+        "failureCondition": "all-allies-defeated",
+        "enemyAiProfile": {
+          "skill": "first",
+          "target": "firstLiving"
+        }
+      }
+    }
+  ]
+}

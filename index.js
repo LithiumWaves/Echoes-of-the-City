@@ -3164,6 +3164,49 @@
             return;
         }
 
+        if (action === 'creator-skill-variant-add-condition') {
+            const index = Number(actionTarget.dataset.skillIndex);
+            if (Number.isInteger(index)) {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[index];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    skill.variantConditions = Array.isArray(skill.variantConditions) ? skill.variantConditions : [];
+                    skill.variantConditions.push({
+                        type: 'statusCountAtLeast',
+                        target: 'self',
+                        statusId: '',
+                        value: 1,
+                    });
+                });
+                rerenderCreatorAfterUnitEdit();
+            }
+            return;
+        }
+
+        if (action === 'creator-skill-variant-remove-condition') {
+            const index = Number(actionTarget.dataset.skillIndex);
+            const condIndex = Number(actionTarget.dataset.conditionIndex);
+            if (Number.isInteger(index) && Number.isInteger(condIndex)) {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[index];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    skill.variantConditions = Array.isArray(skill.variantConditions) ? skill.variantConditions : [];
+                    skill.variantConditions.splice(condIndex, 1);
+                    if (!skill.variantConditions.length) {
+                        delete skill.variantConditions;
+                    }
+                });
+                rerenderCreatorAfterUnitEdit();
+            }
+            return;
+        }
+
         if (action === 'creator-unit-remove-skill') {
             const index = Number(actionTarget.dataset.index);
             if (Number.isInteger(index)) {
@@ -3640,9 +3683,35 @@
             return;
         }
 
-        const hookFieldTarget = event.target.closest('[data-action="creator-hook-condition-field"], [data-action="creator-hook-action-field"], [data-action="creator-simple-effect-field"], [data-action="creator-hook-block-field"]');
+        const hookFieldTarget = event.target.closest('[data-action="creator-hook-condition-field"], [data-action="creator-hook-action-field"], [data-action="creator-simple-effect-field"], [data-action="creator-hook-block-field"], [data-action="creator-skill-variant-condition-field"]');
         if (hookFieldTarget) {
             const creatorUi = getCreatorUi();
+            const actionName = hookFieldTarget.dataset.action;
+
+            if (actionName === 'creator-skill-variant-condition-field') {
+                const skillIndex = Number(hookFieldTarget.dataset.skillIndex);
+                const condIndex = Number(hookFieldTarget.dataset.conditionIndex);
+                const variantField = hookFieldTarget.dataset.field || null;
+                const variantRawValue = hookFieldTarget.type === 'checkbox' ? hookFieldTarget.checked : (hookFieldTarget.value ?? '');
+                if (!Number.isInteger(skillIndex) || !Number.isInteger(condIndex) || !variantField) {
+                    return;
+                }
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[skillIndex];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    skill.variantConditions = Array.isArray(skill.variantConditions) ? skill.variantConditions : [];
+                    const condition = skill.variantConditions[condIndex];
+                    if (condition && creatorUi) {
+                        creatorUi.applyConditionFieldUpdate(condition, variantField, variantRawValue);
+                    }
+                });
+                rerenderCreatorAfterUnitEdit();
+                return;
+            }
+
             const scope = hookFieldTarget.dataset.creatorScope || null;
             const hookName = hookFieldTarget.dataset.hookName || null;
             const entryIndex = Number(hookFieldTarget.dataset.hookEntryIndex);
@@ -3654,7 +3723,6 @@
                 return;
             }
             const entityType = scope === 'status' ? 'status' : 'unit';
-            const actionName = hookFieldTarget.dataset.action;
             runCreatorHookEntryMutation(entityType, scope, hookFieldTarget.dataset, (entry) => {
                 if (actionName === 'creator-hook-block-field') {
                     if (field === 'oncePer') {
@@ -3761,11 +3829,13 @@
                     if (field === 'owned') {
                         if (passiveReq.checked) {
                             passive.requirements.owned = true;
+                            delete passive.requirements.resonance;
                         } else {
                             delete passive.requirements.owned;
                         }
                     } else if (field === 'resonanceSinType') {
                         passive.requirements.resonance = passive.requirements.resonance || {};
+                        delete passive.requirements.owned;
                         const sinType = normalizeStringInput(passiveReq.value, '');
                         if (sinType) {
                             passive.requirements.resonance.sinType = sinType;
@@ -3773,6 +3843,8 @@
                             delete passive.requirements.resonance.sinType;
                         }
                     } else if (field === 'resonanceMinimum') {
+                        passive.requirements.resonance = passive.requirements.resonance || {};
+                        delete passive.requirements.owned;
                         passive.requirements.resonance = passive.requirements.resonance || {};
                         const trimmed = String(passiveReq.value ?? '').trim();
                         if (trimmed) {

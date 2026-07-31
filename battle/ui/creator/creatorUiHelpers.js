@@ -1394,6 +1394,7 @@
         renderTargetSelect,
         renderStatusSelect,
         renderEffectFields,
+        renderConditionRow,
     };
 
     battleModules.creatorUi = CreatorUi;

@@ -376,8 +376,15 @@
             if (!requirements || typeof requirements !== 'object' || Array.isArray(requirements)) {
                 return true;
             }
+
             const resonance = requirements.resonance;
-            if (resonance && typeof resonance === 'object' && resonance.sinType) {
+            const hasResonanceGate = resonance
+                && typeof resonance === 'object'
+                && !Array.isArray(resonance)
+                && typeof resonance.sinType === 'string'
+                && resonance.sinType;
+
+            if (hasResonanceGate) {
                 const minimum = typeof resonance.minimum === 'number' && Number.isFinite(resonance.minimum)
                     ? resonance.minimum
                     : (typeof resonance.value === 'number' && Number.isFinite(resonance.value) ? resonance.value : 0);
@@ -392,7 +399,17 @@
                 if (current < minimum) {
                     return false;
                 }
+                return true;
             }
+
+            if (requirements.owned === true) {
+                return true;
+            }
+
+            if (requirements.owned === false) {
+                return false;
+            }
+
             return true;
         }
 

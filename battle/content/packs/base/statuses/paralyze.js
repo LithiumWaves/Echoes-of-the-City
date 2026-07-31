@@ -8,8 +8,8 @@
     }
 
     registerStatusDefinition({
-        id: 'paralyze',
-        label: 'Paralyze',
+        id: 'paralysis',
+        label: 'Paralysis',
         description: 'On coin roll, force the coin to roll tails and lose 1 Count. Expires at turn end.',
         countOnly: true,
         stackModel: {
@@ -28,7 +28,7 @@
                 {
                     type: 'adjustStatus',
                     target: 'self',
-                    statusId: 'paralyze',
+                    statusId: 'paralysis',
                     countDelta: -1,
                 },
             ],
@@ -36,9 +36,9 @@
                 {
                     type: 'consumeStatus',
                     target: 'self',
-                    statusId: 'paralyze',
+                    statusId: 'paralysis',
                 },
             ],
         },
-    });
+    }, { aliases: ['paralyze'] });
 })();

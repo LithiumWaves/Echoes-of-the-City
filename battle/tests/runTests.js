@@ -6572,6 +6572,233 @@ function runSuite() {
         assert(!marker || marker.count === 0, 'Expected gated passive not to fire without resonance.');
     });
 
+    test('Passive requirements: owned true always fires; owned false blocks', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        registerStatusDefinition({
+            id: 'test_owned_marker',
+            label: 'Owned Marker',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+        registerStatusDefinition({
+            id: 'test_disabled_marker',
+            label: 'Disabled Marker',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const battleDefinition = {
+            id: 'test-owned-passive',
+            name: 'Test Owned Passive',
+            playerUnits: [{
+                id: 'hero',
+                name: 'Hero',
+                level: 1,
+                maxHp: 100,
+                sp: 0,
+                speedRange: [5, 5],
+                defenseLevel: 0,
+                resistances: {
+                    physical: { slash: 1, pierce: 1, blunt: 1 },
+                    sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                },
+                sprites: { idle: '', skills: {} },
+                skills: [{
+                    id: 'basic',
+                    name: 'Basic',
+                    basePower: 1,
+                    coinPower: 0,
+                    coinCount: 1,
+                    damageType: 'slash',
+                    sinType: 'wrath',
+                }],
+                passives: [
+                    {
+                        id: 'owned-passive',
+                        name: 'Owned Passive',
+                        requirements: { owned: true },
+                        hooks: {
+                            battleStart: [{
+                                type: 'adjustStatus',
+                                target: 'self',
+                                statusId: 'test_owned_marker',
+                                countDelta: 1,
+                            }],
+                        },
+                    },
+                    {
+                        id: 'disabled-passive',
+                        name: 'Disabled Passive',
+                        requirements: { owned: false },
+                        hooks: {
+                            battleStart: [{
+                                type: 'adjustStatus',
+                                target: 'self',
+                                statusId: 'test_disabled_marker',
+                                countDelta: 1,
+                            }],
+                        },
+                    },
+                ],
+            }],
+            enemyUnits: [{
+                id: 'enemy',
+                name: 'Enemy',
+                level: 1,
+                maxHp: 100,
+                sp: 0,
+                speedRange: [1, 1],
+                defenseLevel: 0,
+                resistances: {
+                    physical: { slash: 1, pierce: 1, blunt: 1 },
+                    sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                },
+                sprites: { idle: '', skills: {} },
+                skills: [{
+                    id: 'enemy-skill',
+                    name: 'Enemy Skill',
+                    basePower: 1,
+                    coinPower: 0,
+                    coinCount: 1,
+                    skillType: 'guard',
+                    sinType: 'wrath',
+                }],
+                passives: [],
+            }],
+            rules: {
+                encounterType: 'focused',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp });
+        const hero = engine.getState().playerUnits[0];
+        const ownedMarker = hero.statuses.find((status) => status.id === 'test_owned_marker');
+        const disabledMarker = hero.statuses.find((status) => status.id === 'test_disabled_marker');
+        assert(ownedMarker?.count === 1, `Expected owned passive marker, got ${ownedMarker?.count}`);
+        assert(!disabledMarker || disabledMarker.count === 0, 'Expected owned:false passive not to fire.');
+    });
+
+    test('Status: paralysis registers LC id and paralyze alias; consumes on coin roll', () => {
+        const battleModules = createBattleEnvironment();
+        const registry = battleModules.registry;
+        const registerStatusDefinition = registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        assert(registry?.isSupportedStatusId?.('paralysis'), 'Expected paralysis status id.');
+        assert(registry?.isSupportedStatusId?.('paralyze'), 'Expected paralyze alias id.');
+        const definition = registry?.getStatusDefinition?.('paralysis');
+        assert(definition?.id === 'paralysis', `Expected canonical paralysis id, got ${definition?.id}`);
+
+        registerStatusDefinition({
+            id: 'paralysis',
+            label: 'Paralysis',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {
+                coinRoll: [
+                    {
+                        type: 'modifyContext',
+                        target: 'self',
+                        field: 'forceCoinZero',
+                        operation: 'set',
+                        value: true,
+                    },
+                    {
+                        type: 'adjustStatus',
+                        target: 'self',
+                        statusId: 'paralysis',
+                        countDelta: -1,
+                    },
+                ],
+                turnEnd: [
+                    {
+                        type: 'consumeStatus',
+                        target: 'self',
+                        statusId: 'paralysis',
+                    },
+                ],
+            },
+        }, { allowOverwrite: true, aliases: ['paralyze'] });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const attackSkill = {
+            id: 'paralysis-strike',
+            name: 'Paralysis Strike',
+            skillType: 'attack',
+            basePower: 4,
+            coinPower: 6,
+            coinCount: 2,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const pokeSkill = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const createUnit = (id, name, skills, speed) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 200,
+            sp: 0,
+            speedRange: [speed, speed],
+            defenseLevel: 0,
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            sprites: { idle: '', skills: {} },
+            skills,
+            passives: [],
+        });
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'paralysis-coin-roll',
+                name: 'Paralysis Coin Roll',
+                playerUnits: [createUnit('ally', 'Ally', [attackSkill], 5)],
+                enemyUnits: [createUnit('enemy', 'Enemy', [pokeSkill], 1)],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 1,
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+        });
+
+        assert(engine.addStatus('player', { id: 'paralysis', count: 2, potency: 0 }, 0), 'Expected to seed paralysis on attacker.');
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('paralysis-strike');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const ally = engine.getState().playerUnits[0];
+        const paralysis = ally.statuses.find((status) => status.id === 'paralysis');
+        assert(!paralysis || paralysis.count === 0, `Expected paralysis consumed on coin rolls, got ${paralysis?.count ?? 'removed'}`);
+    });
+
     test('Planner skills: skill slot variants resolve by conditions', () => {
         const battleModules = createBattleEnvironment();
         const resolvePlannerSkills = battleModules.plannerSkills?.resolvePlannerSkills;
