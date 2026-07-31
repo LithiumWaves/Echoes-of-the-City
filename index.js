@@ -93,6 +93,7 @@
         'battle/ui/roster/teamBuilderRenderer.js',
         'battle/ui/inspect/inspectState.js',
         'battle/ui/combat/lcCombatUi.js',
+        'battle/audio/combatSounds.js',
         'battle/core/damageFormula.js',
         'battle/core/plannerSkills.js',
         'battle/core/skillDeck.js',
@@ -109,6 +110,20 @@
         click: 'audio/battlewindow/buttonclick.wav',
         theme: 'audio/battlewindow/maintheme.wav',
         heavyPanel: 'audio/battlewindow/heavypanel.wav',
+    };
+    const COMBAT_AUDIO_PATHS = {
+        uiClick: 'audio/combat/Ui_Click.wav',
+        parryAtk: 'audio/combat/Parry_Atk.wav',
+        defenseEvasion: 'audio/combat/Defense_Evasion.wav',
+        defenseGuard: 'audio/combat/Defense_Guard.wav',
+        effectBleeding: 'audio/combat/Effect_Bleeding.wav',
+        effectBurn: 'audio/combat/Effect_Burn.wav',
+        blowStab: 'audio/combat/Blow_Stab.wav',
+        blowHori: 'audio/combat/Blow_Hori.wav',
+        blowVert: 'audio/combat/Blow_Vert.wav',
+        swordStab: 'audio/combat/Sword_Stab.wav',
+        swordHori: 'audio/combat/Sword_Hori.wav',
+        swordVert: 'audio/combat/Sword_Vert.wav',
     };
 
     function loadBooleanSetting(key, fallbackValue = false) {
@@ -2478,6 +2493,7 @@
                 battleDefinition,
                 enableDebugTools: Boolean(state.battleDebugToolsEnabled),
                 storageKeyPrefix: `echoes-of-the-city:battle:${battleDefinition.id}`,
+                playCombatSound,
             });
         }
 
@@ -4314,6 +4330,33 @@
         }
     }
 
+    function playCombatSound(soundId) {
+        if (!soundId || !state.audioUnlocked) {
+            return;
+        }
+
+        const volume = 0.88;
+        if (playBufferedAudio(soundId, volume)) {
+            return;
+        }
+
+        const relativePath = COMBAT_AUDIO_PATHS[soundId];
+        if (!relativePath) {
+            return;
+        }
+
+        try {
+            const audioInstance = new Audio(resolveExtensionUrl(relativePath));
+            audioInstance.volume = volume;
+            const playPromise = audioInstance.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+                playPromise.catch(() => {});
+            }
+        } catch (error) {
+            console.debug(`${EXTENSION_ID}: combat audio playback skipped.`, error);
+        }
+    }
+
     function playSound(name, options = {}) {
         const { requireAudioEnabled = false } = options;
 
@@ -4771,10 +4814,14 @@
 
     function preloadAudio() {
         themeAudio.load();
-        void Promise.all([
+        const bufferLoads = [
             loadAudioBuffer('hover', resolveExtensionUrl(ASSET_RELATIVE_PATHS.hover)),
             loadAudioBuffer('click', resolveExtensionUrl(ASSET_RELATIVE_PATHS.click)),
-        ]);
+        ];
+        Object.entries(COMBAT_AUDIO_PATHS).forEach(([soundId, relativePath]) => {
+            bufferLoads.push(loadAudioBuffer(soundId, resolveExtensionUrl(relativePath)));
+        });
+        void Promise.all(bufferLoads);
     }
 
     function createBattleInterface() {

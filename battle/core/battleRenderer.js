@@ -764,8 +764,15 @@
 
         function shouldUseLcClashPlayback(playback) {
             return Boolean(
-                lcCombatUi?.shouldUseLcClashPlayback?.(playback)
-                && lcCombatUi?.renderLcClashStage,
+                lcCombatUi?.shouldUseLcEngagementPlayback?.(playback)
+                && lcCombatUi?.renderLcEngagementBar,
+            );
+        }
+
+        function shouldUseLcEngagementPlayback(playback) {
+            return Boolean(
+                lcCombatUi?.shouldUseLcEngagementPlayback?.(playback)
+                && lcCombatUi?.renderLcEngagementBar,
             );
         }
 
@@ -777,12 +784,12 @@
             }
 
             const entry = playback.entry;
-            const isLcClash = shouldUseLcClashPlayback(playback);
+            const isLcEngagement = shouldUseLcEngagementPlayback(playback);
 
-            if (isLcClash) {
+            if (isLcEngagement) {
                 return `
-                    <div class="echoes-battle-panel__playback-overlay is-lc-clash">
-                        ${lcCombatUi.renderLcClashStage(resolvedBattle, uiState, {
+                    <div class="echoes-battle-panel__playback-overlay is-lc-engagement is-lc-clash">
+                        ${lcCombatUi.renderLcEngagementBar(resolvedBattle, uiState, {
                             escapeHtml: (value) => String(value),
                             escapeAttribute,
                             getSlotById,
@@ -850,7 +857,7 @@
         function renderResolutionCard(battle, activePlayerSlot, uiState) {
             const playback = uiState?.playback;
             if (playback?.isRunning && playback.entry) {
-                if (shouldUseLcClashPlayback(playback)) {
+                if (shouldUseLcEngagementPlayback(playback)) {
                     return '';
                 }
                 const entry = playback.entry;

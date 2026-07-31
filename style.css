@@ -3685,11 +3685,13 @@
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
 }
 
-.echoes-battle-panel__playback-overlay.is-lc-clash {
+.echoes-battle-panel__playback-overlay.is-lc-clash,
+.echoes-battle-panel__playback-overlay.is-lc-engagement {
     background: transparent;
     pointer-events: none;
 }
 
+.echoes-lc-engagement-bar,
 .echoes-lc-clash-bar {
     position: absolute;
     top: 0;
@@ -3711,6 +3713,7 @@
     pointer-events: none;
 }
 
+.echoes-lc-engagement-bar.is-round-reveal .echoes-lc-engagement-bar__power,
 .echoes-lc-clash-bar.is-round-reveal .echoes-lc-clash-bar__power {
     animation: echoes-lc-clash-power-pulse 420ms ease-out;
 }

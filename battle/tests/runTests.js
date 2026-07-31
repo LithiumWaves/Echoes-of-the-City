@@ -7478,7 +7478,8 @@ function runSuite() {
         };
 
         const clashHtml = lcCombatUi.renderLcClashStage(battle, uiState, deps);
-        assert(clashHtml.includes('echoes-lc-clash-bar'), 'Expected LC clash bar.');
+        assert(clashHtml.includes('echoes-lc-engagement-bar'), 'Expected LC engagement bar.');
+        assert(clashHtml.includes('echoes-lc-clash-bar'), 'Expected LC clash bar alias.');
         assert(clashHtml.includes('echoes-lc-clash-bar__portrait'), 'Expected clash portraits.');
         assert(clashHtml.includes('echoes-lc-clash-bar__title'), 'Expected clash title.');
         assert(clashHtml.includes('CLASH'), 'Expected CLASH label.');
@@ -7487,9 +7488,80 @@ function runSuite() {
         assert(clashHtml.includes('echoes-battle-panel__playback-coin'), 'Expected coin track in clash bar.');
         assert(clashHtml.includes('resolved:assets/enemy-splash.png'), 'Expected portrait URL resolution.');
 
-        assert(typeof lcCombatUi.shouldUseLcClashPlayback === 'function', 'Expected shouldUseLcClashPlayback export.');
-        assert(lcCombatUi.shouldUseLcClashPlayback(uiState.playback), 'Expected clash playback to use LC UI.');
-        assert(!lcCombatUi.shouldUseLcClashPlayback({ isRunning: true, entry: { engagementType: 'attack' } }), 'Expected non-clash to skip LC UI.');
+        assert(typeof lcCombatUi.shouldUseLcEngagementPlayback === 'function', 'Expected shouldUseLcEngagementPlayback export.');
+        assert(lcCombatUi.shouldUseLcEngagementPlayback(uiState.playback), 'Expected clash playback to use LC UI.');
+        assert(lcCombatUi.shouldUseLcClashPlayback(uiState.playback), 'Expected clash playback alias helper.');
+        assert(!lcCombatUi.shouldUseLcEngagementPlayback({ isRunning: true, entry: null }), 'Expected missing entry to skip LC UI.');
+
+        const oneSidedEntry = {
+            ...entry,
+            engagementType: 'one-sided',
+            leftDisplayPower: 22,
+            rightDisplayPower: 0,
+            rounds: [],
+            hits: [{ damage: 8, finalPower: 22 }],
+        };
+        const oneSidedHtml = lcCombatUi.renderLcEngagementBar(battle, {
+            playback: {
+                ...uiState.playback,
+                entry: oneSidedEntry,
+                phase: 'attack-hit',
+                hitIndex: 0,
+            },
+        }, deps);
+        assert(oneSidedHtml.includes('ATTACK'), 'Expected ATTACK label for one-sided playback.');
+        assert(lcCombatUi.shouldUseLcEngagementPlayback({ isRunning: true, entry: oneSidedEntry }), 'Expected one-sided playback to use LC UI.');
+    });
+
+    test('Combat sounds: event mapping and attack hit picks', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = {};
+        require(path.resolve(battleRoot, 'audio/combatSounds.js'));
+
+        const combatSounds = global.window.EchoesOfTheCityCombatSounds;
+        assert(combatSounds?.getEngagementBarTitle({ engagementType: 'clash' }) === 'CLASH', 'Expected clash title.');
+        assert(combatSounds?.getEngagementBarTitle({ engagementType: 'one-sided' }) === 'ATTACK', 'Expected attack title.');
+
+        const bluntSounds = new Set(['blowStab', 'blowHori', 'blowVert']);
+        const slashSounds = new Set(['swordStab', 'swordHori', 'swordVert']);
+        for (let index = 0; index < 12; index += 1) {
+            const bluntPick = combatSounds.pickAttackHitSound('blunt');
+            assert(bluntSounds.has(bluntPick), `Expected blunt attack sound, got ${bluntPick}.`);
+            const slashPick = combatSounds.pickAttackHitSound('slash');
+            assert(slashSounds.has(slashPick), `Expected slash attack sound, got ${slashPick}.`);
+            const piercePick = combatSounds.pickAttackHitSound('pierce');
+            assert(slashSounds.has(piercePick), `Expected pierce attack sound, got ${piercePick}.`);
+        }
+
+        assert(
+            combatSounds.getSoundForBattleEvent({
+                type: 'status_triggered',
+                data: { statusId: 'evade', evadePower: 12 },
+            }) === 'defenseEvasion',
+            'Expected evade sound.',
+        );
+        assert(
+            combatSounds.getSoundForBattleEvent({
+                type: 'status_triggered',
+                data: { statusId: 'bleed', damage: 3 },
+            }) === 'effectBleeding',
+            'Expected bleed sound.',
+        );
+        assert(
+            combatSounds.getSoundForBattleEvent({
+                type: 'status_triggered',
+                data: { statusId: 'burn', damage: 2 },
+            }) === 'effectBurn',
+            'Expected burn sound.',
+        );
+        assert(
+            combatSounds.getSoundForBattleEvent({
+                type: 'status_triggered',
+                data: { statusId: 'bleed', damage: 0 },
+            }) === null,
+            'Expected no bleed sound when damage is zero.',
+        );
     });
 
     process.stdout.write(`\nResult: ${passed} passed, ${failed} failed\n`);

@@ -13,7 +13,9 @@
             engineFactory = battleModules.createBattleEngine,
             rendererFactory = battleModules.createBattleRenderer,
             validateAndNormalizeBattleDefinition = battleModules.validateAndNormalizeBattleDefinition,
+            playCombatSound = null,
         } = options;
+        const combatSounds = battleModules.combatSounds || window.EchoesOfTheCityCombatSounds || null;
         const PLAYBACK_TIMINGS = {
             approach: 420,
             skillIntro: 480,
@@ -96,6 +98,67 @@
             return JSON.parse(JSON.stringify(value));
         }
 
+        function emitCombatSound(soundId) {
+            if (!soundId || typeof playCombatSound !== 'function') {
+                return;
+            }
+            playCombatSound(soundId);
+        }
+
+        function processCombatEvents(battle, fromIndex = 0) {
+            if (!combatSounds?.getSoundForBattleEvent || typeof playCombatSound !== 'function') {
+                return;
+            }
+            const events = Array.isArray(battle?.events) ? battle.events : [];
+            events.slice(fromIndex).forEach((event) => {
+                const soundId = combatSounds.getSoundForBattleEvent(event);
+                if (soundId) {
+                    emitCombatSound(soundId);
+                }
+            });
+        }
+
+        function getAttackingSideForEntry(entry) {
+            if (!entry) {
+                return null;
+            }
+            if (entry.engagementType === 'clash') {
+                return entry.winnerSide;
+            }
+            return entry.leftSkillId ? 'left' : 'right';
+        }
+
+        function resolveAttackingSkillDamageType(battle, entry) {
+            const attackingSide = getAttackingSideForEntry(entry);
+            if (!attackingSide) {
+                return null;
+            }
+            const skillId = attackingSide === 'left' ? entry.leftSkillId : entry.rightSkillId;
+            const slotId = attackingSide === 'left' ? entry.leftSlotId : entry.rightSlotId;
+            const state = battle || engine.getState();
+            const slot = [...(state.playerSlots || []), ...(state.enemySlots || [])].find((candidate) => candidate.id === slotId);
+            if (!slot) {
+                return null;
+            }
+            const unit = [...(state.playerUnits || []), ...(state.enemyUnits || [])].find((candidate) => candidate.id === slot.unitId);
+            const skill = unit?.skills?.find((candidate) => candidate.id === skillId);
+            return skill?.damageType || null;
+        }
+
+        function playAttackHitSound(battle, entry) {
+            if (!combatSounds?.pickAttackHitSound) {
+                return;
+            }
+            const soundId = combatSounds.pickAttackHitSound(resolveAttackingSkillDamageType(battle, entry));
+            if (soundId) {
+                emitCombatSound(soundId);
+            }
+        }
+
+        function getSkillType(skill) {
+            return skill?.skillType || skill?.type || 'attack';
+        }
+
         function cancelPlayback() {
             playbackToken += 1;
             playbackState = createIdlePlaybackState();
@@ -163,6 +226,14 @@
                         return false;
                     }
 
+                    if (entry.engagementType !== 'clash') {
+                        playAttackHitSound(previewBattle, entry);
+                    }
+
+                    if (entry.engagementType === 'clash' && round.result === 'tie') {
+                        emitCombatSound(combatSounds?.COMBAT_SOUND_IDS?.parryAtk || 'parryAtk');
+                    }
+
                     if (round.result === 'left-win' || round.result === 'left-speed-break') {
                         rightBroken += 1;
                         updatePlaybackState({
@@ -170,6 +241,7 @@
                             roundIndex,
                             rightBroken,
                         });
+                        emitCombatSound(combatSounds?.COMBAT_SOUND_IDS?.parryAtk || 'parryAtk');
                         if (!(await waitForPlayback(PLAYBACK_TIMINGS.coinBreak, token))) {
                             return false;
                         }
@@ -180,6 +252,7 @@
                             roundIndex,
                             leftBroken,
                         });
+                        emitCombatSound(combatSounds?.COMBAT_SOUND_IDS?.parryAtk || 'parryAtk');
                         if (!(await waitForPlayback(PLAYBACK_TIMINGS.coinBreak, token))) {
                             return false;
                         }
@@ -195,6 +268,12 @@
                     leftBroken,
                     rightBroken,
                 });
+                if (
+                    entry.engagementType !== 'clash'
+                    && !(Array.isArray(entry.rounds) && entry.rounds.length)
+                ) {
+                    playAttackHitSound(previewBattle, entry);
+                }
                 if (!(await waitForPlayback(PLAYBACK_TIMINGS.attackHit, token))) {
                     return false;
                 }
@@ -580,14 +659,39 @@
             }
 
             if (action === 'toggle-defense-mode' && slotId) {
-                engine.toggleDefenseMode(slotId);
+                const didToggle = engine.toggleDefenseMode(slotId);
+                if (didToggle) {
+                    const stateAfter = engine.getState();
+                    const slotAfter = stateAfter.playerSlots?.find((slot) => slot.id === slotId);
+                    if (slotAfter?.defenseMode) {
+                        const unit = stateAfter.playerUnits?.find((candidate) => candidate.id === slotAfter.unitId);
+                        const selectedSkill = slotAfter.selectedSkillId
+                            ? unit?.skills?.find((skill) => skill.id === slotAfter.selectedSkillId)
+                            : null;
+                        if (getSkillType(selectedSkill) === 'guard') {
+                            emitCombatSound(combatSounds?.COMBAT_SOUND_IDS?.defenseGuard || 'defenseGuard');
+                        }
+                    }
+                }
                 render();
                 return;
             }
 
             if (action === 'select-skill' && skillId) {
                 const skillSlotId = slotId || engine.getState().activePlayerSlotId;
-                engine.selectSkill(skillId, skillSlotId);
+                const stateBefore = engine.getState();
+                const slotBefore = stateBefore.playerSlots?.find((slot) => slot.id === skillSlotId);
+                const unitBefore = stateBefore.playerUnits?.find((candidate) => candidate.id === slotBefore?.unitId);
+                const skillBefore = unitBefore?.skills?.find((skill) => skill.id === skillId);
+                const didSelect = engine.selectSkill(skillId, skillSlotId);
+                if (didSelect) {
+                    const skillType = getSkillType(skillBefore);
+                    if (skillType === 'guard') {
+                        emitCombatSound(combatSounds?.COMBAT_SOUND_IDS?.defenseGuard || 'defenseGuard');
+                    } else if (skillType === 'attack') {
+                        emitCombatSound(combatSounds?.COMBAT_SOUND_IDS?.uiClick || 'uiClick');
+                    }
+                }
                 render();
                 return;
             }
@@ -606,10 +710,13 @@
 
             if (action === 'resolve-turn') {
                 const previewBattle = cloneBattleState(engine.getState());
+                const eventStart = previewBattle.events?.length || 0;
                 const didResolve = engine.resolveTurn();
                 if (!didResolve) {
                     const reason = engine.getResolveBlockReason?.() || 'Assign all skills before resolving.';
                     debugPatchMessage = reason;
+                } else {
+                    processCombatEvents(engine.getState(), eventStart);
                 }
                 render();
                 if (didResolve) {
@@ -619,7 +726,9 @@
             }
 
             if (action === 'next-turn') {
+                const eventStart = engine.getState().events?.length || 0;
                 engine.advanceTurn();
+                processCombatEvents(engine.getState(), eventStart);
                 render();
                 return;
             }

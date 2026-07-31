@@ -327,13 +327,14 @@
     }
 
     function shouldUseLcClashPlayback(playback) {
-        return Boolean(
-            playback?.isRunning
-            && playback.entry?.engagementType === 'clash',
-        );
+        return shouldUseLcEngagementPlayback(playback);
     }
 
-    function getClashPlaybackSubtitle(playback) {
+    function shouldUseLcEngagementPlayback(playback) {
+        return Boolean(playback?.isRunning && playback.entry);
+    }
+
+    function getEngagementPlaybackSubtitle(playback, entry) {
         if (playback.phase === 'approach') {
             return 'Closing in';
         }
@@ -341,7 +342,10 @@
             return 'Skill reveal';
         }
         if (playback.phase === 'round-reveal') {
-            return `Clash ${playback.roundIndex + 1}`;
+            if (entry?.engagementType === 'clash') {
+                return `Clash ${playback.roundIndex + 1}`;
+            }
+            return `Defense ${playback.roundIndex + 1}`;
         }
         if (playback.phase === 'coin-break') {
             return 'Coin broken';
@@ -352,15 +356,13 @@
         return `Resolve ${playback.entryIndex + 1} / ${playback.totalEntries}`;
     }
 
-    function renderLcClashStage(battle, uiState, deps) {
+    function renderLcEngagementBar(battle, uiState, deps) {
         const playback = uiState?.playback;
         if (!playback?.isRunning || !playback.entry) {
             return '';
         }
         const entry = playback.entry;
-        if (entry.engagementType !== 'clash') {
-            return '';
-        }
+        const combatSoundsModule = battleModules.combatSounds || window.EchoesOfTheCityCombatSounds || null;
 
         const {
             escapeHtml,
@@ -393,34 +395,41 @@
         const rightPortraitStyle = rightPortraitUrl
             ? `background-image:url('${escapeAttribute(rightPortraitUrl)}');`
             : '';
-        const subtitle = getClashPlaybackSubtitle(playback);
+        const subtitle = getEngagementPlaybackSubtitle(playback, entry);
         const showSkillNames = playback.phase === 'skill-intro';
         const roundRevealClass = playback.phase === 'round-reveal' ? ' is-round-reveal' : '';
+        const barTitle = combatSoundsModule?.getEngagementBarTitle
+            ? combatSoundsModule.getEngagementBarTitle(entry)
+            : (entry.engagementType === 'clash' ? 'CLASH' : entry.engagementType === 'one-sided' ? 'ATTACK' : 'DEFENSE');
 
         return `
-            <div class="echoes-lc-clash-bar${roundRevealClass}">
-                <div class="echoes-lc-clash-bar__side echoes-lc-clash-bar__side--left">
-                    <div class="echoes-lc-clash-bar__portrait" style="${leftPortraitStyle}" title="${escapeAttribute(leftUnit?.name || '')}"></div>
-                    <strong class="echoes-lc-clash-bar__power">${leftPower}</strong>
-                    <div class="echoes-lc-clash-bar__coins echoes-battle-panel__playback-coins">
+            <div class="echoes-lc-engagement-bar echoes-lc-clash-bar${roundRevealClass}">
+                <div class="echoes-lc-engagement-bar__side echoes-lc-engagement-bar__side--left">
+                    <div class="echoes-lc-engagement-bar__portrait echoes-lc-clash-bar__portrait" style="${leftPortraitStyle}" title="${escapeAttribute(leftUnit?.name || '')}"></div>
+                    <strong class="echoes-lc-engagement-bar__power echoes-lc-clash-bar__power">${leftPower}</strong>
+                    <div class="echoes-lc-engagement-bar__coins echoes-lc-clash-bar__coins echoes-battle-panel__playback-coins">
                         ${renderPlaybackCoinTrack(leftSkill, 'left', playback, entry)}
                     </div>
-                    ${showSkillNames ? `<span class="echoes-lc-clash-bar__skill">${escapeHtml(entry.leftSkillName || leftSkill?.name || '')}</span>` : ''}
+                    ${showSkillNames ? `<span class="echoes-lc-engagement-bar__skill echoes-lc-clash-bar__skill">${escapeHtml(entry.leftSkillName || leftSkill?.name || '')}</span>` : ''}
                 </div>
-                <div class="echoes-lc-clash-bar__center">
-                    <span class="echoes-lc-clash-bar__title">CLASH</span>
-                    <small class="echoes-lc-clash-bar__subtitle">${escapeHtml(subtitle)}</small>
+                <div class="echoes-lc-engagement-bar__center echoes-lc-clash-bar__center">
+                    <span class="echoes-lc-engagement-bar__title echoes-lc-clash-bar__title">${escapeHtml(barTitle)}</span>
+                    <small class="echoes-lc-engagement-bar__subtitle echoes-lc-clash-bar__subtitle">${escapeHtml(subtitle)}</small>
                 </div>
-                <div class="echoes-lc-clash-bar__side echoes-lc-clash-bar__side--right">
-                    <div class="echoes-lc-clash-bar__portrait" style="${rightPortraitStyle}" title="${escapeAttribute(rightUnit?.name || '')}"></div>
-                    <strong class="echoes-lc-clash-bar__power">${rightPower}</strong>
-                    <div class="echoes-lc-clash-bar__coins echoes-battle-panel__playback-coins">
+                <div class="echoes-lc-engagement-bar__side echoes-lc-engagement-bar__side--right">
+                    <div class="echoes-lc-engagement-bar__portrait echoes-lc-clash-bar__portrait" style="${rightPortraitStyle}" title="${escapeAttribute(rightUnit?.name || '')}"></div>
+                    <strong class="echoes-lc-engagement-bar__power echoes-lc-clash-bar__power">${rightPower}</strong>
+                    <div class="echoes-lc-engagement-bar__coins echoes-lc-clash-bar__coins echoes-battle-panel__playback-coins">
                         ${renderPlaybackCoinTrack(rightSkill, 'right', playback, entry)}
                     </div>
-                    ${showSkillNames ? `<span class="echoes-lc-clash-bar__skill">${escapeHtml(entry.rightSkillName || rightSkill?.name || '')}</span>` : ''}
+                    ${showSkillNames ? `<span class="echoes-lc-engagement-bar__skill echoes-lc-clash-bar__skill">${escapeHtml(entry.rightSkillName || rightSkill?.name || '')}</span>` : ''}
                 </div>
             </div>
         `;
+    }
+
+    function renderLcClashStage(battle, uiState, deps) {
+        return renderLcEngagementBar(battle, uiState, deps);
     }
 
     const lcCombatUi = {
@@ -432,8 +441,10 @@
         sortDashboardSlots,
         renderLcSinResourceRail,
         renderLcDashboard,
+        renderLcEngagementBar,
         renderLcClashStage,
         shouldUseLcClashPlayback,
+        shouldUseLcEngagementPlayback,
     };
 
     battleModules.lcCombatUi = lcCombatUi;
