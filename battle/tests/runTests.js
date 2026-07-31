@@ -75,6 +75,7 @@ function createBattleEnvironment(options = {}) {
     require(path.resolve(battleRoot, 'effects', 'skillEffectRunner.js'));
     require(path.resolve(battleRoot, 'core', 'damageFormula.js'));
     require(path.resolve(battleRoot, 'core', 'plannerSkills.js'));
+    require(path.resolve(battleRoot, 'core', 'sinHand.js'));
     require(path.resolve(battleRoot, 'core', 'battleEngine.js'));
 
     return global.window.EchoesOfTheCityBattleModules;
@@ -6797,6 +6798,111 @@ function runSuite() {
         const ally = engine.getState().playerUnits[0];
         const paralysis = ally.statuses.find((status) => status.id === 'paralysis');
         assert(!paralysis || paralysis.count === 0, `Expected paralysis consumed on coin rolls, got ${paralysis?.count ?? 'removed'}`);
+    });
+
+    test('Sin hand: draw fills hand and assignment gates skill offers', () => {
+        const battleModules = createBattleEnvironment();
+        const sinHand = battleModules.sinHand;
+        assert(typeof sinHand?.drawSinHand === 'function', 'Expected sinHand module.');
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const battleDefinition = {
+            id: 'sin-hand-test',
+            name: 'Sin Hand Test',
+            playerUnits: [{
+                id: 'hero',
+                name: 'Hero',
+                level: 1,
+                maxHp: 100,
+                sp: 0,
+                speedRange: [5, 5],
+                defenseLevel: 0,
+                resistances: {
+                    physical: { slash: 1, pierce: 1, blunt: 1 },
+                    sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                },
+                sprites: { idle: '', skills: {} },
+                skills: [
+                    { id: 'wrath-1', name: 'Wrath 1', skillSlot: 'slot-1', basePower: 3, coinPower: 1, coinCount: 1, damageType: 'slash', sinType: 'wrath' },
+                    { id: 'sloth-2', name: 'Sloth 2', skillSlot: 'slot-2', basePower: 5, coinPower: 2, coinCount: 2, damageType: 'slash', sinType: 'sloth' },
+                    { id: 'guard', name: 'Guard', skillType: 'guard', basePower: 4, coinPower: 0, coinCount: 1, damageType: 'slash', sinType: 'pride' },
+                ],
+                passives: [],
+            }],
+            enemyUnits: [{
+                id: 'enemy',
+                name: 'Enemy',
+                level: 1,
+                maxHp: 100,
+                sp: 0,
+                speedRange: [1, 1],
+                defenseLevel: 0,
+                resistances: {
+                    physical: { slash: 1, pierce: 1, blunt: 1 },
+                    sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                },
+                sprites: { idle: '', skills: {} },
+                skills: [{ id: 'poke', name: 'Poke', basePower: 1, coinPower: 0, coinCount: 1, damageType: 'slash', sinType: 'wrath' }],
+                passives: [],
+            }],
+            rules: { encounterType: 'focused', sinDrawCount: 8, enemyAiProfile: { skill: 'first', target: 'firstLiving' } },
+        };
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp });
+        engine.advanceTurn();
+        const state = engine.getState();
+        const handTotal = sinHand.SIN_TYPES.reduce((sum, sinType) => sum + (state.runtimeState?.sinHandBySide?.player?.[sinType] || 0), 0);
+        assert(handTotal > 0, `Expected sin hand draw, got ${handTotal}`);
+
+        const playerSlot = state.playerSlots[0];
+        const hand = state.runtimeState?.sinHandBySide?.player || {};
+        const firstSin = sinHand.SIN_TYPES.find((sinType) => (hand[sinType] || 0) > 0);
+        assert(firstSin, 'Expected at least one sin in hand.');
+        assert(engine.assignSinToSlot(playerSlot.id, firstSin), `Expected ${firstSin} assignment.`);
+        const afterAssign = engine.getState().playerSlots[0];
+        assert(afterAssign.skillOffer?.top, 'Expected top skill offer after sin assignment.');
+        assert(engine.selectSkill(afterAssign.skillOffer.top, playerSlot.id), 'Expected valid offer selection.');
+        assert(!engine.selectSkill('guard', playerSlot.id), 'Expected guard blocked until defense mode.');
+
+        assert(engine.toggleDefenseMode(playerSlot.id), 'Expected defense toggle.');
+        const defenseSlot = engine.getState().playerSlots[0];
+        assert(defenseSlot.skillOffer?.bottom === 'guard', `Expected guard on bottom, got ${defenseSlot.skillOffer?.bottom}`);
+        assert(engine.selectSkill('guard', playerSlot.id), 'Expected guard selection in defense mode.');
+    });
+
+    test('Sin hand: seven player slots initialize with sin state', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const createUnit = (index) => ({
+            id: `unit-${index}`,
+            name: `Unit ${index}`,
+            level: 1,
+            maxHp: 50,
+            sp: 0,
+            speedRange: [3, 3],
+            defenseLevel: 0,
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            sprites: { idle: '', skills: {} },
+            skills: [{ id: `skill-${index}`, name: 'Skill', basePower: 1, coinPower: 0, coinCount: 1, damageType: 'slash', sinType: 'wrath' }],
+            passives: [],
+        });
+        const battleDefinition = {
+            id: 'seven-slot-test',
+            name: 'Seven Slot Test',
+            playerUnits: Array.from({ length: 7 }, (_, index) => createUnit(index + 1)),
+            enemyUnits: [createUnit(99)],
+            rules: { encounterType: 'focused', enemyAiProfile: { skill: 'first', target: 'firstLiving' } },
+        };
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp });
+        const state = engine.getState();
+        assert(state.playerSlots.length === 7, `Expected 7 player slots, got ${state.playerSlots.length}`);
+        state.playerSlots.forEach((slot) => {
+            assert(Array.isArray(slot.assignedSins), 'Expected assignedSins array.');
+            assert(slot.skillOffer && typeof slot.skillOffer === 'object', 'Expected skillOffer object.');
+        });
     });
 
     test('Planner skills: skill slot variants resolve by conditions', () => {

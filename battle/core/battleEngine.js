@@ -204,6 +204,10 @@
             ammoState: null,
             attackContext: null,
             onUseGranted: false,
+            assignedSins: [],
+            defenseMode: false,
+            skillOffer: { top: null, bottom: null },
+            selectedOfferSlot: null,
         };
     }
 
@@ -226,6 +230,10 @@
         const enemyAi = typeof battleModules.createEnemyAi === 'function'
             ? battleModules.createEnemyAi(battleDefinition?.rules?.enemyAiProfile || battleDefinition?.enemyAiProfile || null)
             : null;
+        const sinHand = battleModules.sinHand || window.EchoesOfTheCitySinHand || null;
+        const battleRules = battleDefinition?.rules && typeof battleDefinition.rules === 'object'
+            ? battleDefinition.rules
+            : {};
         let battle = createBattleState();
 
         function safeInvoke(fn, payload) {
@@ -4030,7 +4038,12 @@
                 lastResolution: null,
                 clashPresentation: null,
                 resolutionHistory: [],
+                rules: { ...battleRules },
             };
+
+            if (sinHand?.initSinState) {
+                sinHand.initSinState(nextBattle, battleRules);
+            }
 
             nextBattle.engineActions = {
                 endBattle(winner, options = {}) {
@@ -4363,6 +4376,11 @@
             processSanityModelAtTurnStart(targetBattle);
             invokeScriptedEvents(targetBattle, 'turnStart', { turn: targetBattle.turn });
 
+            if (sinHand?.drawSinHand) {
+                sinHand.drawSinHand(targetBattle, 'player', { rules: battleRules });
+                sinHand.drawSinHand(targetBattle, 'enemy', { rules: battleRules });
+            }
+
             getAllSlots(targetBattle).forEach((slot) => {
                 const unit = getUnitById(targetBattle, slot.unitId);
                 slot.resolved = false;
@@ -4373,6 +4391,14 @@
                 slot.ammoState = null;
                 slot.attackContext = null;
                 slot.onUseGranted = false;
+                if (sinHand?.resetSlotSinState) {
+                    sinHand.resetSlotSinState(slot);
+                } else {
+                    slot.assignedSins = [];
+                    slot.defenseMode = false;
+                    slot.skillOffer = { top: null, bottom: null };
+                    slot.selectedOfferSlot = null;
+                }
                 slot.defenseState = {
                     activated: false,
                     used: false,
@@ -4398,13 +4424,23 @@
                 });
             });
 
+            if (sinHand?.autoAssignEnemySins) {
+                sinHand.autoAssignEnemySins(targetBattle, 'enemy');
+            }
+            if (sinHand?.refreshAllSkillOffers) {
+                sinHand.refreshAllSkillOffers(targetBattle, 'player');
+                sinHand.refreshAllSkillOffers(targetBattle, 'enemy');
+            }
+
             targetBattle.enemySlots.forEach((slot) => {
                 if (!isSlotActionable(targetBattle, slot)) {
                     return;
                 }
 
                 const enemyUnit = getUnitById(targetBattle, slot.unitId);
-                slot.selectedSkillId = pickEnemySkillId(targetBattle, slot);
+                slot.selectedSkillId = sinHand?.pickSkillFromOffer
+                    ? (sinHand.pickSkillFromOffer(slot) || pickEnemySkillId(targetBattle, slot))
+                    : pickEnemySkillId(targetBattle, slot);
                 slot.intentSkillId = slot.selectedSkillId;
                 const skill = getSkillById(enemyUnit, slot.selectedSkillId);
                 slot.intentTargetSlotId = getAutoTargetSlotId(targetBattle, slot, skill) || pickEnemyTargetSlotId(targetBattle, slot);
@@ -4475,8 +4511,18 @@
             if (!skill) {
                 return false;
             }
+            if (sinHand?.isSkillInOffer) {
+                const assignedCount = Array.isArray(slot.assignedSins) ? slot.assignedSins.length : 0;
+                const hasActiveOffers = slot.skillOffer?.top || slot.skillOffer?.bottom;
+                if ((assignedCount > 0 || hasActiveOffers) && !sinHand.isSkillInOffer(slot, skillId)) {
+                    return false;
+                }
+            }
 
             slot.selectedSkillId = skillId;
+            if (sinHand?.getOfferSlotForSkill) {
+                slot.selectedOfferSlot = sinHand.getOfferSlotForSkill(slot, skillId);
+            }
             slot.manualTargetLock = false;
             slot.targetSlotId = skill.targeting === 'highestMaxPower'
                 ? getAutoTargetSlotId(battle, slot, skill)
@@ -5233,11 +5279,65 @@
             return { ok: true };
         }
 
+        function assignSinToSlot(slotId, sinType) {
+            if (battle.phase !== 'select' || battle.winner || !sinHand?.assignSinToSlot) {
+                return false;
+            }
+            const ok = sinHand.assignSinToSlot(battle, slotId, sinType);
+            if (!ok) {
+                return false;
+            }
+            const slot = getSlotById(battle, slotId);
+            if (slot?.side === 'player') {
+                battle.activePlayerSlotId = slot.id;
+            }
+            return true;
+        }
+
+        function removeSinFromSlot(slotId, sinIndex) {
+            if (battle.phase !== 'select' || battle.winner || !sinHand?.removeSinFromSlot) {
+                return false;
+            }
+            return sinHand.removeSinFromSlot(battle, slotId, sinIndex);
+        }
+
+        function clearColumnSins(slotId) {
+            if (battle.phase !== 'select' || battle.winner || !sinHand?.clearSlotSins) {
+                return false;
+            }
+            return sinHand.clearSlotSins(battle, slotId);
+        }
+
+        function toggleDefenseMode(slotId) {
+            if (battle.phase !== 'select' || battle.winner || !slotId) {
+                return false;
+            }
+            const slot = getSlotById(battle, slotId);
+            if (!slot || slot.side !== 'player' || !isSlotActionable(battle, slot)) {
+                return false;
+            }
+            slot.defenseMode = !slot.defenseMode;
+            const unit = getUnitById(battle, slot.unitId);
+            if (sinHand?.refreshSlotSkillOffer) {
+                sinHand.refreshSlotSkillOffer(battle, slot, unit);
+            }
+            if (slot.selectedSkillId && sinHand?.isSkillInOffer && !sinHand.isSkillInOffer(slot, slot.selectedSkillId)) {
+                slot.selectedSkillId = null;
+                slot.selectedOfferSlot = null;
+            }
+            battle.activePlayerSlotId = slot.id;
+            return true;
+        }
+
         return {
             getState,
             selectSlot,
             selectSkill,
             selectTarget,
+            assignSinToSlot,
+            removeSinFromSlot,
+            clearColumnSins,
+            toggleDefenseMode,
             resolveTurn,
             advanceTurn,
             reset,

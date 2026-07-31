@@ -579,8 +579,32 @@
                 return;
             }
 
+            if (action === 'assign-sin') {
+                const sinType = actionTarget.dataset.sinType;
+                const assignSlotId = slotId || engine.getState().activePlayerSlotId;
+                if (!sinType || !assignSlotId) {
+                    return;
+                }
+                engine.assignSinToSlot(assignSlotId, sinType);
+                render();
+                return;
+            }
+
+            if (action === 'clear-column-sins' && slotId) {
+                engine.clearColumnSins(slotId);
+                render();
+                return;
+            }
+
+            if (action === 'toggle-defense-mode' && slotId) {
+                engine.toggleDefenseMode(slotId);
+                render();
+                return;
+            }
+
             if (action === 'select-skill' && skillId) {
-                engine.selectSkill(skillId, slotId);
+                const skillSlotId = slotId || engine.getState().activePlayerSlotId;
+                engine.selectSkill(skillId, skillSlotId);
                 render();
                 return;
             }

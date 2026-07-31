@@ -7,6 +7,7 @@
     const PANEL_GAP = 24;
     const DRAG_THRESHOLD = 6;
     const PANEL_ASPECT_RATIO = 1640 / 4120;
+    const COMBAT_MAX_PLAYER_UNITS = 7;
     const BATTLE_DEBUG_TOOLS_STORAGE_KEY = `${EXTENSION_ID}:battle-debug-tools-enabled`;
     const BATTLE_BASE_PACK_SCRIPT_RELATIVE_PATHS = [
         'battle/content/packs/base/statuses/bleed.js',
@@ -91,8 +92,10 @@
         'battle/ui/creator/encounterBuilder/encounterBuilderRenderer.js',
         'battle/ui/roster/teamBuilderRenderer.js',
         'battle/ui/inspect/inspectState.js',
+        'battle/ui/combat/lcCombatUi.js',
         'battle/core/damageFormula.js',
         'battle/core/plannerSkills.js',
+        'battle/core/sinHand.js',
         'battle/core/battleEngine.js',
         'battle/core/battleRenderer.js',
         'battle/core/battleHandler.js',
@@ -2372,9 +2375,12 @@
         const selectedBattle = state.availableBattles.find((battle) => battle.id === state.selectedBattleId) || null;
         const activePreset = getActiveTeamPreset();
         const unitList = typeof api.listUnitDefinitions === 'function' ? api.listUnitDefinitions() : [];
-        const maxPlayerUnits = Number.isInteger(encounter?.rules?.maxPlayerUnits)
+        const encounterCap = Number.isInteger(encounter?.rules?.maxPlayerUnits)
             ? encounter.rules.maxPlayerUnits
             : null;
+        const deployCap = encounterCap != null
+            ? Math.min(encounterCap, COMBAT_MAX_PLAYER_UNITS)
+            : COMBAT_MAX_PLAYER_UNITS;
         const selectedIds = Array.isArray(state.deploySelectedUnitIds) ? state.deploySelectedUnitIds : [];
         const teamUnitIds = Array.isArray(activePreset.unitIds) ? activePreset.unitIds : [];
 
@@ -2396,9 +2402,7 @@
             }).join('')
             : '<p class="echoes-battle-panel__planner-empty">No units in the active team preset. Build your team in Characters first.</p>';
 
-        const capHint = maxPlayerUnits != null
-            ? `<p class="echoes-battle-panel__planner-empty">Deploy up to ${maxPlayerUnits} units for this encounter.</p>`
-            : '';
+        const capHint = `<p class="echoes-battle-panel__planner-empty">Deploy up to ${deployCap} identities (combat field limit).</p>`;
 
         elements.combatContent.innerHTML = `
             <div class="echoes-battle-panel__combat-debug echoes-deploy">
@@ -2580,11 +2584,14 @@
                     throw new Error('Select at least one unit to deploy.');
                 }
                 const encounter = getBattleContentApi().getBattleDefinition?.(state.selectedBattleId);
-                const maxPlayerUnits = Number.isInteger(encounter?.rules?.maxPlayerUnits)
+                const encounterCap = Number.isInteger(encounter?.rules?.maxPlayerUnits)
                     ? encounter.rules.maxPlayerUnits
                     : null;
-                if (maxPlayerUnits != null && selectedIds.length > maxPlayerUnits) {
-                    throw new Error(`This encounter allows up to ${maxPlayerUnits} player units.`);
+                const maxPlayerUnits = encounterCap != null
+                    ? Math.min(encounterCap, COMBAT_MAX_PLAYER_UNITS)
+                    : COMBAT_MAX_PLAYER_UNITS;
+                if (selectedIds.length > maxPlayerUnits) {
+                    throw new Error(`Combat supports up to ${maxPlayerUnits} identities per side.`);
                 }
                 await initializeBattleHandler(state.selectedBattleId, { playerUnitIds: selectedIds });
                 renderCombatScreen();
@@ -2656,9 +2663,12 @@
             }
             const api = getBattleContentApi();
             const encounter = api.getBattleDefinition?.(state.selectedBattleId);
-            const maxPlayerUnits = Number.isInteger(encounter?.rules?.maxPlayerUnits)
+            const encounterCap = Number.isInteger(encounter?.rules?.maxPlayerUnits)
                 ? encounter.rules.maxPlayerUnits
                 : null;
+            const maxPlayerUnits = encounterCap != null
+                ? Math.min(encounterCap, COMBAT_MAX_PLAYER_UNITS)
+                : COMBAT_MAX_PLAYER_UNITS;
             const selected = new Set(state.deploySelectedUnitIds || []);
             if (deployToggle.checked) {
                 if (maxPlayerUnits != null && selected.size >= maxPlayerUnits && !selected.has(unitId)) {

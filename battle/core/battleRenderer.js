@@ -7,16 +7,28 @@
         const staggerOverlayPath = 'assets/statuseffects/states/stagger/stagger.png';
         const physicalDamageTypes = ['slash', 'pierce', 'blunt'];
         const sinTypes = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
+        const LC_MAX_FIELD_SLOTS = 7;
         const fieldPositions = {
             player: [
-                { x: 20, y: 56 },
-                { x: 28, y: 80 },
+                { x: 12, y: 58 },
+                { x: 20, y: 46 },
+                { x: 28, y: 58 },
+                { x: 36, y: 46 },
+                { x: 44, y: 58 },
+                { x: 52, y: 46 },
+                { x: 60, y: 58 },
             ],
             enemy: [
-                { x: 74, y: 52 },
-                { x: 83, y: 76 },
+                { x: 88, y: 58 },
+                { x: 80, y: 46 },
+                { x: 72, y: 58 },
+                { x: 64, y: 46 },
+                { x: 88, y: 72 },
+                { x: 80, y: 68 },
+                { x: 72, y: 72 },
             ],
         };
+        const lcCombatUi = battleModules.lcCombatUi || window.EchoesOfTheCityLcCombatUi || null;
 
         function getAllUnits(battle) {
             return [...battle.playerUnits, ...battle.enemyUnits];
@@ -393,6 +405,9 @@
             const playbackClasses = getPlaybackRoleClasses(slot.id, uiState);
             const isStaggered = isUnitStaggered(unit);
             const staggerOverlayUrl = isStaggered ? resolveAssetUrl(staggerOverlayPath) : '';
+            const intentBorderUrl = !isPlayer && intentSkill?.borderPath
+                ? resolveAssetUrl(intentSkill.borderPath)
+                : '';
 
             return `
                 <button
@@ -404,6 +419,7 @@
                     ${isDropTarget ? 'data-drop-target="enemy-slot"' : ''}
                     ${(battle.phase !== 'select' && isPlayer) || uiState?.isPlaybackRunning ? 'disabled' : ''}
                 >
+                    ${intentBorderUrl ? `<span class="echoes-battle-panel__field-intent-icon" style="background-image:url('${intentBorderUrl}')"></span>` : ''}
                     <span class="echoes-battle-panel__field-speed">${slot.speed}</span>
                     <span class="echoes-battle-panel__field-shadow"></span>
                     <span class="echoes-battle-panel__field-ring"></span>
@@ -413,15 +429,10 @@
                             ? `<img class="echoes-battle-panel__field-stagger-overlay" src="${staggerOverlayUrl}" alt="Staggered">`
                             : ''}
                     </span>
-                    <span class="echoes-battle-panel__field-name">${unit.name}</span>
-                    <span class="echoes-battle-panel__field-state">${stateLabel}</span>
-                    <span class="echoes-battle-panel__field-target">${targetLabel}</span>
-                    <span class="echoes-battle-panel__field-vitals">
-                        <span class="echoes-battle-panel__field-hp">HP ${unit.hp}/${unit.maxHp}</span>
-                        <span class="echoes-battle-panel__field-sp">SH ${getUnitShieldAmount(unit)}</span>
-                        <span class="echoes-battle-panel__field-sp">SP ${unit.sp}</span>
-                    </span>
-                    ${renderStaggerThresholdTrack(unit)}
+                    <div class="echoes-battle-panel__field-vitals-lc">
+                        <span class="echoes-battle-panel__field-hp-lc">${unit.hp}</span>
+                        <span class="echoes-battle-panel__field-sp-lc">${unit.sp}</span>
+                    </div>
                     ${renderMiniStatuses(unit)}
                 </button>
             `;
@@ -744,14 +755,28 @@
                             : playback.phase === 'attack-hit'
                                 ? `Attack ${playback.hitIndex + 1}`
                                 : 'Resolution';
+            const isLcClash = entry.engagementType === 'clash' && lcCombatUi?.renderLcClashStage;
 
             return `
-                <div class="echoes-battle-panel__playback-overlay">
+                <div class="echoes-battle-panel__playback-overlay${isLcClash ? ' is-lc-clash' : ''}">
+                    ${isLcClash
+                        ? lcCombatUi.renderLcClashStage(resolvedBattle, uiState, {
+                            escapeHtml: (value) => String(value),
+                            escapeAttribute,
+                            getSlotById,
+                            getUnitById,
+                            getSkillById,
+                            resolveAssetUrl,
+                            renderPlaybackCoinTrack,
+                            getPlaybackValueState,
+                        })
+                        : ''}
                     <div class="echoes-battle-panel__playback-banner">
                         <span>Resolving ${playback.entryIndex + 1} / ${playback.totalEntries}</span>
                         <strong>${statusLabel}</strong>
                     </div>
-                    ${renderPlaybackValueBadges(leftPosition, rightPosition, playback, entry)}
+                    ${!isLcClash ? renderPlaybackValueBadges(leftPosition, rightPosition, playback, entry) : ''}
+                    ${!isLcClash ? `
                     <div class="echoes-battle-panel__playback-panel echoes-battle-panel__playback-panel--left" style="left: ${Math.max(6, leftPosition.x - 8)}%; top: ${Math.max(14, leftPosition.y - 28)}%;">
                         <span>${leftUnit?.name || 'Left Unit'}</span>
                         <strong>${leftSkill?.name || 'No Clash'}</strong>
@@ -768,6 +793,7 @@
                             ${renderPlaybackCoinTrack(rightSkill, 'right', playback, entry)}
                         </div>
                     </div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -1455,7 +1481,27 @@
             `;
         }
 
-        function renderPlanner(battle, activePlayerSlot, uiState) {
+        function renderLcDashboardWrapper(battle, activePlayerSlot, uiState) {
+            if (!lcCombatUi?.renderLcDashboard) {
+                return renderPlannerLegacy(battle, activePlayerSlot, uiState);
+            }
+            return lcCombatUi.renderLcDashboard(battle, uiState, {
+                escapeAttribute,
+                escapeHtml: (value) => String(value),
+                resolveAssetUrl,
+                getUnitById,
+                getSkillById,
+                isDefenseSkill,
+                getSkillPowerLabel,
+                getPhaseLabel,
+                getResolvedBattle,
+                renderResolutionFeed,
+                renderQueueTrack,
+                renderDebugRollControls,
+            });
+        }
+
+        function renderPlannerLegacy(battle, activePlayerSlot, uiState) {
             const debugToolsEnabled = uiState?.debugToolsEnabled !== false;
             const activeUnit = activePlayerSlot ? getUnitById(battle, activePlayerSlot.unitId) : null;
             const selectedSkill = activePlayerSlot?.selectedSkillId ? getSkillById(activeUnit, activePlayerSlot.selectedSkillId) : null;
@@ -1561,7 +1607,7 @@
                     >
                         <span></span>
                     </div>
-                    ${renderPlanner(battle, activePlayerSlot, uiState)}
+                    ${renderLcDashboardWrapper(battle, activePlayerSlot, uiState)}
                 </div>
             `;
         }
