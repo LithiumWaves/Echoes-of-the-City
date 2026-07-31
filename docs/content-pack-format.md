@@ -140,8 +140,30 @@ For reusable packs, battles should reference **enemy** units by id using `enemyU
     "maxPlayerUnits": 3,
     "victoryCondition": "defeat-all-enemies",
     "failureCondition": "all-allies-defeated",
-    "enemyAiProfile": { "skill": "first", "target": "firstLiving" }
+    "enemyAiProfile": { "skill": "first", "target": "firstLiving" },
+    "background": {
+      "image": "assets/combat/backgrounds/example-hall.png",
+      "overlay": "rgba(8,6,5,0.42)",
+      "position": "center bottom",
+      "size": "cover"
+    }
   }
+}
+```
+
+### Battlefield background (`rules.background`)
+
+Optional visual backdrop for the combat stage:
+
+- `image` (required when `background` is set): asset path or URL, resolved like other extension assets.
+- `overlay` (optional): CSS color for a readability tint, e.g. `rgba(0,0,0,0.4)`.
+- `position` (optional): CSS `background-position`, default `center bottom`.
+- `size` (optional): CSS `background-size`, default `cover`.
+
+```json
+"background": {
+  "image": "assets/combat/backgrounds/industrial-hall.png",
+  "overlay": "rgba(8,6,5,0.42)"
 }
 ```
 

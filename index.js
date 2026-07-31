@@ -3335,6 +3335,20 @@
                     draft.rules = draft.rules && typeof draft.rules === 'object' ? draft.rules : {};
                     if (field === 'maxTurns') {
                         draft.rules.maxTurns = Math.max(1, Math.round(normalizeNumberInput(battleRulesField.value, draft.rules.maxTurns ?? 100)));
+                    } else if (field.startsWith('background.')) {
+                        const subField = field.slice('background.'.length);
+                        const value = normalizeStringInput(battleRulesField.value, '');
+                        if (!draft.rules.background || typeof draft.rules.background !== 'object') {
+                            draft.rules.background = {};
+                        }
+                        if (value) {
+                            draft.rules.background[subField] = value;
+                        } else {
+                            delete draft.rules.background[subField];
+                            if (!Object.keys(draft.rules.background).length) {
+                                delete draft.rules.background;
+                            }
+                        }
                     } else {
                         draft.rules[field] = normalizeStringInput(battleRulesField.value, draft.rules[field] || '');
                     }

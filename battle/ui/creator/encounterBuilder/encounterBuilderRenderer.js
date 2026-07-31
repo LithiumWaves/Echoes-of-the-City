@@ -82,6 +82,7 @@
     function renderRulesSection(battleDraft, creatorUi, escapeAttr) {
         const rules = battleDraft?.rules && typeof battleDraft.rules === 'object' ? battleDraft.rules : {};
         const aiProfile = rules.enemyAiProfile && typeof rules.enemyAiProfile === 'object' ? rules.enemyAiProfile : {};
+        const background = rules.background && typeof rules.background === 'object' ? rules.background : {};
 
         const buildSelect = (options, selected, attrs) => {
             return `<select ${attrs} style="width:100%;">${creatorUi.buildSelectOptions(options, selected, escapeAttr)}</select>`;
@@ -107,6 +108,12 @@
                     ${buildSelect(ENEMY_AI_SKILLS, aiProfile.skill || 'cycle', 'data-action="creator-battle-ai-field" data-field="skill"')}
                     <label>Enemy AI: target</label>
                     ${buildSelect(ENEMY_AI_TARGETS, aiProfile.target || 'mirror', 'data-action="creator-battle-ai-field" data-field="target"')}
+                </div>
+                <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                    <label>Background image</label>
+                    <input data-action="creator-battle-rules-field" data-field="background.image" value="${escapeAttr(background.image || '')}" placeholder="assets/combat/backgrounds/hall.png" />
+                    <label>Background overlay</label>
+                    <input data-action="creator-battle-rules-field" data-field="background.overlay" value="${escapeAttr(background.overlay || '')}" placeholder="rgba(0,0,0,0.4)" />
                 </div>
                 <p class="echoes-creator__hint">If max turns is reached before victory, the battle ends in defeat.</p>
             </section>

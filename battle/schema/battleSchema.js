@@ -1928,6 +1928,26 @@
             }
         }
 
+        const background = normalizedDefinition.rules?.background;
+        if (background != null) {
+            if (typeof background !== 'object' || Array.isArray(background)) {
+                pushError(errors, 'battle.rules.background', 'must be an object when provided.');
+            } else {
+                if (!background.image || typeof background.image !== 'string' || !background.image.trim()) {
+                    pushError(errors, 'battle.rules.background.image', 'must be a non-empty string when background is provided.');
+                }
+                if (background.overlay != null && typeof background.overlay !== 'string') {
+                    pushError(errors, 'battle.rules.background.overlay', 'must be a string when provided.');
+                }
+                if (background.position != null && typeof background.position !== 'string') {
+                    pushError(errors, 'battle.rules.background.position', 'must be a string when provided.');
+                }
+                if (background.size != null && typeof background.size !== 'string') {
+                    pushError(errors, 'battle.rules.background.size', 'must be a string when provided.');
+                }
+            }
+        }
+
         const waves = normalizedDefinition.rules?.waves;
         if (waves != null) {
             if (!Array.isArray(waves) || !waves.length) {

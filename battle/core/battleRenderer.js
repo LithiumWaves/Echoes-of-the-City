@@ -102,6 +102,44 @@
                 .replace(/>/g, '&gt;');
         }
 
+        function escapeHtml(value) {
+            return escapeAttribute(value);
+        }
+
+        function resolveBattlefieldBackground(battle) {
+            const background = battle?.rules?.background;
+            if (!background?.image || typeof background.image !== 'string') {
+                return null;
+            }
+            const imageUrl = resolveAssetUrl(background.image);
+            if (!imageUrl) {
+                return null;
+            }
+            return {
+                imageUrl,
+                overlay: background.overlay || 'rgba(8, 6, 5, 0.42)',
+                position: background.position || 'center bottom',
+                size: background.size || 'cover',
+            };
+        }
+
+        function renderBattlefieldBackgroundLayers(battle) {
+            const resolved = resolveBattlefieldBackground(battle);
+            if (!resolved) {
+                return '';
+            }
+            const overlayStyle = `--echoes-field-bg-overlay:${escapeAttribute(resolved.overlay)};`;
+            const bgStyle = [
+                `--echoes-field-bg-image:url('${escapeAttribute(resolved.imageUrl)}')`,
+                `--echoes-field-bg-position:${escapeAttribute(resolved.position)}`,
+                `--echoes-field-bg-size:${escapeAttribute(resolved.size)}`,
+            ].join(';');
+            return `
+                <div class="echoes-battle-panel__field-bg" style="${bgStyle}"></div>
+                <div class="echoes-battle-panel__field-bg-overlay" style="${overlayStyle}"></div>
+            `;
+        }
+
         function getSkillOffenseLevel(unit, skill) {
             return Math.max(1, unit.level + (skill.offenseLevel || 0));
         }
@@ -1397,7 +1435,9 @@
 
         function renderBattlefield(battle, activePlayerSlot, uiState) {
             const debugToolsEnabled = uiState?.debugToolsEnabled !== false;
-            const bloodfeast = battle?.encounterResources?.bloodfeast || 0;
+            const sinRailMarkup = lcCombatUi?.renderLcSinResourceRail
+                ? lcCombatUi.renderLcSinResourceRail(battle, escapeHtml)
+                : '';
             const playerMarkup = (() => {
                 const seenUnitIds = new Set();
                 return battle.playerSlots
@@ -1415,28 +1455,28 @@
                 .map((slot) => renderFieldUnitWithUiState(battle, getUnitById(battle, slot.unitId), slot, 'enemy', activePlayerSlot, uiState))
                 .join('');
 
+            const resolveDisabled = battle.phase !== 'select' || battle.winner || uiState?.isPlaybackRunning;
+            const resolveLabel = uiState?.isPlaybackRunning ? 'Resolving...' : 'DUEL';
+
             return `
                 <section class="echoes-battle-panel__combat-battlefield">
+                    ${renderBattlefieldBackgroundLayers(battle)}
                     <div class="echoes-battle-panel__combat-hud">
-                        <div class="echoes-battle-panel__combat-counter-stack">
-                            <div class="echoes-battle-panel__combat-counter">
-                                <span>Wave</span>
+                        <div class="echoes-battle-panel__combat-counter-stack echoes-battle-panel__combat-counter-stack--lc">
+                            <div class="echoes-battle-panel__combat-counter echoes-battle-panel__combat-counter--lc">
+                                <span>WAVE</span>
                                 <strong>${battle.wave || 1} / ${battle.totalWaves || 1}</strong>
                             </div>
-                            <div class="echoes-battle-panel__combat-counter">
-                                <span>Turn</span>
+                            <div class="echoes-battle-panel__combat-counter echoes-battle-panel__combat-counter--lc">
+                                <span>TURN</span>
                                 <strong>${battle.turn}</strong>
                             </div>
-                            <div class="echoes-battle-panel__combat-counter">
-                                <span>Bloodfeast</span>
-                                <strong>${bloodfeast}</strong>
-                            </div>
                         </div>
-                        <div class="echoes-battle-panel__combat-controls">
+                        <div class="echoes-battle-panel__combat-controls echoes-battle-panel__combat-controls--lc">
                             ${debugToolsEnabled
                                 ? `
                                     <button
-                                        class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost${uiState?.turnDebugEnabled ? ' is-active' : ''}"
+                                        class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost echoes-battle-panel__combat-button--lc${uiState?.turnDebugEnabled ? ' is-active' : ''}"
                                         type="button"
                                         data-action="toggle-turn-debug"
                                     >
@@ -1445,22 +1485,22 @@
                                 `
                                 : ''}
                             <button
-                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost${uiState?.inspect?.isOpen ? ' is-active' : ''}"
+                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost echoes-battle-panel__combat-button--lc${uiState?.inspect?.isOpen ? ' is-active' : ''}"
                                 type="button"
                                 data-action="toggle-inspect"
                             >
                                 Inspect
                             </button>
                             <button
-                                class="echoes-battle-panel__combat-button"
+                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--duel"
                                 type="button"
                                 data-action="resolve-turn"
-                                ${battle.phase !== 'select' || battle.winner || uiState?.isPlaybackRunning ? 'disabled' : ''}
+                                ${resolveDisabled ? 'disabled' : ''}
                             >
-                                ${uiState?.isPlaybackRunning ? 'Resolving...' : 'Resolve'}
+                                ${resolveLabel}
                             </button>
                             <button
-                                class="echoes-battle-panel__combat-button"
+                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost echoes-battle-panel__combat-button--lc"
                                 type="button"
                                 data-action="next-turn"
                                 ${getResolvedBattle(battle, uiState).phase !== 'resolved' || getResolvedBattle(battle, uiState).winner || uiState?.isPlaybackRunning ? 'disabled' : ''}
@@ -1468,7 +1508,7 @@
                                 Next
                             </button>
                             <button
-                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost"
+                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost echoes-battle-panel__combat-button--lc"
                                 type="button"
                                 data-action="reset-fight"
                             >
@@ -1476,6 +1516,8 @@
                             </button>
                         </div>
                     </div>
+
+                    ${sinRailMarkup}
 
                     <div class="echoes-battle-panel__combat-stage-area">
                         ${renderTargetOverlayWithUiState(battle, activePlayerSlot, uiState)}

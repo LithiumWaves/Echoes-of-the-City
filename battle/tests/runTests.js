@@ -7298,6 +7298,110 @@ function runSuite() {
         assert(html.includes('playerUnitIds') === false, 'Markup should not expose raw JSON keys.');
         assert(html.includes('Characters'), 'Expected Characters deploy hint.');
         assert(html.includes('Enemy setup'), 'Expected enemy setup section.');
+        assert(html.includes('Background image'), 'Expected background image field.');
+    });
+
+    test('Schema: rules.background validates image path', () => {
+        const battleModules = createBattleEnvironment();
+        const minimalEnemy = {
+            id: 'bg-schema-enemy',
+            name: 'BG Enemy',
+            level: 1,
+            maxHp: 50,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { idle: 'assets/test.png', skills: {} },
+            skills: [{
+                id: 'hit',
+                name: 'Hit',
+                skillType: 'attack',
+                basePower: 1,
+                coinPower: 0,
+                coinCount: 1,
+                damageType: 'slash',
+                sinType: 'wrath',
+                effects: [],
+            }],
+            passives: [],
+        };
+        const baseRules = {
+            encounterType: 'focused',
+            maxTurns: 10,
+            victoryCondition: 'defeat-all-enemies',
+            failureCondition: 'all-allies-defeated',
+        };
+        const valid = battleModules.schema.validateEncounterDefinition({
+            id: 'bg-valid-encounter',
+            name: 'BG Valid',
+            enemyUnits: [minimalEnemy],
+            rules: {
+                ...baseRules,
+                background: {
+                    image: 'assets/combat/backgrounds/hall.png',
+                    overlay: 'rgba(8,6,5,0.42)',
+                },
+            },
+        });
+        assert(!valid.errors.length, `Expected valid background rules: ${valid.errors.join(', ')}`);
+
+        const invalid = battleModules.schema.validateEncounterDefinition({
+            id: 'bg-invalid-encounter',
+            name: 'BG Invalid',
+            enemyUnits: [minimalEnemy],
+            rules: {
+                ...baseRules,
+                background: { overlay: 'rgba(0,0,0,0.4)' },
+            },
+        });
+        assert(
+            invalid.errors.some((entry) => entry.includes('background.image')),
+            `Expected background.image error: ${invalid.errors.join(', ')}`,
+        );
+    });
+
+    test('LC UI: dashboard row layout and sin resource rail', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = {};
+        require(path.resolve(battleRoot, 'ui/combat/lcCombatUi.js'));
+
+        const lcCombatUi = global.window.EchoesOfTheCityLcCombatUi;
+        assert(typeof lcCombatUi?.renderLcSinResourceRail === 'function', 'Expected renderLcSinResourceRail.');
+        assert(typeof lcCombatUi?.renderLcDashboard === 'function', 'Expected renderLcDashboard.');
+
+        const railHtml = lcCombatUi.renderLcSinResourceRail({
+            encounterResources: { 'player:wrath': 3, 'player:pride': 7 },
+        }, (value) => String(value));
+        assert(railHtml.includes('echoes-lc-sin-rail--field'), 'Expected field sin rail markup.');
+        assert(railHtml.includes('>3<'), 'Expected wrath count in sin rail.');
+        assert(railHtml.includes('>7<'), 'Expected pride count in sin rail.');
+
+        const dashboardHtml = lcCombatUi.renderLcDashboard({
+            phase: 'select',
+            playerSlots: [],
+            playerUnits: [],
+        }, {}, {
+            escapeHtml: (value) => String(value),
+            getPhaseLabel: () => 'Planning',
+            getResolvedBattle: (battle) => battle,
+            renderResolutionFeed: () => '',
+            renderQueueTrack: () => '',
+            renderDebugRollControls: () => '',
+            escapeAttribute: (value) => String(value),
+            resolveAssetUrl: (value) => value,
+            getUnitById: () => null,
+            getSkillById: () => null,
+            isDefenseSkill: () => false,
+            getSkillPowerLabel: () => '',
+        });
+        assert(dashboardHtml.includes('echoes-lc-stage-frame'), 'Expected LC stage frame.');
+        assert(dashboardHtml.includes('echoes-lc-skill-row--top'), 'Expected top skill row.');
+        assert(dashboardHtml.includes('echoes-lc-portrait-row'), 'Expected portrait row.');
     });
 
     process.stdout.write(`\nResult: ${passed} passed, ${failed} failed\n`);
