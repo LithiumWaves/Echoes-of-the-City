@@ -19,7 +19,8 @@
         const PLAYBACK_TIMINGS = {
             approach: 420,
             skillIntro: 480,
-            roundReveal: 780,
+            roundReveal: 280,
+            coinFlip: 280,
             coinBreak: 320,
             attackHit: 560,
             betweenEntries: 360,
@@ -80,10 +81,34 @@
                 phase: 'idle',
                 roundIndex: -1,
                 hitIndex: -1,
+                coinRevealIndex: -1,
                 leftBroken: 0,
                 rightBroken: 0,
                 previewBattle: null,
             };
+        }
+
+        function normalizePlaybackFlips(flips) {
+            if (combatSounds?.normalizeCoinFlips) {
+                return combatSounds.normalizeCoinFlips(flips);
+            }
+            const lcUi = battleModules.lcCombatUi || window.EchoesOfTheCityLcCombatUi;
+            if (lcUi?.normalizeCoinFlips) {
+                return lcUi.normalizeCoinFlips(flips);
+            }
+            if (Array.isArray(flips)) {
+                return flips;
+            }
+            if (typeof flips === 'string' && flips.trim()) {
+                return flips.trim().split(/\s+/).filter(Boolean).map((token) => token === 'H');
+            }
+            return [];
+        }
+
+        function getRoundFlipCount(round) {
+            const leftCount = normalizePlaybackFlips(round?.leftFlips).length;
+            const rightCount = normalizePlaybackFlips(round?.rightFlips).length;
+            return Math.max(leftCount, rightCount, 1);
         }
 
         function cloneBattleState(value) {
@@ -216,6 +241,7 @@
                 phase: 'approach',
                 roundIndex: -1,
                 hitIndex: -1,
+                coinRevealIndex: -1,
                 leftBroken,
                 rightBroken,
             });
@@ -233,17 +259,33 @@
             if (Array.isArray(entry.rounds) && entry.rounds.length) {
                 for (let roundIndex = 0; roundIndex < entry.rounds.length; roundIndex += 1) {
                     const round = entry.rounds[roundIndex];
+                    const flipCount = getRoundFlipCount(round);
+
                     updatePlaybackState({
                         phase: 'round-reveal',
                         roundIndex,
                         hitIndex: -1,
+                        coinRevealIndex: -1,
                         leftBroken,
                         rightBroken,
                     });
-                    playCoinFlipSoundsForRound(round);
                     if (!(await waitForPlayback(PLAYBACK_TIMINGS.roundReveal, token))) {
                         return false;
                     }
+
+                    for (let flipIndex = 0; flipIndex < flipCount; flipIndex += 1) {
+                        updatePlaybackState({
+                            coinRevealIndex: flipIndex,
+                        });
+                        playCoinFlipSounds(1);
+                        if (!(await waitForPlayback(PLAYBACK_TIMINGS.coinFlip, token))) {
+                            return false;
+                        }
+                    }
+
+                    updatePlaybackState({
+                        coinRevealIndex: flipCount,
+                    });
 
                     if (entry.engagementType !== 'clash') {
                         playAttackHitSound(previewBattle, entry);
@@ -283,6 +325,7 @@
                 updatePlaybackState({
                     phase: 'attack-hit',
                     hitIndex,
+                    coinRevealIndex: hitIndex,
                     roundIndex: entry.engagementType === 'clash' ? playbackState.roundIndex : -1,
                     leftBroken,
                     rightBroken,
@@ -292,6 +335,12 @@
                     && !(Array.isArray(entry.rounds) && entry.rounds.length)
                 ) {
                     playCoinFlipSounds(1);
+                    if (!(await waitForPlayback(PLAYBACK_TIMINGS.coinFlip, token))) {
+                        return false;
+                    }
+                    updatePlaybackState({
+                        coinRevealIndex: hitIndex + 1,
+                    });
                     playAttackHitSound(previewBattle, entry);
                 }
                 if (!(await waitForPlayback(PLAYBACK_TIMINGS.attackHit, token))) {

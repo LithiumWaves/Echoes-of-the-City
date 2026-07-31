@@ -7476,17 +7476,39 @@ function runSuite() {
             renderPlaybackCoinTrack: (skill) => skill ? '<span class="echoes-battle-panel__playback-coin is-heads"></span>' : '',
             getPlaybackValueState: () => ({ leftValue: 18, rightValue: 14 }),
         };
+        const billboardDeps = {
+            ...deps,
+            leftPosition: { x: 24, y: 60 },
+            rightPosition: { x: 78, y: 60 },
+            getBillboardPowerForSide: (side) => (side === 'left' ? 18 : 14),
+            renderBillboardCoinsForSide: (side, playback, entry, skill) => (
+                skill ? '<span class="echoes-battle-panel__playback-coin is-heads"></span>' : ''
+            ),
+        };
 
-        const clashHtml = lcCombatUi.renderLcClashStage(battle, uiState, deps);
-        assert(clashHtml.includes('echoes-lc-engagement-bar'), 'Expected LC engagement bar.');
-        assert(clashHtml.includes('echoes-lc-clash-bar'), 'Expected LC clash bar alias.');
-        assert(clashHtml.includes('echoes-lc-clash-bar__portrait'), 'Expected clash portraits.');
-        assert(clashHtml.includes('echoes-lc-clash-bar__title'), 'Expected clash title.');
+        const clashHtml = lcCombatUi.renderLcEngagementBillboards(battle, uiState, billboardDeps);
+        assert(clashHtml.includes('echoes-lc-engagement-billboard'), 'Expected LC engagement billboard.');
+        assert(clashHtml.includes('echoes-lc-engagement-center'), 'Expected LC engagement center label.');
         assert(clashHtml.includes('CLASH'), 'Expected CLASH label.');
+        assert(clashHtml.includes('Clash Hit'), 'Expected skill name on billboard.');
         assert(clashHtml.includes('>18<'), 'Expected left clash power.');
         assert(clashHtml.includes('>14<'), 'Expected right clash power.');
-        assert(clashHtml.includes('echoes-battle-panel__playback-coin'), 'Expected coin track in clash bar.');
-        assert(clashHtml.includes('resolved:assets/enemy-splash.png'), 'Expected portrait URL resolution.');
+        assert(clashHtml.includes('echoes-battle-panel__playback-coin'), 'Expected coin track on billboard.');
+
+        assert(typeof lcCombatUi.computeRunningPower === 'function', 'Expected computeRunningPower export.');
+        const runningSkill = { basePower: 6, coinPower: 2 };
+        assert(lcCombatUi.computeRunningPower(runningSkill, [true, false], 1) === 8, 'Expected one heads flip power.');
+        assert(lcCombatUi.computeRunningPower(runningSkill, [true, true], 2, 12) === 12, 'Expected final power snap.');
+        assert(lcCombatUi.normalizeCoinFlips('H T H').length === 3, 'Expected normalized flip tokens.');
+
+        const coinStates = lcCombatUi.getBillboardCoinStates(mockSkill, {
+            phase: 'round-reveal',
+            roundIndex: 0,
+            coinRevealIndex: 1,
+            leftBroken: 0,
+            rightBroken: 0,
+        }, entry, 'left');
+        assert(coinStates.includes('flipping') || coinStates.includes('heads'), 'Expected coin states during reveal.');
 
         assert(typeof lcCombatUi.shouldUseLcEngagementPlayback === 'function', 'Expected shouldUseLcEngagementPlayback export.');
         assert(lcCombatUi.shouldUseLcEngagementPlayback(uiState.playback), 'Expected clash playback to use LC UI.');
@@ -7499,16 +7521,17 @@ function runSuite() {
             leftDisplayPower: 22,
             rightDisplayPower: 0,
             rounds: [],
-            hits: [{ damage: 8, finalPower: 22 }],
+            hits: [{ damage: 8, finalPower: 22, isHeads: true }],
         };
-        const oneSidedHtml = lcCombatUi.renderLcEngagementBar(battle, {
+        const oneSidedHtml = lcCombatUi.renderLcEngagementBillboards(battle, {
             playback: {
                 ...uiState.playback,
                 entry: oneSidedEntry,
                 phase: 'attack-hit',
                 hitIndex: 0,
+                coinRevealIndex: 1,
             },
-        }, deps);
+        }, billboardDeps);
         assert(oneSidedHtml.includes('ATTACK'), 'Expected ATTACK label for one-sided playback.');
         assert(lcCombatUi.shouldUseLcEngagementPlayback({ isRunning: true, entry: oneSidedEntry }), 'Expected one-sided playback to use LC UI.');
     });

@@ -356,7 +356,305 @@
         return `Resolve ${playback.entryIndex + 1} / ${playback.totalEntries}`;
     }
 
+    function normalizeCoinFlips(flips) {
+        if (Array.isArray(flips)) {
+            return flips;
+        }
+        if (typeof flips === 'string' && flips.trim()) {
+            return flips
+                .trim()
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((token) => token === 'H');
+        }
+        return [];
+    }
+
+    function computeRunningPower(skill, flips, revealedCount, finalPower) {
+        if (!skill) {
+            return 0;
+        }
+        const flipList = normalizeCoinFlips(flips);
+        let power = skill.basePower || 0;
+        const coinPower = skill.coinPower || 0;
+        const count = Math.max(0, Math.min(revealedCount, flipList.length));
+        for (let index = 0; index < count; index += 1) {
+            if (flipList[index]) {
+                power += coinPower;
+            }
+        }
+        if (flipList.length > 0 && revealedCount >= flipList.length && Number.isFinite(finalPower)) {
+            return finalPower;
+        }
+        return power;
+    }
+
+    function getPlaybackAttackingSide(entry) {
+        if (!entry) {
+            return null;
+        }
+        if (entry.engagementType === 'clash') {
+            return entry.winnerSide;
+        }
+        return entry.leftSkillId ? 'left' : 'right';
+    }
+
+    function getBillboardFlipsForSide(entry, playback, side) {
+        if (!entry || !playback) {
+            return [];
+        }
+        if (playback.phase === 'round-reveal' || playback.phase === 'coin-break') {
+            const round = entry.rounds?.[playback.roundIndex];
+            if (!round) {
+                return [];
+            }
+            return normalizeCoinFlips(side === 'left' ? round.leftFlips : round.rightFlips);
+        }
+        if (playback.phase === 'attack-hit') {
+            const attackingSide = getPlaybackAttackingSide(entry);
+            if (attackingSide !== side) {
+                return [];
+            }
+            return (entry.hits || []).map((hit) => Boolean(hit?.isHeads));
+        }
+        return [];
+    }
+
+    function getBillboardFinalPowerForSide(entry, playback, side) {
+        if (!entry || !playback) {
+            return null;
+        }
+        if (playback.phase === 'round-reveal' || playback.phase === 'coin-break') {
+            const round = entry.rounds?.[playback.roundIndex];
+            if (!round) {
+                return null;
+            }
+            return side === 'left' ? round.leftPower : round.rightPower;
+        }
+        if (playback.phase === 'attack-hit') {
+            const attackingSide = getPlaybackAttackingSide(entry);
+            const hit = entry.hits?.[playback.hitIndex];
+            if (!hit) {
+                return null;
+            }
+            if (attackingSide === 'left') {
+                return side === 'left' ? hit.finalPower : hit.damage;
+            }
+            return side === 'right' ? hit.finalPower : hit.damage;
+        }
+        return null;
+    }
+
+    function getBillboardRevealedFlipCount(playback, flips) {
+        const flipList = normalizeCoinFlips(flips);
+        if (!playback || flipList.length === 0) {
+            return 0;
+        }
+        const coinRevealIndex = Number.isFinite(playback.coinRevealIndex) ? playback.coinRevealIndex : -1;
+        if (playback.phase === 'round-reveal' || playback.phase === 'attack-hit') {
+            if (coinRevealIndex < 0) {
+                return 0;
+            }
+            return Math.min(coinRevealIndex + 1, flipList.length);
+        }
+        if (playback.phase === 'coin-break') {
+            return flipList.length;
+        }
+        return 0;
+    }
+
+    function getBillboardPower(skill, playback, entry, side) {
+        if (!skill) {
+            return 0;
+        }
+        const flips = getBillboardFlipsForSide(entry, playback, side);
+        const revealedCount = getBillboardRevealedFlipCount(playback, flips);
+        const finalPower = getBillboardFinalPowerForSide(entry, playback, side);
+        if (flips.length === 0) {
+            if (Number.isFinite(finalPower)) {
+                return finalPower;
+            }
+            return skill.basePower || 0;
+        }
+        return computeRunningPower(skill, flips, revealedCount, finalPower);
+    }
+
+    function getBillboardCoinStates(skill, playback, entry, side) {
+        if (!skill) {
+            return [];
+        }
+        const totalCoins = skill.coinCount || 0;
+        const brokenCoins = side === 'left' ? playback.leftBroken : playback.rightBroken;
+        const remainingCoins = Math.max(0, totalCoins - brokenCoins);
+        const states = [];
+        for (let index = 0; index < totalCoins; index += 1) {
+            states.push(index >= remainingCoins ? 'broken' : 'pending');
+        }
+
+        const flips = getBillboardFlipsForSide(entry, playback, side);
+        const coinRevealIndex = Number.isFinite(playback.coinRevealIndex) ? playback.coinRevealIndex : -1;
+        const phase = playback.phase;
+        const attackingSide = getPlaybackAttackingSide(entry);
+        const isAttackingSide = attackingSide === side;
+
+        if (phase === 'round-reveal' || phase === 'coin-break') {
+            for (let index = 0; index < flips.length; index += 1) {
+                if (states[index] === 'broken') {
+                    continue;
+                }
+                if (phase === 'coin-break' || coinRevealIndex >= flips.length - 1) {
+                    states[index] = flips[index] ? 'heads' : 'tails';
+                } else if (coinRevealIndex < 0) {
+                    states[index] = 'pending';
+                } else if (index > coinRevealIndex) {
+                    states[index] = 'pending';
+                } else if (index === coinRevealIndex) {
+                    states[index] = 'flipping';
+                } else {
+                    states[index] = flips[index] ? 'heads' : 'tails';
+                }
+            }
+        }
+
+        if (phase === 'attack-hit' && isAttackingSide) {
+            for (let index = 0; index < playback.hitIndex; index += 1) {
+                if (states[index] !== 'broken') {
+                    states[index] = 'spent';
+                }
+            }
+            for (let index = 0; index < flips.length; index += 1) {
+                if (states[index] === 'broken') {
+                    continue;
+                }
+                if (index < playback.hitIndex) {
+                    states[index] = flips[index] ? 'heads' : 'tails';
+                } else if (index === playback.hitIndex) {
+                    if (coinRevealIndex < playback.hitIndex) {
+                        states[index] = 'pending';
+                    } else if (coinRevealIndex === playback.hitIndex) {
+                        states[index] = 'flipping';
+                    } else {
+                        states[index] = flips[index] ? 'heads' : 'tails';
+                    }
+                }
+            }
+        }
+
+        return states;
+    }
+
+    function renderBillboardCoinTrack(states) {
+        return states.map((state, index) => {
+            const stateClass = state === 'flipping' ? 'flipping' : state;
+            return `
+                <span class="echoes-battle-panel__playback-coin is-${stateClass}">
+                    <strong>${index + 1}</strong>
+                </span>
+            `;
+        }).join('');
+    }
+
+    function renderLcEngagementBillboard(side, skill, skillLabel, position, playback, entry, deps) {
+        const { escapeHtml, getBillboardPowerForSide, renderBillboardCoinsForSide } = deps;
+        const isEmpty = !skill;
+        const sinColor = skill?.sinType ? SIN_COLORS[skill.sinType] || '#888' : '#555';
+        const horizontalOffset = side === 'left' ? -4 : 4;
+        const left = Math.max(6, Math.min(94, position.x + horizontalOffset));
+        const top = Math.max(12, position.y - 30);
+        const power = skill ? getBillboardPowerForSide(side, playback, entry, skill) : 0;
+        const bumpClass = (
+            (playback.phase === 'round-reveal' || playback.phase === 'attack-hit')
+            && Number.isFinite(playback.coinRevealIndex)
+            && playback.coinRevealIndex >= 0
+        ) ? ' is-bump' : '';
+        const headerLabel = skillLabel || skill?.name || '—';
+
+        return `
+            <div
+                class="echoes-lc-engagement-billboard echoes-lc-engagement-billboard--${side}${isEmpty ? ' is-empty' : ''}"
+                style="left: ${left}%; top: ${top}%; --echoes-lc-sin-color: ${sinColor};"
+            >
+                <div class="echoes-lc-engagement-billboard__header">
+                    <span class="echoes-lc-engagement-billboard__header-accent" aria-hidden="true"></span>
+                    <span class="echoes-lc-engagement-billboard__header-text">${escapeHtml(headerLabel)}</span>
+                </div>
+                <div class="echoes-lc-engagement-billboard__body">
+                    <strong class="echoes-lc-engagement-billboard__power${bumpClass}">${power}</strong>
+                    <div class="echoes-lc-engagement-billboard__coins echoes-battle-panel__playback-coins">
+                        ${skill ? renderBillboardCoinsForSide(side, playback, entry, skill) : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderLcEngagementCenter(leftPosition, rightPosition, barTitle, subtitle, escapeHtml) {
+        const centerX = (leftPosition.x + rightPosition.x) / 2;
+        const centerY = Math.min(leftPosition.y, rightPosition.y) - 38;
+        return `
+            <div
+                class="echoes-lc-engagement-center"
+                style="left: ${centerX}%; top: ${Math.max(8, centerY)}%;"
+            >
+                <span class="echoes-lc-engagement-center__title">${escapeHtml(barTitle)}</span>
+                <small class="echoes-lc-engagement-center__subtitle">${escapeHtml(subtitle)}</small>
+            </div>
+        `;
+    }
+
+    function renderLcEngagementBillboards(battle, uiState, deps) {
+        const playback = uiState?.playback;
+        if (!playback?.isRunning || !playback.entry) {
+            return '';
+        }
+        const entry = playback.entry;
+        const combatSoundsModule = battleModules.combatSounds || window.EchoesOfTheCityCombatSounds || null;
+        const {
+            escapeHtml,
+            getSlotById,
+            getUnitById,
+            getSkillById,
+            leftPosition,
+            rightPosition,
+            getBillboardPowerForSide,
+            renderBillboardCoinsForSide,
+        } = deps;
+
+        if (!leftPosition || !rightPosition) {
+            return '';
+        }
+
+        const leftSlot = getSlotById(battle, entry.leftSlotId);
+        const rightSlot = getSlotById(battle, entry.rightSlotId);
+        if (!leftSlot || !rightSlot) {
+            return '';
+        }
+        const leftUnit = getUnitById(battle, leftSlot.unitId);
+        const rightUnit = getUnitById(battle, rightSlot.unitId);
+        const leftSkill = entry.leftSkillId ? getSkillById(leftUnit, entry.leftSkillId) : null;
+        const rightSkill = entry.rightSkillId ? getSkillById(rightUnit, entry.rightSkillId) : null;
+        const subtitle = getEngagementPlaybackSubtitle(playback, entry);
+        const barTitle = combatSoundsModule?.getEngagementBarTitle
+            ? combatSoundsModule.getEngagementBarTitle(entry)
+            : (entry.engagementType === 'clash' ? 'CLASH' : entry.engagementType === 'one-sided' ? 'ATTACK' : 'DEFENSE');
+
+        const billboardDeps = {
+            escapeHtml,
+            getBillboardPowerForSide,
+            renderBillboardCoinsForSide,
+        };
+
+        return `
+            ${renderLcEngagementBillboard('left', leftSkill, entry.leftSkillName, leftPosition, playback, entry, billboardDeps)}
+            ${renderLcEngagementBillboard('right', rightSkill, entry.rightSkillName, rightPosition, playback, entry, billboardDeps)}
+            ${renderLcEngagementCenter(leftPosition, rightPosition, barTitle, subtitle, escapeHtml)}
+        `;
+    }
+
     function renderLcEngagementBar(battle, uiState, deps) {
+        if (deps?.leftPosition && deps?.rightPosition) {
+            return renderLcEngagementBillboards(battle, uiState, deps);
+        }
         const playback = uiState?.playback;
         if (!playback?.isRunning || !playback.entry) {
             return '';
@@ -429,7 +727,7 @@
     }
 
     function renderLcClashStage(battle, uiState, deps) {
-        return renderLcEngagementBar(battle, uiState, deps);
+        return renderLcEngagementBillboards(battle, uiState, deps) || renderLcEngagementBar(battle, uiState, deps);
     }
 
     const lcCombatUi = {
@@ -441,10 +739,17 @@
         sortDashboardSlots,
         renderLcSinResourceRail,
         renderLcDashboard,
+        normalizeCoinFlips,
+        computeRunningPower,
+        getBillboardCoinStates,
+        getBillboardPower,
+        renderBillboardCoinTrack,
+        renderLcEngagementBillboards,
         renderLcEngagementBar,
         renderLcClashStage,
         shouldUseLcClashPlayback,
         shouldUseLcEngagementPlayback,
+        getEngagementPlaybackSubtitle,
     };
 
     battleModules.lcCombatUi = lcCombatUi;

@@ -648,6 +648,44 @@
             `;
         }
 
+        function normalizeCoinFlips(flips) {
+            if (lcCombatUi?.normalizeCoinFlips) {
+                return lcCombatUi.normalizeCoinFlips(flips);
+            }
+            if (Array.isArray(flips)) {
+                return flips;
+            }
+            if (typeof flips === 'string') {
+                return flips
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .map((token) => token === 'H');
+            }
+            return [];
+        }
+
+        function renderBillboardCoinsForSide(side, playback, entry, skill) {
+            if (!skill) {
+                return '';
+            }
+            if (lcCombatUi?.getBillboardCoinStates && lcCombatUi?.renderBillboardCoinTrack) {
+                const states = lcCombatUi.getBillboardCoinStates(skill, playback, entry, side);
+                return lcCombatUi.renderBillboardCoinTrack(states);
+            }
+            return renderPlaybackCoinTrack(skill, side, playback, entry);
+        }
+
+        function getBillboardPowerForSide(side, playback, entry, skill) {
+            if (lcCombatUi?.getBillboardPower) {
+                return lcCombatUi.getBillboardPower(skill, playback, entry, side);
+            }
+            const valueState = getPlaybackValueState(playback, entry);
+            if (!valueState) {
+                return skill?.basePower || 0;
+            }
+            return side === 'left' ? valueState.leftValue : valueState.rightValue;
+        }
+
         function renderPlaybackCoinTrack(skill, side, playback, entry) {
             if (!skill) {
                 return '';
@@ -656,6 +694,17 @@
             const totalCoins = skill.coinCount;
             const brokenCoins = side === 'left' ? playback.leftBroken : playback.rightBroken;
             const remainingCoins = Math.max(0, totalCoins - brokenCoins);
+            const coinRevealIndex = Number.isFinite(playback.coinRevealIndex) ? playback.coinRevealIndex : -1;
+
+            if (
+                lcCombatUi?.getBillboardCoinStates
+                && lcCombatUi?.renderBillboardCoinTrack
+                && (playback.phase === 'round-reveal' || playback.phase === 'coin-break' || playback.phase === 'attack-hit')
+            ) {
+                const states = lcCombatUi.getBillboardCoinStates(skill, playback, entry, side);
+                return lcCombatUi.renderBillboardCoinTrack(states);
+            }
+
             const states = [];
             for (let index = 0; index < totalCoins; index += 1) {
                 if (index >= remainingCoins) {
@@ -666,22 +715,23 @@
             }
 
             const currentRound = entry.rounds?.[playback.roundIndex] || null;
-            const normalizeFlips = (flips) => {
-                if (Array.isArray(flips)) {
-                    return flips;
-                }
-                if (typeof flips === 'string') {
-                    return flips
-                        .split(/\s+/)
-                        .filter(Boolean)
-                        .map((token) => token === 'H');
-                }
-                return [];
-            };
             if (playback.phase === 'round-reveal' || playback.phase === 'coin-break') {
-                const flips = normalizeFlips(side === 'left' ? currentRound?.leftFlips : currentRound?.rightFlips);
+                const flips = normalizeCoinFlips(side === 'left' ? currentRound?.leftFlips : currentRound?.rightFlips);
                 for (let index = 0; index < flips.length; index += 1) {
-                    states[index] = flips[index] ? 'heads' : 'tails';
+                    if (states[index] === 'broken') {
+                        continue;
+                    }
+                    if (playback.phase === 'coin-break' || coinRevealIndex >= flips.length - 1) {
+                        states[index] = flips[index] ? 'heads' : 'tails';
+                    } else if (coinRevealIndex < 0) {
+                        states[index] = 'pending';
+                    } else if (index > coinRevealIndex) {
+                        states[index] = 'pending';
+                    } else if (index === coinRevealIndex) {
+                        states[index] = 'flipping';
+                    } else {
+                        states[index] = flips[index] ? 'heads' : 'tails';
+                    }
                 }
             }
 
@@ -696,15 +746,22 @@
 
                 const currentHit = entry.hits?.[playback.hitIndex];
                 if (currentHit && states[playback.hitIndex] !== 'broken') {
-                    states[playback.hitIndex] = currentHit.isHeads ? 'heads' : 'tails';
+                    if (coinRevealIndex >= playback.hitIndex) {
+                        states[playback.hitIndex] = currentHit.isHeads ? 'heads' : 'tails';
+                    } else if (coinRevealIndex === playback.hitIndex) {
+                        states[playback.hitIndex] = 'flipping';
+                    }
                 }
             }
 
-            return states.map((state, index) => `
-                <span class="echoes-battle-panel__playback-coin is-${state}">
+            return states.map((state, index) => {
+                const stateClass = state === 'flipping' ? 'flipping' : state;
+                return `
+                <span class="echoes-battle-panel__playback-coin is-${stateClass}">
                     <strong>${index + 1}</strong>
                 </span>
-            `).join('');
+            `;
+            }).join('');
         }
 
         function getPlaybackValueState(playback, entry) {
@@ -763,16 +820,13 @@
         }
 
         function shouldUseLcClashPlayback(playback) {
-            return Boolean(
-                lcCombatUi?.shouldUseLcEngagementPlayback?.(playback)
-                && lcCombatUi?.renderLcEngagementBar,
-            );
+            return shouldUseLcEngagementPlayback(playback);
         }
 
         function shouldUseLcEngagementPlayback(playback) {
             return Boolean(
                 lcCombatUi?.shouldUseLcEngagementPlayback?.(playback)
-                && lcCombatUi?.renderLcEngagementBar,
+                && (lcCombatUi?.renderLcEngagementBillboards || lcCombatUi?.renderLcEngagementBar),
             );
         }
 
@@ -787,17 +841,26 @@
             const isLcEngagement = shouldUseLcEngagementPlayback(playback);
 
             if (isLcEngagement) {
+                const leftSlot = getSlotById(resolvedBattle, entry.leftSlotId);
+                const rightSlot = getSlotById(resolvedBattle, entry.rightSlotId);
+                if (!leftSlot || !rightSlot) {
+                    return '';
+                }
+                const leftPosition = getFieldPosition(leftSlot.side, leftSlot.index);
+                const rightPosition = getFieldPosition(rightSlot.side, rightSlot.index);
+
                 return `
                     <div class="echoes-battle-panel__playback-overlay is-lc-engagement is-lc-clash">
-                        ${lcCombatUi.renderLcEngagementBar(resolvedBattle, uiState, {
+                        ${lcCombatUi.renderLcEngagementBillboards(resolvedBattle, uiState, {
                             escapeHtml: (value) => String(value),
                             escapeAttribute,
                             getSlotById,
                             getUnitById,
                             getSkillById,
-                            resolveAssetUrl,
-                            renderPlaybackCoinTrack,
-                            getPlaybackValueState,
+                            leftPosition,
+                            rightPosition,
+                            getBillboardPowerForSide,
+                            renderBillboardCoinsForSide,
                         })}
                     </div>
                 `;

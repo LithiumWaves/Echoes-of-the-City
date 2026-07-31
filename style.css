@@ -3691,6 +3691,177 @@
     pointer-events: none;
 }
 
+.echoes-lc-engagement-billboard {
+    position: absolute;
+    z-index: 7;
+    transform: translate(-50%, -100%);
+    min-width: 7.5rem;
+    max-width: 11rem;
+    padding: 0;
+    border-radius: 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background:
+        linear-gradient(165deg, rgba(22, 18, 16, 0.94), rgba(8, 6, 5, 0.9));
+    box-shadow:
+        0 10px 28px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    pointer-events: none;
+    text-align: center;
+}
+
+.echoes-lc-engagement-billboard--right {
+    text-align: center;
+}
+
+.echoes-lc-engagement-billboard.is-empty {
+    opacity: 0.55;
+}
+
+.echoes-lc-engagement-billboard__header {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.45rem 0.22rem;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--echoes-lc-sin-color, #888) 35%, transparent), transparent 70%);
+    transform: skewX(-6deg);
+    transform-origin: left center;
+    margin: -0.1rem 0.15rem 0.15rem -0.15rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.echoes-lc-engagement-billboard--right .echoes-lc-engagement-billboard__header {
+    transform: skewX(6deg);
+    transform-origin: right center;
+    flex-direction: row-reverse;
+    background: linear-gradient(-90deg, color-mix(in srgb, var(--echoes-lc-sin-color, #888) 35%, transparent), transparent 70%);
+}
+
+.echoes-lc-engagement-billboard__header-accent {
+    width: 0.35rem;
+    height: 0.75rem;
+    border-radius: 0.1rem;
+    background: var(--echoes-lc-sin-color, #888);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--echoes-lc-sin-color, #888) 50%, transparent);
+    flex-shrink: 0;
+}
+
+.echoes-lc-engagement-billboard__header-text {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(255, 248, 238, 0.92);
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 8.5rem;
+}
+
+.echoes-lc-engagement-billboard__body {
+    padding: 0.35rem 0.5rem 0.45rem;
+}
+
+.echoes-lc-engagement-billboard__power {
+    display: block;
+    font-size: 2.1rem;
+    font-weight: 900;
+    line-height: 1;
+    color: #fff8ee;
+    text-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+}
+
+.echoes-lc-engagement-billboard--left .echoes-lc-engagement-billboard__power {
+    color: #ffe8a8;
+}
+
+.echoes-lc-engagement-billboard--right .echoes-lc-engagement-billboard__power {
+    color: #c8e4ff;
+}
+
+.echoes-lc-engagement-billboard__power.is-bump {
+    animation: echoes-lc-engagement-power-bump 320ms ease-out;
+}
+
+@keyframes echoes-lc-engagement-power-bump {
+    0% {
+        transform: scale(1);
+    }
+    40% {
+        transform: scale(1.14);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.echoes-lc-engagement-billboard__coins {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.22rem;
+    justify-content: center;
+    margin-top: 0.4rem;
+}
+
+.echoes-lc-engagement-billboard__coins .echoes-battle-panel__playback-coin {
+    width: 1.45rem;
+    height: 1.45rem;
+    border-radius: 999px;
+}
+
+.echoes-lc-engagement-center {
+    position: absolute;
+    z-index: 6;
+    transform: translate(-50%, -100%);
+    text-align: center;
+    pointer-events: none;
+    padding: 0.25rem 0.65rem;
+    border-radius: 0.35rem;
+    background: rgba(8, 6, 5, 0.72);
+    border: 1px solid rgba(232, 197, 71, 0.25);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.echoes-lc-engagement-center__title {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 900;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #f0d878;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.echoes-lc-engagement-center__subtitle {
+    display: block;
+    margin-top: 0.12rem;
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 220, 183, 0.72);
+}
+
+.echoes-battle-panel__playback-coin.is-flipping {
+    animation: echoes-lc-coin-flip 280ms ease-out;
+    border-color: rgba(255, 220, 140, 0.55);
+    box-shadow: 0 0 12px rgba(255, 180, 80, 0.45);
+}
+
+@keyframes echoes-lc-coin-flip {
+    0% {
+        transform: scale(1) rotateY(0deg);
+        filter: brightness(1);
+    }
+    45% {
+        transform: scale(1.15) rotateY(90deg);
+        filter: brightness(1.35);
+    }
+    100% {
+        transform: scale(1) rotateY(0deg);
+        filter: brightness(1);
+    }
+}
+
 .echoes-lc-engagement-bar,
 .echoes-lc-clash-bar {
     position: absolute;
