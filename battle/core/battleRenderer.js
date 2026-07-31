@@ -468,8 +468,12 @@
                             : ''}
                     </span>
                     <div class="echoes-battle-panel__field-vitals-lc">
-                        <span class="echoes-battle-panel__field-hp-lc">${unit.hp}</span>
-                        <span class="echoes-battle-panel__field-sp-lc">${unit.sp}</span>
+                        ${lcCombatUi?.renderLcUnitVitals
+                            ? lcCombatUi.renderLcUnitVitals(unit, { escapeHtml, variant: 'field' })
+                            : `
+                                <span class="echoes-battle-panel__field-hp-lc">${unit.hp}</span>
+                                <span class="echoes-battle-panel__field-sp-lc">${unit.sp}</span>
+                            `}
                     </div>
                     ${renderMiniStatuses(unit)}
                 </button>
@@ -670,7 +674,7 @@
             }
             if (lcCombatUi?.getBillboardCoinStates && lcCombatUi?.renderBillboardCoinTrack) {
                 const states = lcCombatUi.getBillboardCoinStates(skill, playback, entry, side);
-                return lcCombatUi.renderBillboardCoinTrack(states);
+                return lcCombatUi.renderBillboardCoinTrack(states, resolveAssetUrl);
             }
             return renderPlaybackCoinTrack(skill, side, playback, entry);
         }
@@ -702,7 +706,7 @@
                 && (playback.phase === 'round-reveal' || playback.phase === 'coin-break' || playback.phase === 'attack-hit')
             ) {
                 const states = lcCombatUi.getBillboardCoinStates(skill, playback, entry, side);
-                return lcCombatUi.renderBillboardCoinTrack(states);
+                return lcCombatUi.renderBillboardCoinTrack(states, resolveAssetUrl);
             }
 
             const states = [];

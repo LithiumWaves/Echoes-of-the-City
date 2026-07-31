@@ -85,6 +85,7 @@
                 leftBroken: 0,
                 rightBroken: 0,
                 previewBattle: null,
+                displayBattle: null,
             };
         }
 
@@ -130,17 +131,55 @@
             playCombatSound(soundId);
         }
 
-        function processCombatEvents(battle, fromIndex = 0) {
+        function processCombatEvents(battle, fromIndex = 0, options = {}) {
             if (!combatSounds?.getSoundForBattleEvent || typeof playCombatSound !== 'function') {
                 return;
             }
+            const skipLifecycle = options?.skipLifecycle === true;
             const events = Array.isArray(battle?.events) ? battle.events : [];
             events.slice(fromIndex).forEach((event) => {
+                if (skipLifecycle && (event?.type === 'unit_staggered' || event?.type === 'unit_defeated')) {
+                    return;
+                }
                 const soundId = combatSounds.getSoundForBattleEvent(event);
                 if (soundId) {
                     emitCombatSound(soundId);
                 }
             });
+        }
+
+        const lcCombatUi = battleModules.lcCombatUi || window.EchoesOfTheCityLcCombatUi || null;
+
+        function playLifecycleSoundsForHit(vitalsResult) {
+            if (!vitalsResult || !combatSounds?.COMBAT_SOUND_IDS) {
+                return;
+            }
+            const { previousHp, resolvedDefender, targetHp } = vitalsResult;
+            if (Number.isFinite(targetHp) && targetHp <= 0 && previousHp > 0) {
+                emitCombatSound(combatSounds.COMBAT_SOUND_IDS.unitDeath || 'unitDeath');
+                return;
+            }
+            if (
+                resolvedDefender
+                && lcCombatUi?.didCrossStaggerThreshold
+                && lcCombatUi.didCrossStaggerThreshold(resolvedDefender, previousHp, targetHp)
+                && (resolvedDefender.staggerTurnsRemaining || 0) > 0
+            ) {
+                emitCombatSound(combatSounds.COMBAT_SOUND_IDS.stagger || 'stagger');
+            }
+        }
+
+        function applyPlaybackHitVitals(entry, hitIndex, displayBattle) {
+            if (!lcCombatUi?.applyPlaybackHitVitals) {
+                return null;
+            }
+            return lcCombatUi.applyPlaybackHitVitals(
+                entry,
+                hitIndex,
+                displayBattle,
+                engine.getState(),
+                getAttackingSide,
+            );
         }
 
         function getAttackingSideForEntry(entry) {
@@ -287,10 +326,6 @@
                         coinRevealIndex: flipCount,
                     });
 
-                    if (entry.engagementType !== 'clash') {
-                        playAttackHitSound(previewBattle, entry);
-                    }
-
                     if (entry.engagementType === 'clash' && round.result === 'tie') {
                         emitCombatSound(combatSounds?.COMBAT_SOUND_IDS?.parryAtk || 'parryAtk');
                     }
@@ -330,19 +365,21 @@
                     leftBroken,
                     rightBroken,
                 });
-                if (
-                    entry.engagementType !== 'clash'
-                    && !(Array.isArray(entry.rounds) && entry.rounds.length)
-                ) {
-                    playCoinFlipSounds(1);
-                    if (!(await waitForPlayback(PLAYBACK_TIMINGS.coinFlip, token))) {
-                        return false;
-                    }
-                    updatePlaybackState({
-                        coinRevealIndex: hitIndex + 1,
-                    });
-                    playAttackHitSound(previewBattle, entry);
+
+                playCoinFlipSounds(1);
+                if (!(await waitForPlayback(PLAYBACK_TIMINGS.coinFlip, token))) {
+                    return false;
                 }
+
+                updatePlaybackState({
+                    coinRevealIndex: hitIndex + 1,
+                });
+
+                const vitalsResult = applyPlaybackHitVitals(entry, hitIndex, playbackState.displayBattle);
+                playLifecycleSoundsForHit(vitalsResult);
+                playAttackHitSound(playbackState.displayBattle || previewBattle, entry);
+                render();
+
                 if (!(await waitForPlayback(PLAYBACK_TIMINGS.attackHit, token))) {
                     return false;
                 }
@@ -371,6 +408,7 @@
             playbackState = createIdlePlaybackState();
             playbackState.isRunning = true;
             playbackState.previewBattle = previewBattle;
+            playbackState.displayBattle = cloneBattleState(previewBattle);
             render();
 
             for (let index = 0; index < entries.length; index += 1) {
@@ -502,9 +540,11 @@
 
         function render() {
             const resolvedBattle = engine.getState();
-            const displayBattle = playbackState.isRunning && playbackState.previewBattle
-                ? playbackState.previewBattle
-                : resolvedBattle;
+            const displayBattle = playbackState.isRunning && playbackState.displayBattle
+                ? playbackState.displayBattle
+                : (playbackState.isRunning && playbackState.previewBattle
+                    ? playbackState.previewBattle
+                    : resolvedBattle);
             const debugIds = enableDebugTools && engine?.debug?.listIds
                 ? engine.debug.listIds()
                 : null;
@@ -785,7 +825,7 @@
                     const reason = engine.getResolveBlockReason?.() || 'Assign all skills before resolving.';
                     debugPatchMessage = reason;
                 } else {
-                    processCombatEvents(engine.getState(), eventStart);
+                    processCombatEvents(engine.getState(), eventStart, { skipLifecycle: true });
                 }
                 render();
                 if (didResolve) {

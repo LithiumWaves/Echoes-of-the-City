@@ -3616,31 +3616,30 @@
 }
 
 .echoes-battle-panel__playback-coin {
-    width: 1.7rem;
-    height: 2.15rem;
-    display: grid;
-    place-items: center;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 191, 132, 0.16);
-    background: rgba(255, 255, 255, 0.05);
-    color: #f8e4c8;
-    transition: opacity 180ms ease, transform 180ms ease, filter 180ms ease, width 180ms ease;
+    width: 1.85rem;
+    height: 1.85rem;
+    display: block;
+    border: none;
+    border-radius: 0;
+    background-color: transparent;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    transition: opacity 180ms ease, transform 180ms ease, filter 180ms ease;
 }
 
 .echoes-battle-panel__playback-coin strong {
-    font-size: 0.72rem;
-    line-height: 1;
+    display: none;
 }
 
 .echoes-battle-panel__playback-coin.is-heads {
-    background: linear-gradient(180deg, rgba(255, 170, 82, 0.3), rgba(101, 52, 23, 0.58));
-    border-color: rgba(255, 206, 157, 0.34);
     transform: translateY(-2px);
+    filter: brightness(1.08);
 }
 
 .echoes-battle-panel__playback-coin.is-tails {
-    opacity: 0.7;
-    filter: grayscale(0.15);
+    opacity: 0.88;
+    filter: grayscale(0.1);
 }
 
 .echoes-battle-panel__playback-coin.is-spent {
@@ -4497,6 +4496,116 @@
     font-weight: 800;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
     z-index: 2;
+}
+
+.echoes-lc-vitals {
+    position: absolute;
+    inset: auto 0 0 0;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: end;
+    gap: 0.2rem;
+    padding: 0.15rem 0.2rem 0.1rem;
+    pointer-events: none;
+}
+
+.echoes-lc-vitals--portrait {
+    bottom: 0.15rem;
+    left: 0;
+    right: 0;
+}
+
+.echoes-lc-vitals--field {
+    position: relative;
+    inset: auto;
+    margin-top: 0.15rem;
+    width: 100%;
+    max-width: 7.5rem;
+}
+
+.echoes-lc-vitals__hp-value {
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #ff8c2a;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.65);
+    min-width: 2rem;
+}
+
+.echoes-lc-vitals--portrait .echoes-lc-vitals__hp-value {
+    font-size: 0.82rem;
+}
+
+.echoes-lc-vitals__hp-bar {
+    position: relative;
+    height: 0.35rem;
+    min-width: 3.5rem;
+    border-radius: 0.15rem;
+    background: rgba(8, 6, 5, 0.85);
+    border: 1px solid rgba(255, 140, 42, 0.35);
+    overflow: visible;
+}
+
+.echoes-lc-vitals--portrait .echoes-lc-vitals__hp-bar {
+    height: 0.28rem;
+    min-width: 2.8rem;
+}
+
+.echoes-lc-vitals__hp-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(180deg, #ff9a3c, #c73e3e);
+    box-shadow: 0 0 8px rgba(255, 120, 40, 0.35);
+    transition: width 180ms ease;
+}
+
+.echoes-lc-vitals__threshold-marker {
+    position: absolute;
+    bottom: 100%;
+    width: 0;
+    height: 0;
+    margin-bottom: 1px;
+    border-left: 0.22rem solid transparent;
+    border-right: 0.22rem solid transparent;
+    border-bottom: 0.32rem solid rgba(255, 220, 140, 0.75);
+    transform: translateX(-50%);
+}
+
+.echoes-lc-vitals__threshold-marker.is-next {
+    border-bottom-color: #ffe8a8;
+    filter: drop-shadow(0 0 4px rgba(255, 220, 140, 0.65));
+}
+
+.echoes-lc-vitals__threshold-marker.is-spent {
+    border-bottom-color: rgba(180, 180, 180, 0.55);
+    opacity: 0.65;
+}
+
+.echoes-lc-vitals__sp-badge {
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    display: grid;
+    place-items: center;
+    padding: 0.15rem;
+    border-radius: 999px;
+    border: 2px solid rgba(139, 90, 43, 0.75);
+    background:
+        radial-gradient(circle at 30% 30%, rgba(120, 120, 120, 0.45), rgba(40, 38, 36, 0.92)),
+        repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.04) 2px, transparent 2px 5px);
+    color: #6eb8ff;
+    font-size: 0.75rem;
+    font-weight: 800;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+.echoes-lc-vitals--portrait .echoes-lc-vitals__sp-badge {
+    min-width: 1.45rem;
+    min-height: 1.45rem;
+    font-size: 0.65rem;
 }
 
 .echoes-lc-portrait__sp {

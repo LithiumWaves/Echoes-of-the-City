@@ -5,14 +5,15 @@
     const MAX_TEAM_PRESETS = 8;
     const MAX_TEAM_SIZE = 12;
 
-    const SIN_COLORS = {
+    const sinPalette = battleModules.sinColors || window.EchoesOfTheCitySinColors || {};
+    const SIN_COLORS = sinPalette.SIN_COLORS || {
         wrath: '#c73e3e',
         lust: '#e07b39',
         sloth: '#d4b84a',
         gluttony: '#5cb85c',
-        gloom: '#4a90c4',
-        pride: '#9b59b6',
-        envy: '#2ecc71',
+        gloom: '#6eb8e8',
+        pride: '#1e3a6e',
+        envy: '#9b59b6',
     };
 
     function createDefaultTeamPresetsState() {

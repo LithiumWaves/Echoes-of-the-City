@@ -87,6 +87,7 @@
         'battle/validation/battleValidation.js',
         'battle/content/battleContentRegistry.js',
         ...BATTLE_BASE_PACK_SCRIPT_RELATIVE_PATHS,
+        'battle/ui/sinColors.js',
         'battle/ui/creator/creatorUiHelpers.js',
         'battle/ui/creator/editorWorkbenchRenderer.js',
         'battle/ui/creator/movesetSheet/movesetSheetRenderer.js',

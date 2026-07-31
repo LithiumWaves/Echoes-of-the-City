@@ -7423,6 +7423,71 @@ function runSuite() {
         assert(deployHtml.includes('data-action="confirm-deployment"'), 'Expected confirm deployment action.');
     });
 
+    test('Sin colors and LC vitals markup', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = { EchoesOfTheCityBattleModules: {} };
+        require(path.resolve(battleRoot, 'ui/sinColors.js'));
+        require(path.resolve(battleRoot, 'ui/combat/lcCombatUi.js'));
+
+        const sinColors = global.window.EchoesOfTheCitySinColors;
+        const lcCombatUi = global.window.EchoesOfTheCityLcCombatUi;
+        assert(sinColors?.SIN_COLORS?.envy === '#9b59b6', 'Expected envy to be purple.');
+        assert(sinColors?.SIN_COLORS?.pride === '#1e3a6e', 'Expected pride to be dark blue.');
+        assert(lcCombatUi?.SIN_COLORS?.envy === '#9b59b6', 'Expected lcCombatUi to use shared envy color.');
+
+        const vitalsHtml = lcCombatUi.renderLcUnitVitals({
+            hp: 216,
+            maxHp: 300,
+            sp: 0,
+            staggerThresholds: [75, 150, 225],
+            staggerThresholdIndex: 1,
+        }, {
+            escapeHtml: (value) => String(value),
+            variant: 'field',
+        });
+        assert(vitalsHtml.includes('echoes-lc-vitals'), 'Expected LC vitals root.');
+        assert(vitalsHtml.includes('echoes-lc-vitals__hp-bar'), 'Expected HP bar.');
+        assert(vitalsHtml.includes('echoes-lc-vitals__threshold-marker'), 'Expected threshold markers.');
+        assert(vitalsHtml.includes('echoes-lc-vitals__sp-badge'), 'Expected SP badge.');
+        assert(vitalsHtml.includes('216'), 'Expected HP value.');
+
+        const coinHtml = lcCombatUi.renderBillboardCoinTrack(
+            ['pending', 'heads', 'tails'],
+            (value) => `resolved:${value}`,
+        );
+        assert(coinHtml.includes('Coin.png'), 'Expected base coin image.');
+        assert(coinHtml.includes('CoinHeads.png'), 'Expected heads coin image.');
+        assert(coinHtml.includes('CoinTails.png'), 'Expected tails coin image.');
+
+        const displayBattle = {
+            playerUnits: [{ id: 'ally', hp: 100, sp: 0, maxHp: 100 }],
+            enemyUnits: [{ id: 'enemy', hp: 100, sp: 0, maxHp: 100, staggerThresholds: [50], staggerThresholdIndex: 0, staggerTurnsRemaining: 0 }],
+            playerSlots: [{ id: 'p1', unitId: 'ally' }],
+            enemySlots: [{ id: 'e1', unitId: 'enemy' }],
+        };
+        const resolvedBattle = JSON.parse(JSON.stringify(displayBattle));
+        resolvedBattle.enemyUnits[0].hp = 40;
+        resolvedBattle.enemyUnits[0].staggerTurnsRemaining = 1;
+        const entry = {
+            engagementType: 'one-sided',
+            leftSkillId: 'hit',
+            leftSlotId: 'p1',
+            rightSlotId: 'e1',
+            hits: [{ targetHp: 40 }],
+        };
+        const vitalsResult = lcCombatUi.applyPlaybackHitVitals(
+            entry,
+            0,
+            displayBattle,
+            resolvedBattle,
+            () => 'left',
+        );
+        assert(displayBattle.enemyUnits[0].hp === 40, 'Expected defender HP updated during playback.');
+        assert(vitalsResult?.previousHp === 100, 'Expected previous HP in vitals result.');
+        assert(lcCombatUi.didCrossStaggerThreshold(resolvedBattle.enemyUnits[0], 100, 40), 'Expected stagger threshold cross.');
+    });
+
     test('Schema: rules.background validates image path', () => {
         const battleModules = createBattleEnvironment();
         const minimalEnemy = {

@@ -1,17 +1,19 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
 
-    const LC_MAX_COLUMNS = 12;
-    const SIN_TYPES = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
-    const SIN_COLORS = {
+    const sinPalette = battleModules.sinColors || window.EchoesOfTheCitySinColors || {};
+    const SIN_TYPES = sinPalette.SIN_TYPES || ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
+    const SIN_COLORS = sinPalette.SIN_COLORS || {
         wrath: '#c73e3e',
         lust: '#e07b39',
         sloth: '#d4b84a',
         gluttony: '#5cb85c',
-        gloom: '#4a90c4',
-        pride: '#9b59b6',
-        envy: '#2ecc71',
+        gloom: '#6eb8e8',
+        pride: '#1e3a6e',
+        envy: '#9b59b6',
     };
+
+    const LC_MAX_COLUMNS = 12;
 
     function getUnitPortraitUrl(unit, resolveAssetUrl) {
         const sprites = unit?.sprites;
@@ -22,6 +24,108 @@
         const idle = sprites.idle;
         const candidate = splash || idle || '';
         return candidate ? resolveAssetUrl(candidate) : '';
+    }
+
+    const COIN_IMAGE_PATHS = {
+        coin: 'assets/skillborders/Coin.png',
+        heads: 'assets/skillborders/CoinHeads.png',
+        tails: 'assets/skillborders/CoinTails.png',
+    };
+
+    function renderLcUnitVitals(unit, options = {}) {
+        const {
+            escapeHtml = (value) => String(value),
+            variant = 'field',
+        } = options;
+        const maxHp = Math.max(1, Number(unit?.maxHp) || 1);
+        const hp = Math.max(0, Number(unit?.hp) || 0);
+        const sp = Number.isFinite(unit?.sp) ? unit.sp : 0;
+        const hpPercent = Math.max(0, Math.min(100, (hp / maxHp) * 100));
+        const thresholds = Array.isArray(unit?.staggerThresholds) ? unit.staggerThresholds : [];
+        const thresholdIndex = Number.isInteger(unit?.staggerThresholdIndex) ? unit.staggerThresholdIndex : 0;
+
+        const markers = thresholds.map((threshold, index) => {
+            const position = Math.max(0, Math.min(100, (Number(threshold) / maxHp) * 100));
+            const markerClass = index < thresholdIndex
+                ? ' is-spent'
+                : index === thresholdIndex
+                    ? ' is-next'
+                    : '';
+            return `<span class="echoes-lc-vitals__threshold-marker${markerClass}" style="left:${position}%;" aria-hidden="true"></span>`;
+        }).join('');
+
+        return `
+            <div class="echoes-lc-vitals echoes-lc-vitals--${escapeHtml(variant)}">
+                <span class="echoes-lc-vitals__hp-value">${escapeHtml(String(hp))}</span>
+                <div class="echoes-lc-vitals__hp-bar" aria-label="HP">
+                    <span class="echoes-lc-vitals__hp-fill" style="width:${hpPercent}%;"></span>
+                    ${markers}
+                </div>
+                <span class="echoes-lc-vitals__sp-badge" aria-label="Sanity">${escapeHtml(String(sp))}</span>
+            </div>
+        `;
+    }
+
+    function applyPlaybackHitVitals(entry, hitIndex, displayBattle, resolvedBattle, getAttackingSideFn) {
+        if (!entry || !displayBattle || !resolvedBattle) {
+            return null;
+        }
+        const hit = Array.isArray(entry.hits) ? entry.hits[hitIndex] : null;
+        if (!hit) {
+            return null;
+        }
+
+        const attackingSide = typeof getAttackingSideFn === 'function'
+            ? getAttackingSideFn(entry)
+            : (entry.engagementType === 'clash' ? entry.winnerSide : (entry.leftSkillId ? 'left' : 'right'));
+        const defenderSlotId = attackingSide === 'left' ? entry.rightSlotId : entry.leftSlotId;
+        const attackerSlotId = attackingSide === 'left' ? entry.leftSlotId : entry.rightSlotId;
+        const allSlots = [...(displayBattle.playerSlots || []), ...(displayBattle.enemySlots || [])];
+        const defenderSlot = allSlots.find((slot) => slot?.id === defenderSlotId);
+        const attackerSlot = allSlots.find((slot) => slot?.id === attackerSlotId);
+        const findUnit = (battle, unitId) => {
+            if (!unitId) {
+                return null;
+            }
+            return [...(battle.playerUnits || []), ...(battle.enemyUnits || [])].find((unit) => unit?.id === unitId) || null;
+        };
+
+        const displayDefender = findUnit(displayBattle, defenderSlot?.unitId);
+        const resolvedDefender = findUnit(resolvedBattle, defenderSlot?.unitId);
+        const displayAttacker = findUnit(displayBattle, attackerSlot?.unitId);
+        const resolvedAttacker = findUnit(resolvedBattle, attackerSlot?.unitId);
+        const previousHp = displayDefender?.hp ?? 0;
+
+        if (displayDefender && Number.isFinite(hit.targetHp)) {
+            displayDefender.hp = hit.targetHp;
+        }
+        if (displayDefender && resolvedDefender) {
+            displayDefender.staggerTurnsRemaining = resolvedDefender.staggerTurnsRemaining;
+            displayDefender.staggerLevel = resolvedDefender.staggerLevel;
+            displayDefender.staggerThresholdIndex = resolvedDefender.staggerThresholdIndex;
+            displayDefender.sp = resolvedDefender.sp;
+        }
+        if (displayAttacker && resolvedAttacker) {
+            displayAttacker.sp = resolvedAttacker.sp;
+        }
+
+        return {
+            previousHp,
+            displayDefender,
+            resolvedDefender,
+            targetHp: hit.targetHp,
+        };
+    }
+
+    function didCrossStaggerThreshold(unit, previousHp, nextHp) {
+        if (!unit || !Number.isFinite(previousHp) || !Number.isFinite(nextHp)) {
+            return false;
+        }
+        const thresholds = Array.isArray(unit.staggerThresholds) ? unit.staggerThresholds : [];
+        return thresholds.some((threshold) => {
+            const value = Number(threshold);
+            return Number.isFinite(value) && previousHp > value && nextHp <= value;
+        });
     }
 
     function getSinResourceCount(battle, sinType) {
@@ -241,8 +345,7 @@
                 >
                     <span class="echoes-lc-portrait__speed">${slot.speed}</span>
                     <span class="echoes-lc-portrait__art" style="${portraitStyle}"></span>
-                    <span class="echoes-lc-portrait__hp">${unit.hp}</span>
-                    <span class="echoes-lc-portrait__sp">${unit.sp}</span>
+                    ${renderLcUnitVitals(unit, { escapeHtml, variant: 'portrait' })}
                     <span class="echoes-lc-portrait__name">${slotLabel}</span>
                 </button>
             </div>
@@ -543,13 +646,28 @@
         return states;
     }
 
-    function renderBillboardCoinTrack(states) {
+    function renderBillboardCoinTrack(states, resolveAssetUrl) {
+        const coinUrl = resolveAssetUrl ? resolveAssetUrl(COIN_IMAGE_PATHS.coin) : COIN_IMAGE_PATHS.coin;
+        const headsUrl = resolveAssetUrl ? resolveAssetUrl(COIN_IMAGE_PATHS.heads) : COIN_IMAGE_PATHS.heads;
+        const tailsUrl = resolveAssetUrl ? resolveAssetUrl(COIN_IMAGE_PATHS.tails) : COIN_IMAGE_PATHS.tails;
+
         return states.map((state, index) => {
+            if (state === 'broken') {
+                return '';
+            }
             const stateClass = state === 'flipping' ? 'flipping' : state;
+            let imageUrl = coinUrl;
+            if (state === 'heads') {
+                imageUrl = headsUrl;
+            } else if (state === 'tails') {
+                imageUrl = tailsUrl;
+            }
             return `
-                <span class="echoes-battle-panel__playback-coin is-${stateClass}">
-                    <strong>${index + 1}</strong>
-                </span>
+                <span
+                    class="echoes-battle-panel__playback-coin is-${stateClass}"
+                    style="background-image:url('${String(imageUrl).replace(/'/g, '%27')}');"
+                    aria-hidden="true"
+                ></span>
             `;
         }).join('');
     }
@@ -734,7 +852,11 @@
         LC_MAX_COLUMNS,
         SIN_TYPES,
         SIN_COLORS,
+        COIN_IMAGE_PATHS,
         getUnitPortraitUrl,
+        renderLcUnitVitals,
+        applyPlaybackHitVitals,
+        didCrossStaggerThreshold,
         getSinResourceCount,
         sortDashboardSlots,
         renderLcSinResourceRail,
