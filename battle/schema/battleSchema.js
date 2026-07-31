@@ -167,6 +167,10 @@
             normalized.description = source.description;
         }
 
+        if (source.drive && typeof source.drive === 'object' && !Array.isArray(source.drive)) {
+            normalized.drive = cloneDefinition(source.drive);
+        }
+
         if (sourceWaves) {
             normalized.rules.waves = sourceWaves;
         }
@@ -180,6 +184,26 @@
 
     function isFiniteNumber(value) {
         return typeof value === 'number' && Number.isFinite(value);
+    }
+
+    function validateDriveMetadata(errors, drive, path) {
+        if (drive == null) {
+            return;
+        }
+        if (typeof drive !== 'object' || Array.isArray(drive)) {
+            pushError(errors, path, 'must be an object when provided.');
+            return;
+        }
+        ['chapterId', 'chapterLabel', 'encounterLabel', 'accentColor', 'bannerImage'].forEach((field) => {
+            if (drive[field] != null && typeof drive[field] !== 'string') {
+                pushError(errors, `${path}.${field}`, 'must be a string when provided.');
+            }
+        });
+        ['chapterOrder', 'encounterOrder'].forEach((field) => {
+            if (drive[field] != null && !isFiniteNumber(drive[field])) {
+                pushError(errors, `${path}.${field}`, 'must be a number when provided.');
+            }
+        });
     }
 
     function validateAmountDefinition(errors, amount, path) {
@@ -1851,6 +1875,9 @@
         }
         if (!normalizedDefinition.name || typeof normalizedDefinition.name !== 'string') {
             pushError(errors, 'battle.name', 'must be a non-empty string.');
+        }
+        if (normalizedDefinition.drive != null) {
+            validateDriveMetadata(errors, normalizedDefinition.drive, 'battle.drive');
         }
         if (requirePlayerParty && (!Array.isArray(normalizedDefinition.playerUnits) || !normalizedDefinition.playerUnits.length)) {
             pushError(errors, 'battle.playerUnits', 'must contain at least one unit.');

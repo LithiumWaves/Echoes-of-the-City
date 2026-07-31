@@ -7339,6 +7339,90 @@ function runSuite() {
         assert(shellHtml.includes('Bound.'), 'Expected message banner text.');
     });
 
+    test('Drive menu: grouping helper and select/deploy markup', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = { EchoesOfTheCityBattleModules: {} };
+        require(path.resolve(battleRoot, 'ui/drive/driveMenuRenderer.js'));
+
+        const driveMenu = global.window.EchoesOfTheCityDriveMenu;
+        const battleModules = global.window.EchoesOfTheCityBattleModules;
+        assert(typeof driveMenu?.groupBattlesForDriveMenu === 'function', 'Expected groupBattlesForDriveMenu.');
+        assert(typeof driveMenu?.renderDriveSelectScreen === 'function', 'Expected renderDriveSelectScreen.');
+        assert(typeof driveMenu?.renderDriveDeployScreen === 'function', 'Expected renderDriveDeployScreen.');
+        assert(battleModules?.driveMenu === driveMenu, 'Expected battleModules.driveMenu export.');
+
+        const battles = [
+            {
+                id: 'story-encounter',
+                name: 'Story Encounter',
+                isDebug: false,
+                description: 'A story fight.',
+                drive: {
+                    chapterId: 'echoes-district',
+                    chapterLabel: 'Echoes District',
+                    chapterOrder: 0,
+                    encounterOrder: 0,
+                },
+            },
+            {
+                id: 'debug-fight',
+                name: 'Debug Fight',
+                isDebug: true,
+                description: 'Debug tools.',
+            },
+            {
+                id: 'pack-encounter',
+                name: 'Pack Encounter',
+                isDebug: false,
+                description: 'From a pack.',
+            },
+        ];
+        const installedPacks = [{
+            id: 'custom-pack',
+            name: 'Custom Pack',
+            battleIds: ['pack-encounter'],
+        }];
+
+        const chapters = driveMenu.groupBattlesForDriveMenu(battles, installedPacks);
+        assert(chapters.length >= 3, 'Expected multiple drive chapters.');
+        const storyChapter = chapters.find((chapter) => chapter.chapterId === 'echoes-district');
+        assert(storyChapter?.chapterLabel === 'Echoes District', 'Expected drive chapter label.');
+        assert(storyChapter?.encounters.some((entry) => entry.id === 'story-encounter'), 'Expected story encounter in chapter.');
+        const debugChapter = chapters[chapters.length - 1];
+        assert(debugChapter.chapterId === driveMenu.DEBUG_CHAPTER_ID, 'Expected debug chapter last.');
+
+        const escapeHtml = (value) => String(value);
+        const escapeAttribute = (value) => String(value).replace(/"/g, '&quot;');
+        const selectHtml = driveMenu.renderDriveSelectScreen({
+            escapeHtml,
+            escapeAttribute,
+            chapters,
+            selectedChapterId: 'echoes-district',
+            selectedBattleId: 'story-encounter',
+            selectedBattle: battles[0],
+            showDebugToolsToggle: true,
+            debugToolsEnabled: false,
+            advancedMarkup: '',
+        });
+        assert(selectHtml.includes('echoes-drive'), 'Expected drive root class.');
+        assert(selectHtml.includes('Echoes District'), 'Expected chapter header.');
+        assert(selectHtml.includes('echoes-drive__encounter-banner'), 'Expected encounter banner.');
+        assert(selectHtml.includes('Begin Drive'), 'Expected Begin Drive label.');
+
+        const deployHtml = driveMenu.renderDriveDeployScreen({
+            escapeHtml,
+            escapeAttribute,
+            selectedBattle: battles[0],
+            encounterName: 'Story Encounter',
+            teamName: 'Team A',
+            capHintMarkup: '<p class="echoes-drive__deploy-cap">Cap</p>',
+            deployCardsMarkup: '<div class="echoes-identity-card">Card</div>',
+        });
+        assert(deployHtml.includes('echoes-drive__deploy-grid'), 'Expected deploy grid wrapper.');
+        assert(deployHtml.includes('data-action="confirm-deployment"'), 'Expected confirm deployment action.');
+    });
+
     test('Schema: rules.background validates image path', () => {
         const battleModules = createBattleEnvironment();
         const minimalEnemy = {

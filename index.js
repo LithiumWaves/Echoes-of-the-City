@@ -92,6 +92,7 @@
         'battle/ui/creator/movesetSheet/movesetSheetRenderer.js',
         'battle/ui/creator/encounterBuilder/encounterBuilderRenderer.js',
         'battle/ui/roster/teamBuilderRenderer.js',
+        'battle/ui/drive/driveMenuRenderer.js',
         'battle/ui/inspect/inspectState.js',
         'battle/ui/combat/lcCombatUi.js',
         'battle/audio/combatSounds.js',
@@ -189,6 +190,7 @@
         teamRosterFilter: '',
         combatPhase: 'select',
         deploySelectedUnitIds: [],
+        selectedDriveChapterId: null,
     };
 
     const elements = {
@@ -498,13 +500,22 @@
             }
 
             seenIds.add(entry.id);
+            const fullDefinition = typeof api.getBattleDefinition === 'function'
+                ? api.getBattleDefinition(entry.id)
+                : null;
+            const backgroundImage = fullDefinition?.rules?.background?.image
+                ? resolveExtensionUrl(fullDefinition.rules.background.image)
+                : null;
+
             uniqueBattles.push({
                 id: entry.id,
                 name: entry.name || entry.id,
                 isDebug: isDebugBattleId(entry.id),
-                description: typeof api.getBattleDefinition === 'function'
-                    ? api.getBattleDefinition(entry.id)?.description || ''
-                    : '',
+                description: fullDefinition?.description || '',
+                drive: fullDefinition?.drive && typeof fullDefinition.drive === 'object'
+                    ? fullDefinition.drive
+                    : null,
+                backgroundImage,
             });
         });
 
@@ -517,6 +528,50 @@
         });
 
         return uniqueBattles;
+    }
+
+    function getInstalledPacksForDrive() {
+        const api = getBattleContentApi();
+        const listedPacks = typeof api.listInstalledContentPacks === 'function'
+            ? api.listInstalledContentPacks()
+            : [];
+        const battleModules = window.EchoesOfTheCityBattleModules || {};
+        const installedEntries = battleModules.installedContentPacks || {};
+
+        return listedPacks.map((pack) => {
+            const entry = installedEntries[pack.id];
+            return {
+                id: pack.id,
+                name: pack.name || pack.id,
+                version: pack.version || null,
+                battleIds: Array.isArray(entry?.ids?.battles) ? entry.ids.battles : [],
+            };
+        });
+    }
+
+    function syncDriveChapterSelection() {
+        const driveMenu = getDriveMenu();
+        if (!driveMenu) {
+            return;
+        }
+
+        const chapters = driveMenu.groupBattlesForDriveMenu(
+            state.availableBattles,
+            getInstalledPacksForDrive(),
+        );
+        const chapterForBattle = driveMenu.findChapterForBattle(chapters, state.selectedBattleId);
+        if (chapterForBattle) {
+            state.selectedDriveChapterId = chapterForBattle.chapterId;
+            return;
+        }
+
+        const hasCurrentChapter = chapters.some((chapter) => chapter.chapterId === state.selectedDriveChapterId);
+        if (!hasCurrentChapter) {
+            const preferredChapter = chapters.find((chapter) => chapter.chapterId !== driveMenu.DEBUG_CHAPTER_ID)
+                || chapters[0]
+                || null;
+            state.selectedDriveChapterId = preferredChapter?.chapterId || null;
+        }
     }
 
     function refreshBattleSelectionState() {
@@ -535,6 +590,8 @@
         if (!state.selectedBattleId || !availableBattles.some((battle) => battle.id === state.selectedBattleId)) {
             state.selectedBattleId = preferredBattleId;
         }
+
+        syncDriveChapterSelection();
     }
 
     async function prepareCreatorSelection() {
@@ -578,6 +635,10 @@
 
     function getEditorWorkbench() {
         return window.EchoesOfTheCityEditorWorkbench || window.EchoesOfTheCityBattleModules?.editorWorkbench || null;
+    }
+
+    function getDriveMenu() {
+        return window.EchoesOfTheCityDriveMenu || window.EchoesOfTheCityBattleModules?.driveMenu || null;
     }
 
     function getTeamBuilder() {
@@ -2242,6 +2303,47 @@
         }
     }
 
+    function buildDriveAdvancedMarkup(selectedBattle, installedPacks) {
+        const installedPackSummary = installedPacks.length
+            ? `Installed packs: ${installedPacks.length}`
+            : 'No installed packs';
+        const contentImportMessage = formatContentImportMessage(state.contentImportMessage);
+        const messageClass = state.contentImportMessage?.type === 'error'
+            ? ' is-error'
+            : ' is-success';
+        const driveMenu = getDriveMenu();
+        const advancedLabel = driveMenu?.DRIVE_LABELS?.advancedImport || 'Import / Export';
+
+        return `
+            <details class="echoes-drive__advanced">
+                <summary class="echoes-drive__advanced-summary">${escapeHtml(advancedLabel)}</summary>
+                <div class="echoes-drive__advanced-body">
+                    <p class="echoes-drive__advanced-hint">Import a battle, unit, status, or full content pack JSON. Export the selected battle or a reusable dependency pack.</p>
+                    <p class="echoes-drive__advanced-hint">Data-only JSON packs persist locally after import.</p>
+                    <div class="echoes-drive__advanced-toolbar">
+                        <span class="echoes-drive__deploy-pill">${escapeHtml(installedPackSummary)}</span>
+                        <button class="echoes-drive__action echoes-drive__action--ghost" type="button" data-action="clear-installed-packs" ${installedPacks.length ? '' : 'disabled'}>Clear Installed Packs</button>
+                    </div>
+                    <textarea
+                        class="echoes-drive__import-textarea"
+                        data-action="content-json-input"
+                        rows="6"
+                        placeholder='{"id":"custom-battle","name":"Custom Battle","enemyUnitIds":[...]}'
+                    >${escapeHtml(state.contentJsonInput || '')}</textarea>
+                    <div class="echoes-drive__advanced-actions">
+                        <button class="echoes-drive__action echoes-drive__action--ghost" type="button" data-action="import-content-json">Import JSON</button>
+                        <button class="echoes-drive__action echoes-drive__action--ghost" type="button" data-action="import-content-file">Import File</button>
+                        <button class="echoes-drive__action echoes-drive__action--ghost" type="button" data-action="export-selected-battle" ${selectedBattle ? '' : 'disabled'}>Export Battle</button>
+                        <button class="echoes-drive__action echoes-drive__action--ghost" type="button" data-action="export-selected-pack" ${selectedBattle ? '' : 'disabled'}>Export Battle Pack</button>
+                    </div>
+                    ${contentImportMessage
+                        ? `<div class="echoes-drive__message${messageClass}">${escapeHtml(contentImportMessage)}</div>`
+                        : ''}
+                </div>
+            </details>
+        `;
+    }
+
     function renderBattleStartScreen() {
         if (!elements.combatContent) {
             return;
@@ -2251,6 +2353,8 @@
             state.battleHandler.render();
             return;
         }
+
+        const driveMenu = getDriveMenu();
 
         if (!state.availableBattles.length) {
             if (!state.battleSelectionPromise) {
@@ -2266,110 +2370,44 @@
                     });
             }
 
-            elements.combatContent.innerHTML = `
-                <div class="echoes-battle-panel__combat-debug">
-                    <div class="echoes-battle-panel__combat-toolbar">
-                        <div class="echoes-battle-panel__combat-pills">
-                            <span class="echoes-battle-panel__combat-pill">Battle Simulator</span>
-                        </div>
+            elements.combatContent.innerHTML = driveMenu?.renderDriveShell({
+                escapeHtml,
+                bodyMarkup: `
+                    <div class="echoes-drive__loading">
+                        <p class="echoes-drive__preview-empty">Loading registered battle definitions...</p>
                     </div>
-                    <div class="echoes-battle-panel__planner-empty">
-                        Loading registered battle definitions...
-                    </div>
-                </div>
+                `,
+                footerMarkup: driveMenu.renderFooterNav('drive', escapeHtml),
+            }) || `
+                <div class="echoes-battle-panel__planner-empty">Loading registered battle definitions...</div>
             `;
             return;
         }
 
         const api = getBattleContentApi();
-        const selectedBattle = state.availableBattles.find((battle) => battle.id === state.selectedBattleId) || state.availableBattles[0];
         const installedPacks = typeof api.listInstalledContentPacks === 'function'
             ? api.listInstalledContentPacks()
             : [];
-        const installedPackSummary = installedPacks.length
-            ? `Installed packs: ${installedPacks.length}`
-            : 'No installed packs';
-        const contentImportMessage = formatContentImportMessage(state.contentImportMessage);
-        const contentImportMessageStyles = state.contentImportMessage?.type === 'error'
-            ? 'background: rgba(120, 24, 24, 0.58); border: 1px solid rgba(255, 110, 110, 0.4);'
-            : 'background: rgba(24, 120, 70, 0.42); border: 1px solid rgba(120, 255, 170, 0.35);';
-        const selectionMarkup = state.availableBattles
-            .map((battle) => `
-                <button
-                    class="echoes-battle-panel__combat-button"
-                    type="button"
-                    data-action="select-battle"
-                    data-battle-id="${escapeHtml(battle.id)}"
-                    style="justify-content: space-between; ${battle.id === selectedBattle?.id ? 'outline: 2px solid rgba(255,255,255,0.55);' : ''}"
-                >
-                    <span>${escapeHtml(battle.name)}</span>
-                    ${battle.isDebug ? '<span class="echoes-battle-panel__combat-pill">Debug</span>' : ''}
-                </button>
-            `)
-            .join('');
+        const installedPacksForDrive = getInstalledPacksForDrive();
+        const chapters = driveMenu?.groupBattlesForDriveMenu(state.availableBattles, installedPacksForDrive) || [];
+        const selectedBattle = state.availableBattles.find((battle) => battle.id === state.selectedBattleId)
+            || state.availableBattles[0]
+            || null;
 
-        elements.combatContent.innerHTML = `
-            <div class="echoes-battle-panel__combat-debug">
-                <div class="echoes-battle-panel__combat-toolbar">
-                    <div class="echoes-battle-panel__combat-pills">
-                        <span class="echoes-battle-panel__combat-pill">Battle Simulator</span>
-                        ${selectedBattle?.isDebug ? '<span class="echoes-battle-panel__combat-pill">Debug Tools Available</span>' : ''}
-                    </div>
-                </div>
-                <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
-                    ${escapeHtml(selectedBattle?.description || 'Choose a registered battle definition to launch combat.')}
-                </div>
-                <div style="margin-top: 0.8rem; display: grid; gap: 0.55rem;">
-                    ${selectionMarkup}
-                </div>
-                <div style="margin-top: 0.8rem; display: flex; justify-content: center;">
-                    <button
-                        class="echoes-battle-panel__combat-button"
-                        type="button"
-                        data-action="launch-selected-battle"
-                        ${selectedBattle ? '' : 'disabled'}
-                    >
-                        ${selectedBattle?.isDebug ? 'Launch Debug Battle' : 'Deploy'}
-                    </button>
-                </div>
-                ${selectedBattle && !selectedBattle.isDebug
-                    ? `
-                        <div style="margin-top: 0.8rem; display: flex; justify-content: center;">
-                            <label class="echoes-battle-panel__planner-empty" style="display: inline-flex; gap: 0.55rem; align-items: center; cursor: pointer;">
-                                <input type="checkbox" data-action="toggle-debug-tools" ${state.battleDebugToolsEnabled ? 'checked' : ''} />
-                                <span>Enable Debug Tools</span>
-                            </label>
-                        </div>
-                    `
-                    : ''}
-                <div style="margin-top: 1rem; display: grid; gap: 0.55rem; text-align: left;">
-                    <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
-                        Import a battle, unit, status, or a full content pack JSON object. Export the selected battle by itself or as a reusable dependency pack.
-                    </div>
-                    <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
-                        Data-only JSON packs are persisted locally after import. Trusted JavaScript packs live under battle/content/packs/user/ and run code.
-                    </div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center;">
-                        <span class="echoes-battle-panel__combat-pill">${escapeHtml(installedPackSummary)}</span>
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="clear-installed-packs" ${installedPacks.length ? '' : 'disabled'}>Clear Installed Packs</button>
-                    </div>
-                    <textarea
-                        data-action="content-json-input"
-                        rows="8"
-                        style="width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height: 1.35;"
-                        placeholder='{"id":"custom-battle","name":"Custom Battle","playerUnits":[...],"enemyUnits":[...]}'
-                    >${escapeHtml(state.contentJsonInput || '')}</textarea>
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="import-content-json">Import JSON</button>
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="import-content-file">Import File</button>
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="export-selected-battle" ${selectedBattle ? '' : 'disabled'}>Export Battle</button>
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="export-selected-pack" ${selectedBattle ? '' : 'disabled'}>Export Battle Pack</button>
-                    </div>
-                    ${contentImportMessage
-                        ? `<div style="padding: 0.65rem 0.75rem; color: rgba(255,255,255,0.92); white-space: pre-wrap; ${contentImportMessageStyles}">${escapeHtml(contentImportMessage)}</div>`
-                        : ''}
-                </div>
-            </div>
+        syncDriveChapterSelection();
+
+        elements.combatContent.innerHTML = driveMenu?.renderDriveSelectScreen({
+            escapeHtml,
+            escapeAttribute,
+            chapters,
+            selectedChapterId: state.selectedDriveChapterId,
+            selectedBattleId: state.selectedBattleId,
+            selectedBattle,
+            showDebugToolsToggle: Boolean(selectedBattle && !selectedBattle.isDebug),
+            debugToolsEnabled: state.battleDebugToolsEnabled,
+            advancedMarkup: buildDriveAdvancedMarkup(selectedBattle, installedPacks),
+        }) || `
+            <div class="echoes-battle-panel__planner-empty">Drive menu module not loaded.</div>
         `;
     }
 
@@ -2378,6 +2416,7 @@
             return;
         }
 
+        const driveMenu = getDriveMenu();
         const api = getBattleContentApi();
         const encounter = typeof api.getBattleDefinition === 'function'
             ? api.getBattleDefinition(state.selectedBattleId)
@@ -2412,34 +2451,18 @@
             }).join('')
             : '<p class="echoes-battle-panel__planner-empty">No units in the active team preset. Build your team in Characters first.</p>';
 
-        const capHint = `<p class="echoes-battle-panel__planner-empty">Deploy up to ${deployCap} identities (combat field limit).</p>`;
+        const capHint = `<p class="echoes-drive__deploy-cap">Deploy up to ${deployCap} identities (combat field limit).</p>`;
 
-        elements.combatContent.innerHTML = `
-            <div class="echoes-battle-panel__combat-debug echoes-deploy">
-                <div class="echoes-battle-panel__combat-toolbar">
-                    <div class="echoes-battle-panel__combat-pills">
-                        <span class="echoes-battle-panel__combat-pill">Deploy</span>
-                        <span class="echoes-battle-panel__combat-pill">${escapeHtml(activePreset.name || 'Active team')}</span>
-                    </div>
-                </div>
-                <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
-                    ${escapeHtml(encounter?.name || selectedBattle?.name || 'Encounter')}
-                    — select units from your active team preset to deploy.
-                </div>
-                ${capHint}
-                <div class="echoes-deploy__grid echoes-identity-grid echoes-identity-grid--deploy">${deployCards}</div>
-                <div class="echoes-deploy__actions">
-                    <button class="echoes-battle-panel__combat-button" type="button" data-action="cancel-deployment">Back</button>
-                    <button
-                        class="echoes-battle-panel__combat-button"
-                        type="button"
-                        data-action="confirm-deployment"
-                        ${teamUnitIds.length && selectedIds.length ? '' : 'disabled'}
-                    >
-                        Deploy &amp; Start
-                    </button>
-                </div>
-            </div>
+        elements.combatContent.innerHTML = driveMenu?.renderDriveDeployScreen({
+            escapeHtml,
+            escapeAttribute,
+            selectedBattle,
+            encounterName: encounter?.name || selectedBattle?.name || 'Encounter',
+            teamName: activePreset.name || 'Active team',
+            capHintMarkup: capHint,
+            deployCardsMarkup: deployCards,
+        }) || `
+            <div class="echoes-battle-panel__planner-empty">Drive menu module not loaded.</div>
         `;
     }
 
@@ -2554,11 +2577,45 @@
             return;
         }
 
-        const { action, battleId } = actionTarget.dataset;
+        const { action, battleId, chapterId } = actionTarget.dataset;
+
+        if (action === 'select-drive-chapter' && chapterId) {
+            const driveMenu = getDriveMenu();
+            const chapters = driveMenu?.groupBattlesForDriveMenu(
+                state.availableBattles,
+                getInstalledPacksForDrive(),
+            ) || [];
+            state.selectedDriveChapterId = chapterId;
+            const chapter = chapters.find((entry) => entry.chapterId === chapterId);
+            if (chapter && !chapter.encounters.some((encounter) => encounter.id === state.selectedBattleId)) {
+                state.selectedBattleId = chapter.encounters[0]?.id || state.selectedBattleId;
+            }
+            state.combatPhase = 'select';
+            renderBattleStartScreen();
+            return;
+        }
+
+        if (action === 'drive-nav-sinners') {
+            void handleCharacterTrayButtonClick();
+            return;
+        }
+
+        if (action === 'drive-nav-workshop') {
+            void handleCreatorTrayButtonClick();
+            return;
+        }
 
         if (action === 'select-battle' && battleId) {
             state.selectedBattleId = battleId;
             state.combatPhase = 'select';
+            const driveMenu = getDriveMenu();
+            const chapterForBattle = driveMenu?.findChapterForBattle(
+                driveMenu.groupBattlesForDriveMenu(state.availableBattles, getInstalledPacksForDrive()),
+                battleId,
+            );
+            if (chapterForBattle) {
+                state.selectedDriveChapterId = chapterForBattle.chapterId;
+            }
             renderBattleStartScreen();
             return;
         }

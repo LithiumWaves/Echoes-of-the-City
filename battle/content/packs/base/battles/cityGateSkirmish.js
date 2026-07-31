@@ -10,6 +10,14 @@
         id: 'city-gate-skirmish',
         name: 'City Gate Skirmish',
         description: 'A straightforward live encounter built for the general battle launcher: face Callisto at the gate.',
+        drive: {
+            chapterId: 'echoes-district',
+            chapterLabel: 'Echoes District',
+            chapterOrder: 0,
+            encounterLabel: 'Gate Skirmish',
+            encounterOrder: 0,
+            accentColor: '#c73e3e',
+        },
         enemyUnitIds: [
             'ring-nursefather-hong-lu',
         ],
