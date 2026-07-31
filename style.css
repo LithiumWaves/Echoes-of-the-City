@@ -1898,10 +1898,16 @@
     pointer-events: none;
 }
 
-.echoes-battle-panel__combat-battlefield .echoes-battle-panel__combat-hud,
-.echoes-battle-panel__combat-battlefield .echoes-lc-sin-rail--field,
 .echoes-battle-panel__combat-battlefield .echoes-battle-panel__combat-stage-area {
     z-index: 2;
+}
+
+.echoes-battle-panel__combat-battlefield .echoes-battle-panel__combat-hud {
+    z-index: 12;
+}
+
+.echoes-battle-panel__combat-battlefield .echoes-lc-sin-rail--field {
+    z-index: 8;
 }
 
 .echoes-battle-panel__combat-resize-handle {
@@ -1948,16 +1954,24 @@
     justify-content: space-between;
     align-items: flex-start;
     gap: 0.8rem;
-    z-index: 5;
+    z-index: 12;
     pointer-events: none;
 }
 
-.echoes-battle-panel__combat-counter-stack,
+.echoes-battle-panel__combat-counter-stack {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    pointer-events: auto;
+}
+
 .echoes-battle-panel__combat-controls {
     display: flex;
     gap: 0.45rem;
     flex-wrap: wrap;
     pointer-events: auto;
+    position: relative;
+    z-index: 1;
 }
 
 .echoes-battle-panel__combat-counter {
@@ -2066,7 +2080,7 @@
     position: absolute;
     top: 3.5rem;
     right: 0.55rem;
-    z-index: 5;
+    z-index: 8;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
@@ -2240,7 +2254,7 @@
 .echoes-battle-panel__field-speed {
     position: absolute;
     left: 50%;
-    top: -1.6rem;
+    top: -1.55rem;
     transform: translateX(-50%);
     min-width: 2.35rem;
     min-height: 2.35rem;
@@ -2253,7 +2267,7 @@
     font-size: 1.15rem;
     font-weight: 800;
     box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
-    z-index: 2;
+    z-index: 3;
 }
 
 .echoes-battle-panel__field-shadow,
@@ -3628,16 +3642,17 @@
 
 .echoes-battle-panel__field-intent-icon {
     position: absolute;
-    top: -2.2rem;
+    top: -4.35rem;
     left: 50%;
     transform: translateX(-50%);
-    width: 2.4rem;
-    height: 2.4rem;
+    width: 2.15rem;
+    height: 2.15rem;
     background-size: contain;
     background-position: center;
     background-repeat: no-repeat;
     z-index: 4;
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45));
+    pointer-events: none;
 }
 
 .echoes-battle-panel__field-vitals-lc {
