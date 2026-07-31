@@ -217,11 +217,6 @@
             ? `--echoes-team-preset-button-url:url('${escapeAttr(presetButtonUrl)}');`
             : '';
 
-        const gridBackgroundUrl = resolveAssetUrl(TEAM_MENU_ASSETS.gridBackground);
-        const gridBackgroundStyle = gridBackgroundUrl
-            ? `--echoes-team-grid-bg-url:url('${escapeAttr(gridBackgroundUrl)}');`
-            : '';
-
         const presetTabs = normalized.presets.map((preset, index) => `
             <button
                 class="echoes-team__preset-tab echoes-team__preset-tab--lc${index === activeIndex ? ' is-active' : ''}"
@@ -296,7 +291,6 @@
                         </div>
                         <section
                             class="echoes-team__grid echoes-identity-grid echoes-identity-grid--lc"
-                            style="${gridBackgroundStyle}"
                             aria-label="Active team"
                         >
                             ${teamSlots}

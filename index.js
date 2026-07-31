@@ -205,6 +205,7 @@
         mainMenu: null,
         characterSelect: null,
         characterScreen: null,
+        characterScreenContent: null,
         characterLayout: null,
         creatorScreen: null,
         creatorContent: null,
@@ -2534,7 +2535,8 @@
     }
 
     async function renderCharacterSelectScreen() {
-        if (!elements.characterScreen) {
+        const mount = elements.characterScreenContent || elements.characterScreen;
+        if (!mount) {
             return;
         }
 
@@ -2542,20 +2544,20 @@
             await ensureBattleModuleLoaded();
         } catch (error) {
             console.error(`${EXTENSION_ID}: team builder module load failed.`, error);
-            elements.characterScreen.innerHTML = `<p class="echoes-team__empty">Failed to load team builder.</p>`;
+            mount.innerHTML = `<p class="echoes-team__empty">Failed to load team builder.</p>`;
             return;
         }
 
         const teamBuilder = getTeamBuilder();
         const api = getBattleContentApi();
         if (!teamBuilder) {
-            elements.characterScreen.innerHTML = `<p class="echoes-team__empty">Team builder is not available.</p>`;
+            mount.innerHTML = `<p class="echoes-team__empty">Team builder is not available.</p>`;
             return;
         }
 
         ensureTeamPresetsLoaded();
         const unitList = typeof api.listUnitDefinitions === 'function' ? api.listUnitDefinitions() : [];
-        elements.characterScreen.innerHTML = teamBuilder.renderTeamBuilder(
+        mount.innerHTML = teamBuilder.renderTeamBuilder(
             state.teamPresets,
             unitList,
             escapeAttribute,
@@ -4932,7 +4934,9 @@
                             <div class="echoes-battle-panel__character-layout">
                                 <div class="echoes-battle-panel__roster-menu"></div>
                                 <div class="echoes-battle-panel__character-screen">
+                                    <div class="echoes-battle-panel__character-screen-bg" aria-hidden="true"></div>
                                     <div class="echoes-battle-panel__no-character"></div>
+                                    <div class="echoes-battle-panel__character-screen-content"></div>
                                 </div>
                             </div>
                         </div>
@@ -4992,6 +4996,7 @@
         elements.characterSelect = root.querySelector('.echoes-battle-panel__character-select');
         elements.characterLayout = root.querySelector('.echoes-battle-panel__character-layout');
         elements.characterScreen = root.querySelector('.echoes-battle-panel__character-screen');
+        elements.characterScreenContent = root.querySelector('.echoes-battle-panel__character-screen-content');
         elements.combatScreen = root.querySelector('.echoes-battle-panel__combat-screen');
         elements.combatContent = root.querySelector('.echoes-battle-panel__combat-content');
         elements.combatTrayButton = root.querySelector('.echoes-battle-panel__tray-button--combat');

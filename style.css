@@ -2332,6 +2332,15 @@
     height: 100%;
     aspect-ratio: 2038 / 1134;
     background: url("./assets/characterstab/characterselectscreen.png") left center / 100% 100% no-repeat;
+    isolation: isolate;
+}
+
+.echoes-battle-panel__character-screen-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: url("./assets/characterstab/teammenubg.png") center / cover no-repeat;
 }
 
 .echoes-battle-panel__no-character {
@@ -2342,47 +2351,64 @@
     aspect-ratio: 356 / 491;
     background: url("./assets/characterstab/nocharacter.png") center / contain no-repeat;
     pointer-events: none;
-    z-index: 1;
+    z-index: 2;
+}
+
+.echoes-battle-panel__character-screen-content {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.echoes-battle-panel__character-screen-content .echoes-team {
+    pointer-events: auto;
 }
 
 .echoes-battle-panel__character-screen .echoes-team {
     position: absolute;
-    inset: 8% 3.5% 8% 3.5%;
+    inset: 0;
     display: flex;
     flex-direction: column;
     color: rgba(255, 255, 255, 0.92);
     font: 0.72rem/1.35 "Segoe UI", system-ui, sans-serif;
-    pointer-events: auto;
-    z-index: 2;
 }
 
 .echoes-team--lc {
-    inset: 7.5% 3.2% 7% 3.2%;
+    inset: 0;
 }
 
 .echoes-team__lc-body {
+    position: relative;
     flex: 1;
     min-height: 0;
-    display: grid;
-    grid-template-columns: minmax(5.5rem, 7.5%) minmax(0, 1fr) minmax(10rem, 20%);
-    gap: 0.65rem;
-    align-items: stretch;
+    height: 100%;
+    display: block;
 }
 
 .echoes-team__center {
+    position: absolute;
+    left: 15.8%;
+    top: 18.8%;
+    right: 21.8%;
+    bottom: 13.2%;
     display: flex;
     flex-direction: column;
     min-height: 0;
-    gap: 0.35rem;
+    gap: 0;
 }
 
 .echoes-team__grid-header {
+    position: absolute;
+    left: 16.8%;
+    top: 12.8%;
+    right: 46%;
+    padding: 0;
+    min-height: auto;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.2rem 0.45rem 0.35rem;
-    min-height: 1.75rem;
 }
 
 .echoes-team__preset-name {
@@ -2457,18 +2483,19 @@
 }
 
 .echoes-team__presets--lc {
-    gap: 0.2rem;
-    padding-top: 0.15rem;
+    position: absolute;
+    left: 3.6%;
+    top: 40.5%;
+    width: 9.8%;
+    bottom: 12.8%;
+    gap: 0.12rem;
+    padding-top: 0;
     overflow-y: auto;
     overflow-x: hidden;
 }
 
 .echoes-team__presets-heading {
-    font: 700 0.62rem/1.2 "Segoe UI", system-ui, sans-serif;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: rgba(240, 216, 168, 0.72);
-    padding: 0.15rem 0.25rem 0.35rem;
+    display: none;
 }
 
 .echoes-team__preset-tab {
@@ -2540,8 +2567,8 @@
     flex: 1;
     min-height: 0;
     border: none;
-    background: var(--echoes-team-grid-bg-url, url("./assets/characterstab/teammenubg.png")) center / 100% 100% no-repeat;
-    padding: 0.15rem 0.25rem 0.25rem;
+    background: transparent;
+    padding: 0.2rem 0.3rem 0.3rem;
     gap: 0.28rem;
     overflow: hidden;
 }
@@ -2803,8 +2830,14 @@
 }
 
 .echoes-team__roster--lc {
+    position: absolute;
+    right: 2.8%;
+    top: 9.2%;
+    width: 17.2%;
+    bottom: 12.8%;
+    padding-top: 0;
     border: 1px solid rgba(255, 180, 100, 0.14);
-    background: rgba(8, 10, 14, 0.38);
+    background: rgba(8, 10, 14, 0.22);
     padding: 0.35rem 0.3rem;
 }
 
@@ -2985,43 +3018,82 @@
     height: 100%;
 }
 
+.echoes-battle-panel__screen:fullscreen .echoes-battle-panel__character-screen-bg {
+    background-size: cover;
+    background-position: center;
+}
+
 .echoes-battle-panel__screen:fullscreen .echoes-battle-panel__no-character {
     top: 13.7%;
     left: 4.1%;
     width: 13.4%;
 }
 
-.echoes-battle-panel__screen:fullscreen .echoes-team--lc {
-    inset: 5.8% 2.6% 5.2% 2.4%;
-}
-
 .echoes-battle-panel__screen:fullscreen .echoes-team__lc-body {
-    grid-template-columns: 9.2% minmax(0, 1fr) 18.8%;
-    gap: 0.55vw;
+    position: relative;
+    height: 100%;
+    width: 100%;
 }
 
 .echoes-battle-panel__screen:fullscreen .echoes-team__presets--lc {
-    padding-top: 17.5%;
+    position: absolute;
+    left: 3.6%;
+    top: 40.5%;
+    width: 9.8%;
+    bottom: 12.8%;
+    padding-top: 0;
+    gap: 0.12rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.echoes-battle-panel__screen:fullscreen .echoes-team__presets-heading {
+    display: none;
+}
+
+.echoes-battle-panel__screen:fullscreen .echoes-team__preset-tab--lc {
+    min-height: 2.55vh;
+    padding: 0.3rem 0.35rem;
+}
+
+.echoes-battle-panel__screen:fullscreen .echoes-team__preset-tab-label {
+    font-size: 0.58rem;
 }
 
 .echoes-battle-panel__screen:fullscreen .echoes-team__grid-header {
-    padding: 0.1rem 0.5rem 0.25rem 1.8%;
-    min-height: 2.4vh;
+    position: absolute;
+    left: 16.8%;
+    top: 12.8%;
+    right: 46%;
+    padding: 0;
+    min-height: auto;
 }
 
-.echoes-battle-panel__screen:fullscreen .echoes-team__preset-name-input {
-    max-width: 16rem;
-    font-size: 0.82rem;
+.echoes-battle-panel__screen:fullscreen .echoes-team__center {
+    position: absolute;
+    left: 15.8%;
+    top: 18.8%;
+    right: 21.8%;
+    bottom: 13.2%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    gap: 0;
 }
 
 .echoes-battle-panel__screen:fullscreen .echoes-team__roster--lc {
-    padding-top: 3.5%;
-    background: rgba(8, 10, 14, 0.28);
+    position: absolute;
+    right: 2.8%;
+    top: 9.2%;
+    width: 17.2%;
+    bottom: 12.8%;
+    padding-top: 0;
+    background: rgba(8, 10, 14, 0.22);
 }
 
 .echoes-battle-panel__screen:fullscreen .echoes-identity-grid--lc {
-    padding: 0.35rem 0.45rem 0.4rem;
-    gap: 0.32rem;
+    padding: 0.45rem 0.5rem 0.5rem;
+    gap: 0.3rem;
 }
 
 .echoes-battle-ui.is-open .echoes-battle-backdrop {
