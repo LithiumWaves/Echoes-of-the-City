@@ -168,7 +168,7 @@
         const hiddenInPlanner = skill?.showInPlanner === false;
 
         return `
-            <article class="echoes-moveset__skill-card" style="border-color:${sinColor};">
+            <article class="echoes-moveset__skill-card echoes-lc-hex" style="--echoes-lc-sin-color:${sinColor}; border-color:${sinColor};">
                 <header class="echoes-moveset__skill-header">
                     <div class="echoes-moveset__skill-sin" style="background:${sinColor};">${escapeHtml(String(sinType).charAt(0).toUpperCase())}</div>
                     <div class="echoes-moveset__skill-title-wrap">
@@ -269,8 +269,8 @@
 
         return `
             <section class="echoes-moveset__mechanics">
-                <h3 class="echoes-moveset__column-title">Mechanics &amp; Statuses</h3>
-                <p class="echoes-creator__hint">Statuses from your workshop catalog. Reference these IDs in skill effects and passives.</p>
+                <h3 class="echoes-moveset__column-title">Status Effects reference</h3>
+                <p class="echoes-creator__hint">Status Effects from your workshop catalog — reference these IDs in skill effects and passives.</p>
                 <div class="echoes-moveset__mechanics-list">
                     ${entries || '<span class="echoes-creator__hint">Save statuses to the workshop to list them here.</span>'}
                 </div>
@@ -288,9 +288,9 @@
 
         return `
             <div class="echoes-moveset">
-                <div class="echoes-moveset__toolbar">
-                    <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-unit-add-skill">+ Skill</button>
-                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-add-passive">+ Passive</button>
+                <div class="echoes-moveset__toolbar echoes-editor-workshop__action-bar">
+                    <button class="echoes-editor-workshop__action" type="button" data-action="creator-unit-add-skill">+ Skill card</button>
+                    <button class="echoes-editor-workshop__action echoes-editor-workshop__action--ghost" type="button" data-action="creator-unit-add-passive">+ Passive</button>
                 </div>
                 <div class="echoes-moveset__body">
                     <div class="echoes-moveset__skills-column">

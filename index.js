@@ -88,6 +88,7 @@
         'battle/content/battleContentRegistry.js',
         ...BATTLE_BASE_PACK_SCRIPT_RELATIVE_PATHS,
         'battle/ui/creator/creatorUiHelpers.js',
+        'battle/ui/creator/editorWorkbenchRenderer.js',
         'battle/ui/creator/movesetSheet/movesetSheetRenderer.js',
         'battle/ui/creator/encounterBuilder/encounterBuilderRenderer.js',
         'battle/ui/roster/teamBuilderRenderer.js',
@@ -573,6 +574,10 @@
 
     function getMovesetSheet() {
         return window.EchoesOfTheCityMovesetSheet || window.EchoesOfTheCityBattleModules?.movesetSheet || null;
+    }
+
+    function getEditorWorkbench() {
+        return window.EchoesOfTheCityEditorWorkbench || window.EchoesOfTheCityBattleModules?.editorWorkbench || null;
     }
 
     function getTeamBuilder() {
@@ -1852,52 +1857,56 @@
         const installedPacks = typeof api.listInstalledContentPacks === 'function'
             ? api.listInstalledContentPacks()
             : [];
-        const message = state.creatorMessage?.text || '';
-        const messageStyles = state.creatorMessage?.type === 'error'
-            ? 'background: rgba(120, 24, 24, 0.58); border: 1px solid rgba(255, 110, 110, 0.4);'
-            : 'background: rgba(24, 120, 70, 0.42); border: 1px solid rgba(120, 255, 170, 0.35);';
+        const message = state.creatorMessage?.text ? { text: state.creatorMessage.text, type: state.creatorMessage.type } : null;
 
-        const tabButton = (id, label) => `
-            <button
-                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost"
-                type="button"
-                data-action="creator-tab"
-                data-tab="${id}"
-                style="${tab === id ? 'outline: 2px solid rgba(255,255,255,0.55);' : ''}"
-            >${escapeHtml(label)}</button>
-        `;
+        const editorWorkbench = getEditorWorkbench();
+        const LABELS = editorWorkbench?.EDITOR_LABELS || {
+            draftCard: 'Draft Card',
+            draftPack: 'Draft Pack',
+            bindToCollection: 'Bind to Collection',
+            trialRun: 'Trial Run',
+            validate: 'Validate',
+            advancedBinding: 'Advanced Binding',
+        };
 
-        const typeButton = (id, label) => `
-            <button
-                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost"
-                type="button"
-                data-action="creator-type"
-                data-type="${id}"
-                style="${entityType === id ? 'outline: 2px solid rgba(255,255,255,0.55);' : ''}"
-            >${escapeHtml(label)}</button>
-        `;
-
-        const listEntries = (tab === 'library')
-            ? installedPacks.map((pack) => `
-                <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 0.55rem; align-items: center;">
-                    <span class="echoes-battle-panel__combat-pill">${escapeHtml(`${pack.name} (${pack.id})${pack.version ? ` v${pack.version}` : ''}`)}</span>
-                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-export-pack" data-pack-id="${escapeHtml(pack.id)}">Export</button>
-                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-uninstall-pack" data-pack-id="${escapeHtml(pack.id)}">Uninstall</button>
-                </div>
-            `).join('')
-            : getCreatorListEntries(entityType).map((entry) => `
-                <button
-                    class="echoes-battle-panel__combat-button"
-                    type="button"
-                    data-action="creator-select-entity"
-                    data-entity-type="${escapeHtml(entityType)}"
-                    data-entity-id="${escapeHtml(entry.id)}"
-                    style="justify-content: space-between; ${entry.id === state.creatorSelectedId ? 'outline: 2px solid rgba(255,255,255,0.55);' : ''}"
-                >
-                    <span>${escapeHtml(entry.name || entry.label || entry.id)}</span>
-                    <span class="echoes-battle-panel__combat-pill">${escapeHtml(entry.id)}</span>
-                </button>
-            `).join('');
+        let binderMarkup = '';
+        if (editorWorkbench) {
+            if (tab === 'library') {
+                binderMarkup = installedPacks.map((pack) => editorWorkbench.renderPublishedSetRow(
+                    pack,
+                    escapeHtml,
+                    escapeAttribute,
+                )).join('');
+            } else if (entityType === 'battle') {
+                binderMarkup = getCreatorListEntries('battle').map((entry) => editorWorkbench.renderPackBinderTile(
+                    entry,
+                    entry.id === state.creatorSelectedId,
+                    escapeHtml,
+                    escapeAttribute,
+                )).join('');
+            } else if (entityType === 'unit') {
+                binderMarkup = getCreatorListEntries('unit').map((entry) => {
+                    const unitDef = getCreatorEntityDefinition('unit', entry.id);
+                    return editorWorkbench.renderCardBinderTile(
+                        entry,
+                        unitDef,
+                        entry.id === state.creatorSelectedId,
+                        {
+                            escapeHtml,
+                            escapeAttribute,
+                            resolveAssetUrl: resolveCreatorSpriteUrl,
+                        },
+                    );
+                }).join('');
+            } else if (entityType === 'status') {
+                binderMarkup = getCreatorListEntries('status').map((entry) => editorWorkbench.renderStatusBinderTile(
+                    entry,
+                    entry.id === state.creatorSelectedId,
+                    escapeHtml,
+                    escapeAttribute,
+                )).join('');
+            }
+        }
 
         const catalog = getCreatorCatalog();
         const creatorUi = getCreatorUi();
@@ -1928,76 +1937,80 @@
 
         const unitEditorMarkup = tab === 'editor' && entityType === 'unit'
             ? `
-                <div class="echoes-creator" style="display: grid; gap: 0.85rem;">
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-unit-new">New Unit</button>
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-validate">Validate</button>
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
+                <div class="echoes-creator echoes-editor-desk-panel">
+                    <div class="echoes-editor-workshop__action-bar">
+                        <button class="echoes-editor-workshop__action" type="button" data-action="creator-unit-new">${escapeHtml(LABELS.draftCard)}</button>
+                        <button class="echoes-editor-workshop__action" type="button" data-action="creator-validate">${escapeHtml(LABELS.validate)}</button>
+                        <button class="echoes-editor-workshop__action" type="button" data-action="creator-save-workshop">${escapeHtml(LABELS.bindToCollection)}</button>
                     </div>
 
-                    <p class="echoes-creator__hint">Build movesets on the sheet below: each skill card has phase lanes (Combat Start, On Use, Clash, per-coin On Hit). Passives and workshop statuses sit on the right.</p>
+                    <p class="echoes-editor-workshop__tip">Shape an Identity Card: stats and art on the plate, then forge skills on the sheet — each lane is a combat phase (On Use, Clash, per-coin On Hit).</p>
 
-                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;">
-                        <div style="display: grid; gap: 0.45rem;">
-                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Id</label>
-                            <input data-action="creator-unit-field" data-field="id" value="${escapeAttribute(String(unitDraft?.id || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                        </div>
-                        <div style="display: grid; gap: 0.45rem;">
-                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Name</label>
-                            <input data-action="creator-unit-field" data-field="name" value="${escapeAttribute(String(unitDraft?.name || ''))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                        </div>
-                        <div style="display: grid; gap: 0.45rem;">
-                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Level</label>
-                            <input data-action="creator-unit-field" data-field="level" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.level ?? 1))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                        </div>
-                        <div style="display: grid; gap: 0.45rem;">
-                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Max HP</label>
-                            <input data-action="creator-unit-field" data-field="maxHp" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.maxHp ?? 100))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                        </div>
-                        <div style="display: grid; gap: 0.45rem;">
-                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">SP</label>
-                            <input data-action="creator-unit-field" data-field="sp" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.sp ?? 0))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                        </div>
-                        <div style="display: grid; gap: 0.45rem;">
-                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Defense Level</label>
-                            <input data-action="creator-unit-field" data-field="defenseLevel" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.defenseLevel ?? 0))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                        </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;">
-                        <div style="display: grid; gap: 0.45rem;">
-                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Speed Min</label>
-                            <input data-action="creator-unit-speed" data-index="0" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.speedRange?.[0] ?? 1))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                        </div>
-                        <div style="display: grid; gap: 0.45rem;">
-                            <label class="echoes-battle-panel__planner-empty" style="text-align:left;">Speed Max</label>
-                            <input data-action="creator-unit-speed" data-index="1" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.speedRange?.[1] ?? 1))}" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                        </div>
-                    </div>
-
-                    <details open>
-                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Sprites</summary>
-                        <div style="display: grid; gap: 0.75rem; margin-top: 0.75rem;">
-                            <div style="display: grid; gap: 0.55rem;">
-                                <span class="echoes-battle-panel__planner-empty" style="text-align:left;">Splash art (roster card)</span>
-                                <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.55rem; align-items: center;">
-                                    <input data-action="creator-unit-sprite" data-sprite-key="splash" value="${escapeAttribute(String(unitSprites?.splash || ''))}" placeholder="assets/... or URL or data:" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                    <input type="file" accept="image/*" data-action="creator-upload-sprite" data-sprite-key="splash" style="max-width: 14rem;" />
+                    <div class="echoes-editor-card-plate">
+                        ${unitSprites?.splash ? `<div class="echoes-editor-card-plate__portrait" style="background-image:url('${escapeAttribute(resolveCreatorSpriteUrl(unitSprites.splash))}');"></div>` : '<div class="echoes-editor-card-plate__portrait echoes-editor-card-plate__portrait--empty"></div>'}
+                        <div class="echoes-editor-card-plate__fields">
+                            <div class="echoes-editor-field-grid echoes-editor-field-grid--2">
+                                <div class="echoes-creator__field-row">
+                                    <label>Card ID</label>
+                                    <input data-action="creator-unit-field" data-field="id" value="${escapeAttribute(String(unitDraft?.id || ''))}" />
                                 </div>
-                                ${unitSprites?.splash ? `<img src="${escapeAttribute(resolveCreatorSpriteUrl(unitSprites.splash))}" alt="splash" style="max-height: 16rem; max-width: 100%; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.2); padding: 0.35rem;" />` : ''}
+                                <div class="echoes-creator__field-row">
+                                    <label>Display name</label>
+                                    <input data-action="creator-unit-field" data-field="name" value="${escapeAttribute(String(unitDraft?.name || ''))}" />
+                                </div>
+                                <div class="echoes-creator__field-row">
+                                    <label>Level</label>
+                                    <input data-action="creator-unit-field" data-field="level" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.level ?? 1))}" />
+                                </div>
+                                <div class="echoes-creator__field-row">
+                                    <label>Max HP</label>
+                                    <input data-action="creator-unit-field" data-field="maxHp" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.maxHp ?? 100))}" />
+                                </div>
+                                <div class="echoes-creator__field-row">
+                                    <label>SP</label>
+                                    <input data-action="creator-unit-field" data-field="sp" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.sp ?? 0))}" />
+                                </div>
+                                <div class="echoes-creator__field-row">
+                                    <label>Defense Level</label>
+                                    <input data-action="creator-unit-field" data-field="defenseLevel" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.defenseLevel ?? 0))}" />
+                                </div>
+                            </div>
+                            <div class="echoes-editor-field-grid echoes-editor-field-grid--2">
+                                <div class="echoes-creator__field-row">
+                                    <label>Speed Min</label>
+                                    <input data-action="creator-unit-speed" data-index="0" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.speedRange?.[0] ?? 1))}" />
+                                </div>
+                                <div class="echoes-creator__field-row">
+                                    <label>Speed Max</label>
+                                    <input data-action="creator-unit-speed" data-index="1" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.speedRange?.[1] ?? 1))}" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <details class="echoes-editor-workshop__details" open>
+                        <summary class="echoes-editor-workshop__details-summary">Card art &amp; sprites</summary>
+                        <div class="echoes-editor-workshop__details-body">
+                            <div class="echoes-creator__field-row">
+                                <label>Splash art (binder portrait)</label>
+                                <div class="echoes-editor-sprite-row">
+                                    <input data-action="creator-unit-sprite" data-sprite-key="splash" value="${escapeAttribute(String(unitSprites?.splash || ''))}" placeholder="assets/... or URL or data:" />
+                                    <input type="file" accept="image/*" data-action="creator-upload-sprite" data-sprite-key="splash" />
+                                </div>
+                                ${unitSprites?.splash ? `<img class="echoes-editor-sprite-preview echoes-editor-sprite-preview--large" src="${escapeAttribute(resolveCreatorSpriteUrl(unitSprites.splash))}" alt="splash" />` : ''}
                             </div>
                             ${['idle', 'moving', 'hurt', 'guard', 'evade'].map((key) => `
-                                <div style="display: grid; grid-template-columns: 7rem minmax(0, 1fr) auto; gap: 0.55rem; align-items: center;">
-                                    <span class="echoes-battle-panel__planner-empty" style="text-align:left;">${escapeHtml(key)}</span>
-                                    <input data-action="creator-unit-sprite" data-sprite-key="${escapeAttribute(key)}" value="${escapeAttribute(String(unitSprites?.[key] || ''))}" placeholder="assets/... or URL or data:" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                    <input type="file" accept="image/*" data-action="creator-upload-sprite" data-sprite-key="${escapeAttribute(key)}" style="max-width: 14rem;" />
+                                <div class="echoes-editor-sprite-row">
+                                    <span class="echoes-editor-sprite-label">${escapeHtml(key)}</span>
+                                    <input data-action="creator-unit-sprite" data-sprite-key="${escapeAttribute(key)}" value="${escapeAttribute(String(unitSprites?.[key] || ''))}" placeholder="assets/... or URL or data:" />
+                                    <input type="file" accept="image/*" data-action="creator-upload-sprite" data-sprite-key="${escapeAttribute(key)}" />
                                 </div>
-                                ${unitSprites?.[key] ? `<img src="${escapeAttribute(resolveCreatorSpriteUrl(unitSprites[key]))}" alt="${escapeAttribute(key)}" style="max-height: 7rem; max-width: 100%; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.2); padding: 0.35rem;" />` : ''}
+                                ${unitSprites?.[key] ? `<img class="echoes-editor-sprite-preview" src="${escapeAttribute(resolveCreatorSpriteUrl(unitSprites[key]))}" alt="${escapeAttribute(key)}" />` : ''}
                             `).join('')}
 
-                            <details>
-                                <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Skill sprites</summary>
-                                <div style="display: grid; gap: 0.55rem; margin-top: 0.65rem;">
+                            <details class="echoes-editor-workshop__details">
+                                <summary class="echoes-editor-workshop__details-summary">Skill sprites</summary>
+                                <div class="echoes-editor-workshop__details-body">
                                     ${unitSkills.map((skill) => {
                                         const skillId = skill?.id || '';
                                         if (!skillId) {
@@ -2005,11 +2018,11 @@
                                         }
                                         const spriteValue = unitSkillSprites?.[skillId] || '';
                                         return `
-                                            <div style="display: grid; grid-template-columns: 1fr minmax(0, 1.2fr) auto auto; gap: 0.55rem; align-items: center;">
+                                            <div class="echoes-editor-sprite-row echoes-editor-sprite-row--skill">
                                                 <span class="echoes-battle-panel__combat-pill">${escapeHtml(skillId)}</span>
-                                                <input data-action="creator-unit-skill-sprite" data-skill-id="${escapeAttribute(skillId)}" value="${escapeAttribute(String(spriteValue))}" placeholder="assets/... or URL or data:" style="width:100%; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;" />
-                                                <input type="file" accept="image/*" data-action="creator-upload-skill-sprite" data-skill-id="${escapeAttribute(skillId)}" style="max-width: 14rem;" />
-                                                <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-clear-skill-sprite" data-skill-id="${escapeAttribute(skillId)}">Clear</button>
+                                                <input data-action="creator-unit-skill-sprite" data-skill-id="${escapeAttribute(skillId)}" value="${escapeAttribute(String(spriteValue))}" placeholder="assets/... or URL or data:" />
+                                                <input type="file" accept="image/*" data-action="creator-upload-skill-sprite" data-skill-id="${escapeAttribute(skillId)}" />
+                                                <button class="echoes-editor-workshop__action echoes-editor-workshop__action--ghost" type="button" data-action="creator-unit-clear-skill-sprite" data-skill-id="${escapeAttribute(skillId)}">Clear</button>
                                             </div>
                                         `;
                                     }).join('')}
@@ -2024,12 +2037,12 @@
                     ${movesetSheet?.renderMovesetSheet(unitDraft, catalog, creatorUi, escapeAttribute, escapeHtml)
                         || '<span class="echoes-creator__hint">Moveset sheet module not loaded.</span>'}
 
-                    <details>
-                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Raw JSON</summary>
+                    <details class="echoes-editor-workshop__details">
+                        <summary class="echoes-editor-workshop__details-summary">${escapeHtml(LABELS.advancedBinding)}</summary>
                         <textarea
                             data-action="creator-json-input"
                             rows="14"
-                            style="width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.65rem; font: inherit; line-height: 1.35; margin-top: 0.65rem;"
+                            class="echoes-creator__raw-json"
                             placeholder='Paste a unit JSON object here...'
                         >${escapeHtml(state.creatorJsonInput || '')}</textarea>
                     </details>
@@ -2039,12 +2052,12 @@
 
         const battleEditorMarkup = tab === 'editor' && entityType === 'battle'
             ? `
-                <div class="echoes-creator" style="display: grid; gap: 0.85rem;">
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-battle-new">New Encounter</button>
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-validate">Validate</button>
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-playtest">Playtest</button>
+                <div class="echoes-creator echoes-editor-desk-panel">
+                    <div class="echoes-editor-workshop__action-bar">
+                        <button class="echoes-editor-workshop__action" type="button" data-action="creator-battle-new">${escapeHtml(LABELS.draftPack)}</button>
+                        <button class="echoes-editor-workshop__action" type="button" data-action="creator-validate">${escapeHtml(LABELS.validate)}</button>
+                        <button class="echoes-editor-workshop__action" type="button" data-action="creator-save-workshop">${escapeHtml(LABELS.bindToCollection)}</button>
+                        <button class="echoes-editor-workshop__action echoes-editor-workshop__action--accent" type="button" data-action="creator-playtest">${escapeHtml(LABELS.trialRun)}</button>
                     </div>
                     ${encounterBuilder?.renderEncounterBuilder(
                         battleDraft,
@@ -2055,13 +2068,12 @@
                         escapeHtml,
                         { hookTriggers: getCreatorHookTriggers() },
                     ) || '<span class="echoes-creator__hint">Encounter builder module not loaded.</span>'}
-                    <details>
-                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Raw JSON</summary>
+                    <details class="echoes-editor-workshop__details">
+                        <summary class="echoes-editor-workshop__details-summary">${escapeHtml(LABELS.advancedBinding)}</summary>
                         <textarea
                             data-action="creator-json-input"
                             rows="14"
                             class="echoes-creator__raw-json"
-                            style="width: 100%; resize: vertical; margin-top: 0.65rem;"
                             placeholder='Paste a battle JSON object here...'
                         >${escapeHtml(state.creatorJsonInput || '')}</textarea>
                     </details>
@@ -2071,21 +2083,21 @@
 
         const statusEditorMarkup = tab === 'editor' && entityType === 'status'
             ? `
-                <div class="echoes-creator" style="display: grid; gap: 0.85rem;">
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center;">
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-status-new">New Status</button>
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-validate">Validate</button>
-                        <button class="echoes-battle-panel__combat-button" type="button" data-action="creator-save-workshop">Save to Workshop</button>
-                        <select data-action="creator-status-template-pick" style="min-width: 14rem; border:1px solid rgba(255,255,255,0.18); background: rgba(8,10,14,0.72); color: rgba(255,255,255,0.92); padding: 0.55rem; font: inherit;">
+                <div class="echoes-creator echoes-editor-desk-panel echoes-editor-effect-plate">
+                    <div class="echoes-editor-workshop__action-bar">
+                        <button class="echoes-editor-workshop__action" type="button" data-action="creator-status-new">New Status Effect</button>
+                        <button class="echoes-editor-workshop__action" type="button" data-action="creator-validate">${escapeHtml(LABELS.validate)}</button>
+                        <button class="echoes-editor-workshop__action" type="button" data-action="creator-save-workshop">${escapeHtml(LABELS.bindToCollection)}</button>
+                        <select class="echoes-editor-workshop__select" data-action="creator-status-template-pick">
                             <option value="">— Start from template —</option>
                             ${statusTemplates.map((template) => `<option value="${escapeAttribute(template.id)}">${escapeHtml(template.label)}</option>`).join('')}
                         </select>
-                        <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-status-apply-template">Use Template</button>
+                        <button class="echoes-editor-workshop__action echoes-editor-workshop__action--ghost" type="button" data-action="creator-status-apply-template">Use Template</button>
                     </div>
 
-                    <p class="echoes-creator__hint">Build status effects visually: pick when they trigger, add conditions, then choose what happens. No JSON required.</p>
+                    <p class="echoes-editor-workshop__tip">Forge a Status Effect: choose triggers, conditions, and outcomes — no JSON required for most effects.</p>
 
-                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem;">
+                    <div class="echoes-editor-field-grid echoes-editor-field-grid--2">
                         <div class="echoes-creator__field-row">
                             <label>Id</label>
                             <input data-action="creator-status-field" data-field="id" value="${escapeAttribute(String(statusView?.draft?.id || ''))}" />
@@ -2114,14 +2126,14 @@
                         <input data-action="creator-status-tags" value="${escapeAttribute(statusTags)}" placeholder="buff, custom, damage" />
                     </div>
 
-                    <details open>
-                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Stack rules</summary>
-                        <div style="display:grid; gap:0.75rem; margin-top:0.75rem;">
+                    <details class="echoes-editor-workshop__details" open>
+                        <summary class="echoes-editor-workshop__details-summary">Stack rules</summary>
+                        <div class="echoes-editor-workshop__details-body">
                             <label class="echoes-creator__checkbox">
                                 <input type="checkbox" data-action="creator-status-count-only" ${statusView?.draft?.countOnly ? 'checked' : ''} />
                                 Count only (no potency — like Damage Up)
                             </label>
-                            <div style="display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:0.75rem;">
+                            <div class="echoes-editor-field-grid echoes-editor-field-grid--2">
                                 <fieldset class="echoes-creator__fieldset">
                                     <legend>Potency</legend>
                                     <label class="echoes-creator__checkbox">
@@ -2152,9 +2164,9 @@
                         </div>
                     </details>
 
-                    <details open>
-                        <summary class="echoes-battle-panel__combat-pill" style="cursor:pointer;">Behavior — triggers &amp; effects</summary>
-                        <div style="margin-top:0.75rem;">
+                    <details class="echoes-editor-workshop__details" open>
+                        <summary class="echoes-editor-workshop__details-summary">Behavior — triggers &amp; effects</summary>
+                        <div class="echoes-editor-workshop__details-body">
                             ${creatorUi?.renderHooksEditor(
                                 statusView?.draft?.hooks || {},
                                 catalog,
@@ -2165,18 +2177,18 @@
                         </div>
                     </details>
 
-                    <details>
-                        <summary class="echoes-battle-panel__planner-empty" style="cursor:pointer; text-align:left;">Advanced JSON</summary>
-                        <textarea data-action="creator-json-input" rows="12" class="echoes-creator__raw-json" style="margin-top:0.65rem;">${escapeHtml(state.creatorJsonInput || '')}</textarea>
+                    <details class="echoes-editor-workshop__details">
+                        <summary class="echoes-editor-workshop__details-summary">${escapeHtml(LABELS.advancedBinding)}</summary>
+                        <textarea data-action="creator-json-input" rows="12" class="echoes-creator__raw-json">${escapeHtml(state.creatorJsonInput || '')}</textarea>
                     </details>
                 </div>
             `
             : '';
 
-        const editorControls = tab === 'library'
+        const deskMarkup = tab === 'library'
             ? `
-                <div class="echoes-battle-panel__planner-empty" style="text-align: left;">
-                    Installed packs are persisted locally. Use Export to download the data-only JSON payload, or Uninstall to remove it.
+                <div class="echoes-editor-desk-panel echoes-editor-desk-panel--collection">
+                    <p class="echoes-editor-workshop__tip">Published sets are saved locally. Export a set to download its data payload, or uninstall to remove it from your collection.</p>
                 </div>
             `
             : `
@@ -2187,36 +2199,16 @@
 
         beginCreatorRenderLock();
         try {
-            elements.creatorContent.innerHTML = `
-            <div class="echoes-battle-panel__combat-debug">
-                <div class="echoes-battle-panel__combat-toolbar">
-                    <div class="echoes-battle-panel__combat-pills">
-                        <span class="echoes-battle-panel__combat-pill">Creator</span>
-                        <span class="echoes-battle-panel__combat-pill">${escapeHtml(tab === 'library' ? 'Content Library' : 'Editor')}</span>
-                    </div>
-                </div>
-                <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
-                    ${tabButton('library', 'Library')}
-                    ${tabButton('editor', 'Editor')}
-                </div>
-                ${tab === 'editor'
-                    ? `
-                        <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
-                            ${typeButton('battle', 'Battles')}
-                            ${typeButton('unit', 'Units')}
-                            ${typeButton('status', 'Statuses')}
-                        </div>
-                    `
-                    : ''}
-                <div style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; height: 100%;">
-                    <div style="display: grid; gap: 0.55rem; max-height: 12.5rem; overflow: auto; padding-right: 0.35rem;">
-                        ${listEntries || '<span class="echoes-battle-panel__planner-empty">None</span>'}
-                    </div>
-                    ${editorControls}
-                    ${message ? `<div style="padding: 0.65rem 0.75rem; color: rgba(255,255,255,0.92); white-space: pre-wrap; ${messageStyles}">${escapeHtml(message)}</div>` : ''}
-                </div>
-            </div>
-        `;
+            elements.creatorContent.innerHTML = editorWorkbench?.renderEditorWorkbenchShell({
+                escapeHtml,
+                tab,
+                entityType,
+                binderMarkup,
+                deskMarkup,
+                message,
+            }) || `
+                <div class="echoes-battle-panel__planner-empty">Workshop module not loaded.</div>
+            `;
         } catch (error) {
             console.error(`${EXTENSION_ID}: creator screen render failed.`, error);
             setCreatorMessage('error', formatCombatModuleError(error));
@@ -4917,9 +4909,9 @@
                             <button
                                 class="echoes-battle-panel__tray-button echoes-battle-panel__tray-button--creator"
                                 type="button"
-                                aria-label="Open creator"
+                                aria-label="Open Workshop"
                                 aria-pressed="false"
-                                title="Open creator"
+                                title="Open Workshop"
                             >
                                 <span class="echoes-battle-panel__tray-icon echoes-battle-panel__tray-icon--creator" aria-hidden="true"></span>
                             </button>

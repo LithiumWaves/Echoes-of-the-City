@@ -7296,9 +7296,47 @@ function runSuite() {
         );
         assert(html.includes('echoes-encounter'), 'Expected encounter builder markup.');
         assert(html.includes('playerUnitIds') === false, 'Markup should not expose raw JSON keys.');
-        assert(html.includes('Characters'), 'Expected Characters deploy hint.');
-        assert(html.includes('Enemy setup'), 'Expected enemy setup section.');
+        assert(html.includes('echoes-editor-pack-section'), 'Expected workshop pack section wrapper.');
+        assert(html.includes('Encounters in pack'), 'Expected encounters in pack section.');
         assert(html.includes('Background image'), 'Expected background image field.');
+    });
+
+    test('Editor workbench: shell renderer exports and TCG labels', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = { EchoesOfTheCityBattleModules: {} };
+        require(path.resolve(battleRoot, 'ui/creator/editorWorkbenchRenderer.js'));
+
+        const editorWorkbench = global.window.EchoesOfTheCityEditorWorkbench;
+        const battleModules = global.window.EchoesOfTheCityBattleModules;
+        assert(typeof editorWorkbench?.renderEditorWorkbenchShell === 'function', 'Expected renderEditorWorkbenchShell.');
+        assert(typeof editorWorkbench?.renderPackBinderTile === 'function', 'Expected renderPackBinderTile.');
+        assert(typeof editorWorkbench?.renderCardBinderTile === 'function', 'Expected renderCardBinderTile.');
+        assert(typeof editorWorkbench?.renderPublishedSetRow === 'function', 'Expected renderPublishedSetRow.');
+        assert(battleModules?.editorWorkbench === editorWorkbench, 'Expected battleModules.editorWorkbench export.');
+
+        const escapeHtml = (value) => String(value);
+        const escapeAttribute = (value) => String(value);
+        const shellHtml = editorWorkbench.renderEditorWorkbenchShell({
+            escapeHtml,
+            tab: 'editor',
+            entityType: 'battle',
+            binderMarkup: editorWorkbench.renderPackBinderTile(
+                { id: 'test-pack', name: 'Test Pack' },
+                true,
+                escapeHtml,
+                escapeAttribute,
+            ),
+            deskMarkup: '<div class="echoes-editor-desk-panel">Desk</div>',
+            message: { type: 'success', text: 'Bound.' },
+        });
+
+        assert(shellHtml.includes('echoes-editor-workshop'), 'Expected workshop root class.');
+        assert(shellHtml.includes('Collection'), 'Expected Collection tab label.');
+        assert(shellHtml.includes('Forge'), 'Expected Forge tab label.');
+        assert(shellHtml.includes('Encounter Packs'), 'Expected Encounter Packs type label.');
+        assert(shellHtml.includes('echoes-editor-pack-tile'), 'Expected pack binder tile.');
+        assert(shellHtml.includes('Bound.'), 'Expected message banner text.');
     });
 
     test('Schema: rules.background validates image path', () => {

@@ -89,8 +89,8 @@
         };
 
         return `
-            <section class="echoes-encounter__rules">
-                <h3 class="echoes-encounter__section-title">Encounter rules</h3>
+            <section class="echoes-encounter__rules echoes-editor-pack-section">
+                <h3 class="echoes-encounter__section-title">Pack rules</h3>
                 <div class="echoes-creator__field-row echoes-creator__field-row--2">
                     <label>Encounter type</label>
                     ${buildSelect(ENCOUNTER_TYPES, rules.encounterType || 'focused', 'data-action="creator-battle-rules-field" data-field="encounterType"')}
@@ -143,14 +143,14 @@
 
         const singleWaveSection = !multiWave
             ? `
-                <section class="echoes-encounter__enemies">
-                    <h3 class="echoes-encounter__section-title">Enemy units</h3>
+                <section class="echoes-encounter__enemies echoes-editor-pack-section">
+                    <h3 class="echoes-encounter__section-title">Encounters in pack</h3>
                     ${renderUnitPickerRow('enemy', enemyUnitIds, unitList, escapeAttr, escapeHtml)}
                 </section>
             `
             : `
-                <section class="echoes-encounter__waves">
-                    <h3 class="echoes-encounter__section-title">Enemy waves</h3>
+                <section class="echoes-encounter__waves echoes-editor-pack-section">
+                    <h3 class="echoes-encounter__section-title">Encounters in pack (waves)</h3>
                     <div class="echoes-encounter__wave-list">${waveCards}</div>
                     <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-encounter-add-wave">+ Wave</button>
                 </section>
@@ -229,8 +229,8 @@
         }).join('');
 
         return `
-            <section class="echoes-encounter__scripted">
-                <h3 class="echoes-encounter__section-title">Scripted events</h3>
+            <section class="echoes-encounter__scripted echoes-editor-pack-section">
+                <h3 class="echoes-encounter__section-title">Pack scripted events</h3>
                 <p class="echoes-creator__hint">Run effect actions when battle lifecycle hooks fire (battle start, stagger threshold crossed, turn end, etc.).</p>
                 <div class="echoes-encounter__scripted-list">
                     ${eventCards || '<span class="echoes-creator__hint">No scripted events.</span>'}
@@ -244,10 +244,10 @@
         const hookTriggers = Array.isArray(options.hookTriggers) ? options.hookTriggers : [];
 
         return `
-            <div class="echoes-encounter">
-                <p class="echoes-creator__hint">Player units are chosen in Characters (team presets) and deployed when launching a battle.</p>
-                <div class="echoes-encounter__header">
-                    <h3 class="echoes-encounter__section-title">Encounter info</h3>
+            <div class="echoes-encounter echoes-editor-pack-section">
+                <p class="echoes-editor-workshop__tip">Identity Cards in your team presets become allies when you trial-run this pack. Enemies are the cards you slot into the pack below.</p>
+                <div class="echoes-encounter__header echoes-editor-pack-section">
+                    <h3 class="echoes-encounter__section-title">Pack identity</h3>
                     <div class="echoes-creator__field-row echoes-creator__field-row--2">
                         <label>Encounter ID</label>
                         <input data-action="creator-battle-field" data-field="id" value="${escapeAttr(String(battleDraft?.id || ''))}" placeholder="my-encounter" />
@@ -260,9 +260,9 @@
                     </div>
                 </div>
                 <div class="echoes-encounter__body">
-                    <div class="echoes-encounter__column">
-                        <h3 class="echoes-encounter__section-title">Enemy setup</h3>
-                        <p class="echoes-creator__hint">Units become enemies when placed in enemy slots; side is assigned at battle start.</p>
+                    <div class="echoes-encounter__column echoes-editor-pack-section">
+                        <h3 class="echoes-encounter__section-title">Encounters in pack</h3>
+                        <p class="echoes-creator__hint">Enemy Identity Cards placed here oppose your team when the pack is played.</p>
                         ${renderWavesSection(battleDraft, unitList, escapeAttr, escapeHtml)}
                         ${renderRulesSection(battleDraft, creatorUi, escapeAttr)}
                     </div>

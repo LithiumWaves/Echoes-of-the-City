@@ -118,6 +118,7 @@
         const portraitUrl = getUnitPortraitUrl(definition, resolveAssetUrl);
         const sinLabel = String(sinType).charAt(0).toUpperCase();
         const variantClass = variant === 'roster' ? ' echoes-identity-card--roster' : '';
+        const binderClass = variant === 'binder' ? ' echoes-identity-card--binder' : '';
         const selectedClass = selected ? ' is-selected' : '';
         const portraitStyle = portraitUrl
             ? `background-image:url('${escapeAttr(portraitUrl)}');`
@@ -135,7 +136,7 @@
 
         return `
             <${tagName}
-                class="echoes-identity-card${variantClass}${selectedClass}"
+                class="echoes-identity-card${variantClass}${binderClass}${selectedClass}"
                 data-unit-id="${escapeAttr(unitId)}"
                 style="--echoes-identity-sin-color:${sinColor};"
             >
