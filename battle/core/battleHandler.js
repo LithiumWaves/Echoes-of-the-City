@@ -155,6 +155,24 @@
             }
         }
 
+        function playCoinFlipSounds(flips = 1) {
+            const soundId = combatSounds?.COMBAT_SOUND_IDS?.coinFlip || 'coinFlip';
+            const flipCount = Math.max(0, Math.floor(Number(flips) || 0));
+            if (!flipCount) {
+                return;
+            }
+            for (let index = 0; index < flipCount; index += 1) {
+                emitCombatSound(soundId);
+            }
+        }
+
+        function playCoinFlipSoundsForRound(round) {
+            const flipCount = combatSounds?.countCoinFlipsInRound
+                ? combatSounds.countCoinFlipsInRound(round)
+                : 0;
+            playCoinFlipSounds(flipCount > 0 ? flipCount : 1);
+        }
+
         function getSkillType(skill) {
             return skill?.skillType || skill?.type || 'attack';
         }
@@ -222,6 +240,7 @@
                         leftBroken,
                         rightBroken,
                     });
+                    playCoinFlipSoundsForRound(round);
                     if (!(await waitForPlayback(PLAYBACK_TIMINGS.roundReveal, token))) {
                         return false;
                     }
@@ -272,6 +291,7 @@
                     entry.engagementType !== 'clash'
                     && !(Array.isArray(entry.rounds) && entry.rounds.length)
                 ) {
+                    playCoinFlipSounds(1);
                     playAttackHitSound(previewBattle, entry);
                 }
                 if (!(await waitForPlayback(PLAYBACK_TIMINGS.attackHit, token))) {

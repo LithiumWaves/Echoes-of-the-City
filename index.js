@@ -124,6 +124,9 @@
         swordStab: 'audio/combat/Sword_Stab.wav',
         swordHori: 'audio/combat/Sword_Hori.wav',
         swordVert: 'audio/combat/Sword_Vert.wav',
+        stagger: 'audio/combat/Stagger.mp3',
+        coinFlip: 'audio/combat/Coin Flip.mp3',
+        unitDeath: 'audio/combat/Unit Death.mp3',
     };
 
     function loadBooleanSetting(key, fallbackValue = false) {

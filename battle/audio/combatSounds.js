@@ -14,6 +14,9 @@
         swordStab: 'swordStab',
         swordHori: 'swordHori',
         swordVert: 'swordVert',
+        stagger: 'stagger',
+        coinFlip: 'coinFlip',
+        unitDeath: 'unitDeath',
     };
 
     const BLUNT_ATTACK_SOUNDS = [
@@ -46,11 +49,34 @@
         return pickRandomItem(SLASH_PIERCE_ATTACK_SOUNDS);
     }
 
+    function countCoinFlips(flips) {
+        if (Array.isArray(flips)) {
+            return flips.length;
+        }
+        if (typeof flips === 'string' && flips.trim()) {
+            return flips.trim().split(/\s+/).length;
+        }
+        return 0;
+    }
+
+    function countCoinFlipsInRound(round) {
+        if (!round || typeof round !== 'object') {
+            return 0;
+        }
+        return countCoinFlips(round.leftFlips) + countCoinFlips(round.rightFlips);
+    }
+
     function getSoundForBattleEvent(event) {
         if (!event || typeof event !== 'object') {
             return null;
         }
         const data = event.data && typeof event.data === 'object' ? event.data : {};
+        if (event.type === 'unit_staggered') {
+            return COMBAT_SOUND_IDS.stagger;
+        }
+        if (event.type === 'unit_defeated') {
+            return COMBAT_SOUND_IDS.unitDeath;
+        }
         if (event.type === 'status_triggered') {
             if (data.statusId === 'evade' && Number.isFinite(data.evadePower)) {
                 return COMBAT_SOUND_IDS.defenseEvasion;
@@ -81,6 +107,8 @@
     const combatSounds = {
         COMBAT_SOUND_IDS,
         pickAttackHitSound,
+        countCoinFlips,
+        countCoinFlipsInRound,
         getSoundForBattleEvent,
         getEngagementBarTitle,
     };

@@ -7562,6 +7562,19 @@ function runSuite() {
             }) === null,
             'Expected no bleed sound when damage is zero.',
         );
+        assert(
+            combatSounds.getSoundForBattleEvent({ type: 'unit_staggered', data: { unitName: 'Ally' } }) === 'stagger',
+            'Expected stagger sound.',
+        );
+        assert(
+            combatSounds.getSoundForBattleEvent({ type: 'unit_defeated', data: { unitName: 'Enemy' } }) === 'unitDeath',
+            'Expected unit death sound.',
+        );
+        assert(combatSounds.countCoinFlipsInRound({
+            leftFlips: [true, false, true],
+            rightFlips: 'H T',
+        }) === 5, 'Expected five coin flips in round.');
+        assert(combatSounds.countCoinFlips('H H T') === 3, 'Expected three formatted coin flips.');
     });
 
     process.stdout.write(`\nResult: ${passed} passed, ${failed} failed\n`);
