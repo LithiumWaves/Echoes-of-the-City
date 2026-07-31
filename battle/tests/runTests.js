@@ -75,7 +75,7 @@ function createBattleEnvironment(options = {}) {
     require(path.resolve(battleRoot, 'effects', 'skillEffectRunner.js'));
     require(path.resolve(battleRoot, 'core', 'damageFormula.js'));
     require(path.resolve(battleRoot, 'core', 'plannerSkills.js'));
-    require(path.resolve(battleRoot, 'core', 'sinHand.js'));
+    require(path.resolve(battleRoot, 'core', 'skillDeck.js'));
     require(path.resolve(battleRoot, 'core', 'battleEngine.js'));
 
     return global.window.EchoesOfTheCityBattleModules;
@@ -6800,18 +6800,19 @@ function runSuite() {
         assert(!paralysis || paralysis.count === 0, `Expected paralysis consumed on coin rolls, got ${paralysis?.count ?? 'removed'}`);
     });
 
-    test('Sin hand: draw fills hand and assignment gates skill offers', () => {
+    test('Skill deck: turn start draws offers and gates selection', () => {
         const battleModules = createBattleEnvironment();
-        const sinHand = battleModules.sinHand;
-        assert(typeof sinHand?.drawSinHand === 'function', 'Expected sinHand module.');
+        const skillDeck = battleModules.skillDeck;
+        assert(typeof skillDeck?.drawTurnOffers === 'function', 'Expected skillDeck module.');
 
         const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
         const battleDefinition = {
-            id: 'sin-hand-test',
-            name: 'Sin Hand Test',
+            id: 'skill-deck-test',
+            name: 'Skill Deck Test',
             playerUnits: [{
                 id: 'hero',
                 name: 'Hero',
+                deploymentOrder: 1,
                 level: 1,
                 maxHp: 100,
                 sp: 0,
@@ -6845,37 +6846,104 @@ function runSuite() {
                 skills: [{ id: 'poke', name: 'Poke', basePower: 1, coinPower: 0, coinCount: 1, damageType: 'slash', sinType: 'wrath' }],
                 passives: [],
             }],
-            rules: { encounterType: 'focused', sinDrawCount: 8, enemyAiProfile: { skill: 'first', target: 'firstLiving' } },
+            rules: { encounterType: 'focused', maxPlayerUnits: 2, enemyAiProfile: { skill: 'first', target: 'firstLiving' } },
         };
 
         const engine = battleModules.createBattleEngine({ battleDefinition, clamp });
-        engine.advanceTurn();
         const state = engine.getState();
-        const handTotal = sinHand.SIN_TYPES.reduce((sum, sinType) => sum + (state.runtimeState?.sinHandBySide?.player?.[sinType] || 0), 0);
-        assert(handTotal > 0, `Expected sin hand draw, got ${handTotal}`);
-
         const playerSlot = state.playerSlots[0];
-        const hand = state.runtimeState?.sinHandBySide?.player || {};
-        const firstSin = sinHand.SIN_TYPES.find((sinType) => (hand[sinType] || 0) > 0);
-        assert(firstSin, 'Expected at least one sin in hand.');
-        assert(engine.assignSinToSlot(playerSlot.id, firstSin), `Expected ${firstSin} assignment.`);
-        const afterAssign = engine.getState().playerSlots[0];
-        assert(afterAssign.skillOffer?.top, 'Expected top skill offer after sin assignment.');
-        assert(engine.selectSkill(afterAssign.skillOffer.top, playerSlot.id), 'Expected valid offer selection.');
-        assert(!engine.selectSkill('guard', playerSlot.id), 'Expected guard blocked until defense mode.');
+        assert(playerSlot.skillOffer?.top, 'Expected top skill offer on turn start.');
+        assert(engine.selectSkill('guard', playerSlot.id) === false, 'Expected guard blocked until defense mode.');
 
         assert(engine.toggleDefenseMode(playerSlot.id), 'Expected defense toggle.');
         const defenseSlot = engine.getState().playerSlots[0];
         assert(defenseSlot.skillOffer?.bottom === 'guard', `Expected guard on bottom, got ${defenseSlot.skillOffer?.bottom}`);
         assert(engine.selectSkill('guard', playerSlot.id), 'Expected guard selection in defense mode.');
+
+        const deck = state.runtimeState?.skillDeckByUnitId?.hero || {};
+        const deckTotal = Object.values(deck).reduce((sum, count) => sum + count, 0);
+        assert(deckTotal >= 4, `Expected default skill deck counts, got ${deckTotal}`);
     });
 
-    test('Sin hand: seven player slots initialize with sin state', () => {
+    test('Skill deck: focused slot growth and resolve regression', () => {
+        const battleModules = createBattleEnvironment();
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const battleDefinition = {
+            id: 'slot-growth-test',
+            name: 'Slot Growth Test',
+            playerUnits: [
+                {
+                    id: 'hero-a',
+                    name: 'Hero A',
+                    deploymentOrder: 1,
+                    level: 1,
+                    maxHp: 100,
+                    sp: 0,
+                    speedRange: [6, 6],
+                    defenseLevel: 0,
+                    resistances: {
+                        physical: { slash: 1, pierce: 1, blunt: 1 },
+                        sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                    },
+                    sprites: { idle: '', skills: {} },
+                    skills: [{ id: 'strike-a', name: 'Strike A', skillSlot: 'slot-1', basePower: 3, coinPower: 1, coinCount: 1, damageType: 'slash', sinType: 'wrath' }],
+                    passives: [],
+                },
+                {
+                    id: 'hero-b',
+                    name: 'Hero B',
+                    deploymentOrder: 2,
+                    level: 1,
+                    maxHp: 100,
+                    sp: 0,
+                    speedRange: [4, 4],
+                    defenseLevel: 0,
+                    resistances: {
+                        physical: { slash: 1, pierce: 1, blunt: 1 },
+                        sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                    },
+                    sprites: { idle: '', skills: {} },
+                    skills: [{ id: 'strike-b', name: 'Strike B', skillSlot: 'slot-1', basePower: 3, coinPower: 1, coinCount: 1, damageType: 'slash', sinType: 'lust' }],
+                    passives: [],
+                },
+            ],
+            enemyUnits: [{
+                id: 'enemy',
+                name: 'Enemy',
+                level: 1,
+                maxHp: 100,
+                sp: 0,
+                speedRange: [1, 1],
+                defenseLevel: 0,
+                resistances: {
+                    physical: { slash: 1, pierce: 1, blunt: 1 },
+                    sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+                },
+                sprites: { idle: '', skills: {} },
+                skills: [{ id: 'poke', name: 'Poke', basePower: 1, coinPower: 0, coinCount: 1, damageType: 'slash', sinType: 'wrath' }],
+                passives: [],
+            }],
+            rules: { encounterType: 'focused', maxPlayerUnits: 3, enemyAiProfile: { skill: 'first', target: 'firstLiving' } },
+        };
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp });
+        assert(engine.getState().playerSlots.length === 2, 'Expected two slots on turn 1.');
+        assert(engine.resolveTurn(), 'Expected turn 1 resolve.');
+        engine.advanceTurn();
+        const afterGrowth = engine.getState();
+        assert(afterGrowth.playerSlots.length === 3, `Expected third slot after growth, got ${afterGrowth.playerSlots.length}`);
+        assert(afterGrowth.playerSlots.some((slot) => slot.unitId === 'hero-a' && slot.skillSlotIndex === 1), 'Expected extra slot for lowest deployment order.');
+
+        assert(engine.resolveTurn(), 'Expected resolve to succeed with auto-selected skills.');
+    });
+
+    test('Skill deck: seven player slots initialize with offers', () => {
         const battleModules = createBattleEnvironment();
         const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
         const createUnit = (index) => ({
             id: `unit-${index}`,
             name: `Unit ${index}`,
+            deploymentOrder: index,
             level: 1,
             maxHp: 50,
             sp: 0,
@@ -6886,7 +6954,7 @@ function runSuite() {
                 sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
             },
             sprites: { idle: '', skills: {} },
-            skills: [{ id: `skill-${index}`, name: 'Skill', basePower: 1, coinPower: 0, coinCount: 1, damageType: 'slash', sinType: 'wrath' }],
+            skills: [{ id: `skill-${index}`, name: 'Skill', skillSlot: 'slot-1', basePower: 1, coinPower: 0, coinCount: 1, damageType: 'slash', sinType: 'wrath' }],
             passives: [],
         });
         const battleDefinition = {
@@ -6900,8 +6968,8 @@ function runSuite() {
         const state = engine.getState();
         assert(state.playerSlots.length === 7, `Expected 7 player slots, got ${state.playerSlots.length}`);
         state.playerSlots.forEach((slot) => {
-            assert(Array.isArray(slot.assignedSins), 'Expected assignedSins array.');
             assert(slot.skillOffer && typeof slot.skillOffer === 'object', 'Expected skillOffer object.');
+            assert(slot.skillOffer.top, `Expected drawn top offer for slot ${slot.id}.`);
         });
     });
 

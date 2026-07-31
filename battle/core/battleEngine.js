@@ -186,12 +186,13 @@
         };
     }
 
-    function createBattleSlot(unit, side, index) {
+    function createBattleSlot(unit, side, index, skillSlotIndex = 0) {
         return {
             id: `${side}-slot-${index + 1}`,
             side,
             index,
             unitId: unit.id,
+            skillSlotIndex,
             speed: 0,
             selectedSkillId: null,
             intentSkillId: null,
@@ -204,7 +205,7 @@
             ammoState: null,
             attackContext: null,
             onUseGranted: false,
-            assignedSins: [],
+            rawSkillOffer: { top: null, bottom: null },
             defenseMode: false,
             skillOffer: { top: null, bottom: null },
             selectedOfferSlot: null,
@@ -230,7 +231,7 @@
         const enemyAi = typeof battleModules.createEnemyAi === 'function'
             ? battleModules.createEnemyAi(battleDefinition?.rules?.enemyAiProfile || battleDefinition?.enemyAiProfile || null)
             : null;
-        const sinHand = battleModules.sinHand || window.EchoesOfTheCitySinHand || null;
+        const skillDeck = battleModules.skillDeck || window.EchoesOfTheCitySkillDeck || null;
         const battleRules = battleDefinition?.rules && typeof battleDefinition.rules === 'object'
             ? battleDefinition.rules
             : {};
@@ -3619,8 +3620,34 @@
                         return false;
                     }
 
+                    const unit = getUnitById(targetBattle, slot.unitId);
+                    const skill = getSkillById(unit, slot.selectedSkillId);
+                    if (skill && isDefenseSkill(skill)) {
+                        return true;
+                    }
+
                     return Boolean(slot.targetSlotId);
                 });
+        }
+
+        function getResolveAssignmentMessage(targetBattle) {
+            const missing = targetBattle.playerSlots
+                .filter((slot) => isSlotActionable(targetBattle, slot))
+                .filter((slot) => {
+                    if (!slot.selectedSkillId) {
+                        return true;
+                    }
+                    const unit = getUnitById(targetBattle, slot.unitId);
+                    const skill = getSkillById(unit, slot.selectedSkillId);
+                    if (skill && isDefenseSkill(skill)) {
+                        return false;
+                    }
+                    return !slot.targetSlotId;
+                });
+            if (!missing.length) {
+                return '';
+            }
+            return 'Assign a skill and target for every active identity before resolving.';
         }
 
         function refreshSpeedOrder(targetBattle) {
@@ -3940,6 +3967,11 @@
             const enemySlots = enemyUnits.map((unit, index) => createBattleSlot(unit, 'enemy', index));
             targetBattle.enemyUnits = enemyUnits;
             targetBattle.enemySlots = enemySlots;
+            if (skillDeck?.initUnitDeck) {
+                enemyUnits.forEach((unit) => {
+                    skillDeck.initUnitDeck(targetBattle, unit, { rules: battleRules });
+                });
+            }
             targetBattle.activePlayerSlotId = ensureActivePlayerSlot(targetBattle)?.id || targetBattle.activePlayerSlotId || null;
             refreshRedirectedTargets(targetBattle);
             refreshSpeedOrder(targetBattle);
@@ -3977,6 +4009,9 @@
             const slot = createBattleSlot(unit, resolvedSide, currentSlots.length);
             targetBattle[unitsKey] = [...currentUnits, unit];
             targetBattle[slotsKey] = [...currentSlots, slot];
+            if (skillDeck?.initUnitDeck) {
+                skillDeck.initUnitDeck(targetBattle, unit, { rules: battleRules });
+            }
             refreshRedirectedTargets(targetBattle);
             refreshSpeedOrder(targetBattle);
             ensureActivePlayerSlot(targetBattle);
@@ -4041,8 +4076,8 @@
                 rules: { ...battleRules },
             };
 
-            if (sinHand?.initSinState) {
-                sinHand.initSinState(nextBattle, battleRules);
+            if (skillDeck?.initSkillDecks) {
+                skillDeck.initSkillDecks(nextBattle, { rules: battleRules });
             }
 
             nextBattle.engineActions = {
@@ -4376,13 +4411,23 @@
             processSanityModelAtTurnStart(targetBattle);
             invokeScriptedEvents(targetBattle, 'turnStart', { turn: targetBattle.turn });
 
-            if (sinHand?.drawSinHand) {
-                sinHand.drawSinHand(targetBattle, 'player', { rules: battleRules });
-                sinHand.drawSinHand(targetBattle, 'enemy', { rules: battleRules });
+            if (targetBattle.turn > 1 && skillDeck?.advanceSkillSlotGrowth) {
+                skillDeck.advanceSkillSlotGrowth(targetBattle, battleRules, (unit, side, index, skillSlotIndex) => {
+                    return createBattleSlot(unit, side, index, skillSlotIndex);
+                });
             }
 
+            const speedByUnitId = {};
             getAllSlots(targetBattle).forEach((slot) => {
                 const unit = getUnitById(targetBattle, slot.unitId);
+                if (!unit) {
+                    return;
+                }
+                if (!Number.isFinite(speedByUnitId[slot.unitId])) {
+                    speedByUnitId[slot.unitId] = isUnitStaggered(unit)
+                        ? 0
+                        : randomInt(...unit.speedRange);
+                }
                 slot.resolved = false;
                 slot.selectedSkillId = null;
                 slot.intentSkillId = null;
@@ -4391,11 +4436,11 @@
                 slot.ammoState = null;
                 slot.attackContext = null;
                 slot.onUseGranted = false;
-                if (sinHand?.resetSlotSinState) {
-                    sinHand.resetSlotSinState(slot);
+                if (skillDeck?.resetSlotSkillState) {
+                    skillDeck.resetSlotSkillState(slot);
                 } else {
-                    slot.assignedSins = [];
                     slot.defenseMode = false;
+                    slot.rawSkillOffer = { top: null, bottom: null };
                     slot.skillOffer = { top: null, bottom: null };
                     slot.selectedOfferSlot = null;
                 }
@@ -4411,11 +4456,11 @@
                     slot.targetSlotIds = null;
                     slot.resolved = true;
                 } else {
-                    slot.speed = randomInt(...unit.speedRange);
+                    slot.speed = speedByUnitId[slot.unitId];
                     slot.targetSlotId = getFirstLivingSlotId(targetBattle, getOpposingSide(slot.side));
                     slot.targetSlotIds = slot.targetSlotId ? [slot.targetSlotId] : null;
                 }
-                unit.speed = slot.speed;
+                unit.speed = speedByUnitId[slot.unitId];
 
                 emitEvent(targetBattle, 'slot_speed_rolled', {
                     unitName: unit.name,
@@ -4424,12 +4469,9 @@
                 });
             });
 
-            if (sinHand?.autoAssignEnemySins) {
-                sinHand.autoAssignEnemySins(targetBattle, 'enemy');
-            }
-            if (sinHand?.refreshAllSkillOffers) {
-                sinHand.refreshAllSkillOffers(targetBattle, 'player');
-                sinHand.refreshAllSkillOffers(targetBattle, 'enemy');
+            if (skillDeck?.drawTurnOffersForSide) {
+                skillDeck.drawTurnOffersForSide(targetBattle, 'player', { rules: battleRules });
+                skillDeck.drawTurnOffersForSide(targetBattle, 'enemy', { rules: battleRules });
             }
 
             targetBattle.enemySlots.forEach((slot) => {
@@ -4438,8 +4480,8 @@
                 }
 
                 const enemyUnit = getUnitById(targetBattle, slot.unitId);
-                slot.selectedSkillId = sinHand?.pickSkillFromOffer
-                    ? (sinHand.pickSkillFromOffer(slot) || pickEnemySkillId(targetBattle, slot))
+                slot.selectedSkillId = skillDeck?.pickSkillFromOffer
+                    ? (skillDeck.pickSkillFromOffer(slot) || pickEnemySkillId(targetBattle, slot))
                     : pickEnemySkillId(targetBattle, slot);
                 slot.intentSkillId = slot.selectedSkillId;
                 const skill = getSkillById(enemyUnit, slot.selectedSkillId);
@@ -4454,6 +4496,38 @@
                     targetLabel: getSlotTargetLabel(targetBattle, slot.targetSlotId),
                 });
             });
+
+            targetBattle.playerSlots.forEach((slot) => {
+                if (!isSlotActionable(targetBattle, slot)) {
+                    return;
+                }
+                const unit = getUnitById(targetBattle, slot.unitId);
+                const skillId = skillDeck?.pickFirstAttackOffer
+                    ? skillDeck.pickFirstAttackOffer(slot, unit)
+                    : null;
+                if (!skillId) {
+                    return;
+                }
+                const skill = getSkillById(unit, skillId);
+                slot.selectedSkillId = skillId;
+                if (skillDeck?.getOfferSlotForSkill) {
+                    slot.selectedOfferSlot = skillDeck.getOfferSlotForSkill(slot, skillId);
+                }
+                slot.manualTargetLock = false;
+                slot.targetSlotId = skill?.targeting === 'highestMaxPower'
+                    ? getAutoTargetSlotId(targetBattle, slot, skill)
+                    : (slot.targetSlotId || getFirstLivingSlotId(targetBattle, 'enemy'));
+                slot.targetSlotIds = slot.targetSlotId ? [slot.targetSlotId] : null;
+                refreshAttackWeightTargetsForSlot(targetBattle, slot, { force: true });
+                slot.defenseState = {
+                    activated: false,
+                    used: false,
+                    broken: false,
+                    context: null,
+                };
+            });
+
+            refreshRedirectedTargets(targetBattle);
 
             applyPanicSelectionsForTurn(targetBattle);
 
@@ -4511,17 +4585,16 @@
             if (!skill) {
                 return false;
             }
-            if (sinHand?.isSkillInOffer) {
-                const assignedCount = Array.isArray(slot.assignedSins) ? slot.assignedSins.length : 0;
+            if (skillDeck?.isSkillInOffer) {
                 const hasActiveOffers = slot.skillOffer?.top || slot.skillOffer?.bottom;
-                if ((assignedCount > 0 || hasActiveOffers) && !sinHand.isSkillInOffer(slot, skillId)) {
+                if (hasActiveOffers && !skillDeck.isSkillInOffer(slot, skillId)) {
                     return false;
                 }
             }
 
             slot.selectedSkillId = skillId;
-            if (sinHand?.getOfferSlotForSkill) {
-                slot.selectedOfferSlot = sinHand.getOfferSlotForSkill(slot, skillId);
+            if (skillDeck?.getOfferSlotForSkill) {
+                slot.selectedOfferSlot = skillDeck.getOfferSlotForSkill(slot, skillId);
             }
             slot.manualTargetLock = false;
             slot.targetSlotId = skill.targeting === 'highestMaxPower'
@@ -4838,6 +4911,17 @@
             });
         }
 
+        function consumeCommittedSkill(targetBattle, slot) {
+            if (!slot?.selectedSkillId || !skillDeck?.consumeSkill) {
+                return;
+            }
+            const unit = getUnitById(targetBattle, slot.unitId);
+            const skill = getSkillById(unit, slot.selectedSkillId);
+            if (skill && !isDefenseSkill(skill)) {
+                skillDeck.consumeSkill(targetBattle, slot.unitId, slot.selectedSkillId);
+            }
+        }
+
         function resolveTurn() {
             if (battle.phase !== 'select' || battle.winner || !hasAllPlayerAssignments(battle)) {
                 return false;
@@ -4859,6 +4943,7 @@
                 const actingSkill = getSkillById(actingUnit, slot.selectedSkillId);
                 if (isDefenseSkill(actingSkill)) {
                     slot.resolved = true;
+                    consumeCommittedSkill(battle, slot);
                     continue;
                 }
 
@@ -4887,6 +4972,8 @@
                     const clashOutcome = resolveClashEngagement(battle, slot, targetSlot, { skipAttackEnd: true });
                     slot.resolved = true;
                     targetSlot.resolved = true;
+                    consumeCommittedSkill(battle, slot);
+                    consumeCommittedSkill(battle, targetSlot);
                     const winnerSlot = clashOutcome?.winnerSlot;
                     const winnerUnit = clashOutcome?.winnerUnit;
                     const winnerSkill = clashOutcome?.winnerSkill;
@@ -4910,6 +4997,7 @@
                 } else {
                     resolveOneSidedEngagement(battle, slot, targetSlot, { skipAttackEnd: true });
                     slot.resolved = true;
+                    consumeCommittedSkill(battle, slot);
                     const attackContext = slot.attackContext;
                     if (attackContext && !attackContext.cancelled) {
                         const extraTargets = getSlotAssignedTargetIds(slot)
@@ -5279,35 +5367,6 @@
             return { ok: true };
         }
 
-        function assignSinToSlot(slotId, sinType) {
-            if (battle.phase !== 'select' || battle.winner || !sinHand?.assignSinToSlot) {
-                return false;
-            }
-            const ok = sinHand.assignSinToSlot(battle, slotId, sinType);
-            if (!ok) {
-                return false;
-            }
-            const slot = getSlotById(battle, slotId);
-            if (slot?.side === 'player') {
-                battle.activePlayerSlotId = slot.id;
-            }
-            return true;
-        }
-
-        function removeSinFromSlot(slotId, sinIndex) {
-            if (battle.phase !== 'select' || battle.winner || !sinHand?.removeSinFromSlot) {
-                return false;
-            }
-            return sinHand.removeSinFromSlot(battle, slotId, sinIndex);
-        }
-
-        function clearColumnSins(slotId) {
-            if (battle.phase !== 'select' || battle.winner || !sinHand?.clearSlotSins) {
-                return false;
-            }
-            return sinHand.clearSlotSins(battle, slotId);
-        }
-
         function toggleDefenseMode(slotId) {
             if (battle.phase !== 'select' || battle.winner || !slotId) {
                 return false;
@@ -5318,10 +5377,10 @@
             }
             slot.defenseMode = !slot.defenseMode;
             const unit = getUnitById(battle, slot.unitId);
-            if (sinHand?.refreshSlotSkillOffer) {
-                sinHand.refreshSlotSkillOffer(battle, slot, unit);
+            if (skillDeck?.refreshSlotSkillOffer) {
+                skillDeck.refreshSlotSkillOffer(battle, slot, unit);
             }
-            if (slot.selectedSkillId && sinHand?.isSkillInOffer && !sinHand.isSkillInOffer(slot, slot.selectedSkillId)) {
+            if (slot.selectedSkillId && skillDeck?.isSkillInOffer && !skillDeck.isSkillInOffer(slot, slot.selectedSkillId)) {
                 slot.selectedSkillId = null;
                 slot.selectedOfferSlot = null;
             }
@@ -5329,15 +5388,23 @@
             return true;
         }
 
+        function getResolveBlockReason() {
+            if (battle.phase !== 'select' || battle.winner) {
+                return 'Combat is not ready to resolve.';
+            }
+            if (hasAllPlayerAssignments(battle)) {
+                return '';
+            }
+            return getResolveAssignmentMessage(battle);
+        }
+
         return {
             getState,
             selectSlot,
             selectSkill,
             selectTarget,
-            assignSinToSlot,
-            removeSinFromSlot,
-            clearColumnSins,
             toggleDefenseMode,
+            getResolveBlockReason,
             resolveTurn,
             advanceTurn,
             reset,

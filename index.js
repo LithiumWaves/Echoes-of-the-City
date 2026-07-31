@@ -95,7 +95,7 @@
         'battle/ui/combat/lcCombatUi.js',
         'battle/core/damageFormula.js',
         'battle/core/plannerSkills.js',
-        'battle/core/sinHand.js',
+        'battle/core/skillDeck.js',
         'battle/core/battleEngine.js',
         'battle/core/battleRenderer.js',
         'battle/core/battleHandler.js',

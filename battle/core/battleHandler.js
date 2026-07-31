@@ -579,23 +579,6 @@
                 return;
             }
 
-            if (action === 'assign-sin') {
-                const sinType = actionTarget.dataset.sinType;
-                const assignSlotId = slotId || engine.getState().activePlayerSlotId;
-                if (!sinType || !assignSlotId) {
-                    return;
-                }
-                engine.assignSinToSlot(assignSlotId, sinType);
-                render();
-                return;
-            }
-
-            if (action === 'clear-column-sins' && slotId) {
-                engine.clearColumnSins(slotId);
-                render();
-                return;
-            }
-
             if (action === 'toggle-defense-mode' && slotId) {
                 engine.toggleDefenseMode(slotId);
                 render();
@@ -624,6 +607,10 @@
             if (action === 'resolve-turn') {
                 const previewBattle = cloneBattleState(engine.getState());
                 const didResolve = engine.resolveTurn();
+                if (!didResolve) {
+                    const reason = engine.getResolveBlockReason?.() || 'Assign all skills before resolving.';
+                    debugPatchMessage = reason;
+                }
                 render();
                 if (didResolve) {
                     startPlayback(previewBattle);

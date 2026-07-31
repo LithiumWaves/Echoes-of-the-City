@@ -1398,9 +1398,19 @@
         function renderBattlefield(battle, activePlayerSlot, uiState) {
             const debugToolsEnabled = uiState?.debugToolsEnabled !== false;
             const bloodfeast = battle?.encounterResources?.bloodfeast || 0;
-            const playerMarkup = battle.playerSlots
-                .map((slot) => renderFieldUnitWithUiState(battle, getUnitById(battle, slot.unitId), slot, 'player', activePlayerSlot, uiState))
-                .join('');
+            const playerMarkup = (() => {
+                const seenUnitIds = new Set();
+                return battle.playerSlots
+                    .filter((slot) => {
+                        if (seenUnitIds.has(slot.unitId)) {
+                            return false;
+                        }
+                        seenUnitIds.add(slot.unitId);
+                        return true;
+                    })
+                    .map((slot) => renderFieldUnitWithUiState(battle, getUnitById(battle, slot.unitId), slot, 'player', activePlayerSlot, uiState))
+                    .join('');
+            })();
             const enemyMarkup = battle.enemySlots
                 .map((slot) => renderFieldUnitWithUiState(battle, getUnitById(battle, slot.unitId), slot, 'enemy', activePlayerSlot, uiState))
                 .join('');

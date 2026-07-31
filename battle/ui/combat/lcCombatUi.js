@@ -1,7 +1,7 @@
 (() => {
     const battleModules = window.EchoesOfTheCityBattleModules || (window.EchoesOfTheCityBattleModules = {});
 
-    const LC_MAX_COLUMNS = 7;
+    const LC_MAX_COLUMNS = 12;
     const SIN_COLORS = {
         wrath: '#c73e3e',
         lust: '#e07b39',
@@ -67,15 +67,23 @@
         `;
     }
 
-    function renderAssignedSinChips(assignedSins, escapeHtml) {
-        if (!Array.isArray(assignedSins) || !assignedSins.length) {
-            return '';
+    function sortDashboardSlots(battle, slots) {
+        const skillDeck = battleModules.skillDeck || window.EchoesOfTheCitySkillDeck;
+        const unitsById = {};
+        (battle.playerUnits || []).forEach((unit) => {
+            if (unit?.id) {
+                unitsById[unit.id] = unit;
+            }
+        });
+        if (skillDeck?.sortDashboardSlots) {
+            return skillDeck.sortDashboardSlots(slots, unitsById);
         }
-        return assignedSins.map((sinType, index) => `
-            <span class="echoes-lc-sin-chip" style="background:${SIN_COLORS[sinType] || '#666'};" title="${escapeHtml(sinType)}">
-                ${escapeHtml(String(sinType).charAt(0).toUpperCase())}
-            </span>
-        `).join('');
+        return [...slots].sort((left, right) => {
+            if (right.speed !== left.speed) {
+                return right.speed - left.speed;
+            }
+            return left.index - right.index;
+        });
     }
 
     function renderLcColumn(battle, slot, deps) {
@@ -102,6 +110,9 @@
         const isActive = battle.activePlayerSlotId === slot.id;
         const isResolved = slot.resolved;
         const portraitStyle = portraitUrl ? `background-image:url('${escapeAttribute(portraitUrl)}');` : '';
+        const slotLabel = Number.isInteger(slot.skillSlotIndex) && slot.skillSlotIndex > 0
+            ? `${escapeHtml(unit.name)} #${slot.skillSlotIndex + 1}`
+            : escapeHtml(unit.name);
 
         return `
             <div class="echoes-lc-column${isActive ? ' is-active' : ''}${isResolved ? ' is-resolved' : ''}${slot.defenseMode ? ' is-defense-mode' : ''}" data-slot-id="${slot.id}">
@@ -115,9 +126,6 @@
                     ${renderLcSkillSlot(topSkill, slot, 'top', battle, deps)}
                     ${renderLcSkillSlot(bottomSkill, slot, 'bottom', battle, deps)}
                 </div>
-                <div class="echoes-lc-column__sins">
-                    ${renderAssignedSinChips(slot.assignedSins, escapeHtml)}
-                </div>
                 <button
                     class="echoes-lc-portrait"
                     type="button"
@@ -130,46 +138,9 @@
                     <span class="echoes-lc-portrait__art" style="${portraitStyle}"></span>
                     <span class="echoes-lc-portrait__hp">${unit.hp}</span>
                     <span class="echoes-lc-portrait__sp">${unit.sp}</span>
-                    <span class="echoes-lc-portrait__name">${escapeHtml(unit.name)}</span>
+                    <span class="echoes-lc-portrait__name">${slotLabel}</span>
                 </button>
             </div>
-        `;
-    }
-
-    function renderLcSinRail(battle, deps) {
-        const { escapeAttribute, escapeHtml } = deps;
-        const sinHand = battleModules.sinHand || window.EchoesOfTheCitySinHand;
-        const sinTypes = sinHand?.SIN_TYPES || Object.keys(SIN_COLORS);
-        const hand = battle.runtimeState?.sinHandBySide?.player || {};
-        const activeSlotId = battle.activePlayerSlotId || battle.playerSlots?.[0]?.id || '';
-
-        const chips = sinTypes.map((sinType) => {
-            const count = hand[sinType] || 0;
-            if (count <= 0) {
-                return '';
-            }
-            return `
-                <button
-                    class="echoes-lc-sin-rail__chip"
-                    type="button"
-                    data-action="assign-sin"
-                    data-sin-type="${escapeAttribute(sinType)}"
-                    data-slot-id="${escapeAttribute(activeSlotId)}"
-                    style="background:${SIN_COLORS[sinType]};"
-                    ${battle.phase !== 'select' ? 'disabled' : ''}
-                >
-                    <span>${escapeHtml(String(sinType).charAt(0).toUpperCase())}</span>
-                    <strong>${count}</strong>
-                </button>
-            `;
-        }).join('');
-
-        return `
-            <aside class="echoes-lc-sin-rail">
-                <div class="echoes-lc-sin-rail__title">Sin Hand</div>
-                <div class="echoes-lc-sin-rail__chips">${chips || '<span class="echoes-lc-sin-rail__empty">Empty</span>'}</div>
-                <p class="echoes-lc-sin-rail__hint">Select a column, then tap a sin to assign.</p>
-            </aside>
         `;
     }
 
@@ -183,10 +154,13 @@
             renderDebugRollControls,
         } = deps;
 
-        const columns = [];
-        for (let index = 0; index < LC_MAX_COLUMNS; index += 1) {
-            const slot = battle.playerSlots[index] || null;
-            columns.push(renderLcColumn(battle, slot, deps));
+        const sortedSlots = sortDashboardSlots(battle, battle.playerSlots || []);
+        const columns = sortedSlots
+            .slice(0, LC_MAX_COLUMNS)
+            .map((slot) => renderLcColumn(battle, slot, deps));
+
+        while (columns.length < LC_MAX_COLUMNS) {
+            columns.push(`<div class="echoes-lc-column echoes-lc-column--empty"></div>`);
         }
 
         const resolvedBattle = getResolvedBattle(battle, uiState);
@@ -198,9 +172,9 @@
                     <div class="echoes-lc-dashboard__columns">
                         ${columns.join('')}
                     </div>
-                    ${renderLcSinRail(battle, deps)}
                 </div>
                 <aside class="echoes-lc-dashboard__sidebar">
+                    ${uiState?.debugPatchMessage ? `<p class="echoes-lc-dashboard__notice">${escapeHtml(uiState.debugPatchMessage)}</p>` : ''}
                     <div class="echoes-lc-dashboard__phase">
                         <span>Resolution</span>
                         <strong>${uiState?.isPlaybackRunning ? 'Playing Back' : getPhaseLabel(resolvedBattle)}</strong>
@@ -293,6 +267,7 @@
         LC_MAX_COLUMNS,
         SIN_COLORS,
         getUnitPortraitUrl,
+        sortDashboardSlots,
         renderLcDashboard,
         renderLcClashStage,
     };
