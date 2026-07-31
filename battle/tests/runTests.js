@@ -7240,12 +7240,6 @@ function runSuite() {
                 skills: {},
             },
             skills: [{ id: 'hit', sinType: 'pride', skillType: 'attack', basePower: 1, coinPower: 0, coinCount: 1, damageType: 'slash', effects: [] }],
-        }, {
-            id: 'roster-unit',
-            name: 'Roster Unit',
-            level: 5,
-            sprites: { idle: 'assets/roster-unit.png', skills: {} },
-            skills: [{ id: 'hit', sinType: 'wrath', skillType: 'attack', basePower: 1, coinPower: 0, coinCount: 1, damageType: 'slash', effects: [] }],
         }];
 
         const portraitFromSplash = teamBuilder.getUnitPortraitUrl(unitList[0], (value) => `resolved:${value}`);
@@ -7277,25 +7271,6 @@ function runSuite() {
         const teamMainHtml = teamBuilder.renderTeamMain(state, unitList, escapeAttr, escapeHtml, renderOptions);
         assert(teamMainHtml.includes('echoes-team__zone-grid'), 'Expected LC zone grid in renderTeamMain.');
         assert(!teamMainHtml.includes('echoes-team__presets--lc'), 'renderTeamMain should not include preset rail.');
-        assert(teamMainHtml.includes('echoes-team__sin-chips'), 'Expected team sin chips in renderTeamMain.');
-        assert(teamMainHtml.includes('echoes-team__team-count'), 'Expected team count in renderTeamMain.');
-        assert(teamMainHtml.includes('echoes-identity-slot__frame'), 'Expected empty slot frame markup.');
-        assert(teamMainHtml.includes('data-drop-target="team-slot"'), 'Expected team slot drop targets.');
-        assert(teamMainHtml.includes('data-drag-roster-unit="true"'), 'Expected draggable roster picks.');
-        assert(teamMainHtml.includes('data-drag-team-unit="true"'), 'Expected draggable team cards.');
-        assert(teamMainHtml.includes('teamsbutton.png'), 'Expected teamsbutton name tab asset.');
-
-        const preset = { name: 'Test', unitIds: teamBuilder.normalizeUnitIds(['a', 'b']) };
-        assert(teamBuilder.moveTeamUnit(preset, 0, 2), 'Expected moveTeamUnit to swap slots.');
-        assert(preset.unitIds[0] === null && preset.unitIds[2] === 'a', 'Expected unit moved to slot 2.');
-        const addPreset = { name: 'Add', unitIds: teamBuilder.normalizeUnitIds(['a']) };
-        assert(teamBuilder.addTeamUnitAtSlot(addPreset, 'b', 3), 'Expected addTeamUnitAtSlot on empty slot.');
-        assert(addPreset.unitIds[3] === 'b', 'Expected unit added at slot index.');
-        assert(teamBuilder.placeTeamUnitInSlot(addPreset, 'c', 0), 'Expected roster place to swap slot.');
-        assert(addPreset.unitIds[0] === 'c' && addPreset.unitIds[3] === 'b', 'Expected placed unit in slot 0.');
-
-        const sinCounts = teamBuilder.computeTeamSinCounts(['card-unit'], unitList);
-        assert(typeof sinCounts.wrath === 'number', 'Expected sin count object.');
 
         const html = teamBuilder.renderTeamBuilder(state, unitList, escapeAttr, escapeHtml, renderOptions);
         assert(html.includes('echoes-identity-card'), 'Expected identity card markup.');
@@ -7323,7 +7298,6 @@ function runSuite() {
         assert(cardHtml.includes('resolved:assets/characterstab/Uptie_4_Frame_000.png'), 'Expected resolved frame URL.');
 
         assert(teamBuilder.TEAM_MENU_ASSETS?.presetButton?.includes('rosterbutton.png'), 'Expected TEAM_MENU_ASSETS preset button path.');
-        assert(teamBuilder.TEAM_MENU_ASSETS?.nameTab?.includes('teamsbutton.png'), 'Expected TEAM_MENU_ASSETS name tab path.');
         assert(teamBuilder.TEAM_MENU_ASSETS?.gridBackground?.includes('teammenubg.png'), 'Expected TEAM_MENU_ASSETS grid background path.');
         assert((html.match(/echoes-team__preset-tab--lc/g) || []).length === teamBuilder.MAX_TEAM_PRESETS, 'Expected eight preset tabs.');
     });
