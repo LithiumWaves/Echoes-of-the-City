@@ -7256,9 +7256,23 @@ function runSuite() {
         const state = teamBuilder.createDefaultTeamPresetsState();
         state.presets[0].unitIds = ['card-unit'];
 
-        const html = teamBuilder.renderTeamBuilder(state, unitList, escapeAttr, escapeHtml, {
+        const renderOptions = {
             resolveAssetUrl: (value) => `resolved:${value}`,
-        });
+        };
+
+        assert(typeof teamBuilder.renderPresetRail === 'function', 'Expected renderPresetRail export.');
+        assert(typeof teamBuilder.renderTeamMain === 'function', 'Expected renderTeamMain export.');
+
+        const presetRailHtml = teamBuilder.renderPresetRail(state, escapeAttr, escapeHtml, renderOptions);
+        assert(presetRailHtml.includes('echoes-team__presets--lc'), 'Expected LC preset rail class in renderPresetRail.');
+        assert(presetRailHtml.includes('rosterbutton.png'), 'Expected rosterbutton asset in preset rail.');
+        assert(!presetRailHtml.includes('echoes-team__zone-grid'), 'Preset rail should not include zone grid.');
+
+        const teamMainHtml = teamBuilder.renderTeamMain(state, unitList, escapeAttr, escapeHtml, renderOptions);
+        assert(teamMainHtml.includes('echoes-team__zone-grid'), 'Expected LC zone grid in renderTeamMain.');
+        assert(!teamMainHtml.includes('echoes-team__presets--lc'), 'renderTeamMain should not include preset rail.');
+
+        const html = teamBuilder.renderTeamBuilder(state, unitList, escapeAttr, escapeHtml, renderOptions);
         assert(html.includes('echoes-identity-card'), 'Expected identity card markup.');
         assert(html.includes('echoes-identity-slot--empty'), 'Expected empty identity slots.');
         assert((html.match(/echoes-identity-slot/g) || []).length >= teamBuilder.MAX_TEAM_SIZE, 'Expected fixed slot containers.');

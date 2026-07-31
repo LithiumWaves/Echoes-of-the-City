@@ -206,6 +206,7 @@
         characterSelect: null,
         characterScreen: null,
         characterScreenContent: null,
+        rosterMenuContent: null,
         characterLayout: null,
         creatorScreen: null,
         creatorContent: null,
@@ -2536,6 +2537,7 @@
 
     async function renderCharacterSelectScreen() {
         const mount = elements.characterScreenContent || elements.characterScreen;
+        const rosterMount = elements.rosterMenuContent;
         if (!mount) {
             return;
         }
@@ -2544,28 +2546,45 @@
             await ensureBattleModuleLoaded();
         } catch (error) {
             console.error(`${EXTENSION_ID}: team builder module load failed.`, error);
-            mount.innerHTML = `<p class="echoes-team__empty">Failed to load team builder.</p>`;
+            const errorMarkup = `<p class="echoes-team__empty">Failed to load team builder.</p>`;
+            mount.innerHTML = errorMarkup;
+            if (rosterMount) {
+                rosterMount.innerHTML = '';
+            }
             return;
         }
 
         const teamBuilder = getTeamBuilder();
         const api = getBattleContentApi();
         if (!teamBuilder) {
-            mount.innerHTML = `<p class="echoes-team__empty">Team builder is not available.</p>`;
+            const errorMarkup = `<p class="echoes-team__empty">Team builder is not available.</p>`;
+            mount.innerHTML = errorMarkup;
+            if (rosterMount) {
+                rosterMount.innerHTML = '';
+            }
             return;
         }
 
         ensureTeamPresetsLoaded();
         const unitList = typeof api.listUnitDefinitions === 'function' ? api.listUnitDefinitions() : [];
-        mount.innerHTML = teamBuilder.renderTeamBuilder(
+        const renderOptions = {
+            rosterFilter: state.teamRosterFilter,
+            resolveAssetUrl: resolveExtensionUrl,
+        };
+        if (rosterMount) {
+            rosterMount.innerHTML = teamBuilder.renderPresetRail(
+                state.teamPresets,
+                escapeAttribute,
+                escapeHtml,
+                renderOptions,
+            );
+        }
+        mount.innerHTML = teamBuilder.renderTeamMain(
             state.teamPresets,
             unitList,
             escapeAttribute,
             escapeHtml,
-            {
-                rosterFilter: state.teamRosterFilter,
-                resolveAssetUrl: resolveExtensionUrl,
-            },
+            renderOptions,
         );
     }
 
@@ -4711,7 +4730,7 @@
         if (action === 'team-focus-roster') {
             state.teamRosterFilter = '';
             renderCharacterSelectScreen();
-            const rosterSearch = elements.characterScreen?.querySelector('[data-action="team-roster-filter"]');
+            const rosterSearch = elements.characterScreenContent?.querySelector('[data-action="team-roster-filter"]');
             if (rosterSearch) {
                 rosterSearch.focus();
             }
@@ -4932,9 +4951,10 @@
                         </div>
                         <div class="echoes-battle-panel__character-select" aria-hidden="true">
                             <div class="echoes-battle-panel__character-layout">
-                                <div class="echoes-battle-panel__roster-menu"></div>
+                                <div class="echoes-battle-panel__roster-menu">
+                                    <div class="echoes-battle-panel__roster-menu-content"></div>
+                                </div>
                                 <div class="echoes-battle-panel__character-screen">
-                                    <div class="echoes-battle-panel__no-character"></div>
                                     <div class="echoes-battle-panel__character-screen-content"></div>
                                 </div>
                             </div>
@@ -4996,6 +5016,7 @@
         elements.characterLayout = root.querySelector('.echoes-battle-panel__character-layout');
         elements.characterScreen = root.querySelector('.echoes-battle-panel__character-screen');
         elements.characterScreenContent = root.querySelector('.echoes-battle-panel__character-screen-content');
+        elements.rosterMenuContent = root.querySelector('.echoes-battle-panel__roster-menu-content');
         elements.combatScreen = root.querySelector('.echoes-battle-panel__combat-screen');
         elements.combatContent = root.querySelector('.echoes-battle-panel__combat-content');
         elements.combatTrayButton = root.querySelector('.echoes-battle-panel__tray-button--combat');
@@ -5027,9 +5048,9 @@
         elements.combatContent.addEventListener('dragend', () => state.battleHandler?.handleDragEnd());
         elements.characterTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.characterTrayButton.addEventListener('click', handleCharacterTrayButtonClick);
-        elements.characterScreen?.addEventListener('click', handleCharacterScreenClick);
-        elements.characterScreen?.addEventListener('change', handleCharacterScreenChange);
-        elements.characterScreen?.addEventListener('input', handleCharacterScreenChange);
+        elements.characterLayout?.addEventListener('click', handleCharacterScreenClick);
+        elements.characterLayout?.addEventListener('change', handleCharacterScreenChange);
+        elements.characterLayout?.addEventListener('input', handleCharacterScreenChange);
         elements.creatorTrayButton.addEventListener('mouseenter', handleTrayButtonHover);
         elements.creatorTrayButton.addEventListener('click', handleCreatorTrayButtonClick);
         elements.creatorContent.addEventListener('click', handleCreatorContentClick);

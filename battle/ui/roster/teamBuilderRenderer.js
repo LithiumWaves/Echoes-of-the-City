@@ -205,11 +205,9 @@
         `;
     }
 
-    function renderTeamBuilder(teamState, unitList, escapeAttr, escapeHtml, options = {}) {
+    function renderPresetRail(teamState, escapeAttr, escapeHtml, options = {}) {
         const normalized = normalizeTeamPresetsState(teamState);
         const activeIndex = normalized.activePresetIndex;
-        const activePreset = normalized.presets[activeIndex] || { name: '', unitIds: [] };
-        const rosterFilter = String(options.rosterFilter || '').trim().toLowerCase();
         const resolveAssetUrl = options.resolveAssetUrl || ((value) => value || '');
 
         const presetButtonUrl = resolveAssetUrl(TEAM_MENU_ASSETS.presetButton);
@@ -228,6 +226,20 @@
                 <span class="echoes-team__preset-tab-label">${escapeHtml(preset.name || `Teams #${index + 1}`)}</span>
             </button>
         `).join('');
+
+        return `
+            <nav class="echoes-team__presets echoes-team__presets--lc" aria-label="Team presets">
+                ${presetTabs}
+            </nav>
+        `;
+    }
+
+    function renderTeamMain(teamState, unitList, escapeAttr, escapeHtml, options = {}) {
+        const normalized = normalizeTeamPresetsState(teamState);
+        const activeIndex = normalized.activePresetIndex;
+        const activePreset = normalized.presets[activeIndex] || { name: '', unitIds: [] };
+        const rosterFilter = String(options.rosterFilter || '').trim().toLowerCase();
+        const resolveAssetUrl = options.resolveAssetUrl || ((value) => value || '');
 
         const unitIds = Array.isArray(activePreset.unitIds) ? activePreset.unitIds : [];
         const teamSlots = Array.from({ length: MAX_TEAM_SIZE }, (_, slotIndex) => {
@@ -281,9 +293,6 @@
                             aria-label="Team name"
                         />
                     </div>
-                    <nav class="echoes-team__presets echoes-team__presets--lc" aria-label="Team presets">
-                        ${presetTabs}
-                    </nav>
                     <div class="echoes-team__zone-grid">
                         <section
                             class="echoes-team__grid echoes-identity-grid echoes-identity-grid--lc"
@@ -309,6 +318,10 @@
         `;
     }
 
+    function renderTeamBuilder(teamState, unitList, escapeAttr, escapeHtml, options = {}) {
+        return `${renderPresetRail(teamState, escapeAttr, escapeHtml, options)}${renderTeamMain(teamState, unitList, escapeAttr, escapeHtml, options)}`;
+    }
+
     const TeamBuilder = {
         TEAM_PRESETS_STORAGE_KEY,
         MAX_TEAM_PRESETS,
@@ -322,6 +335,8 @@
         getUnitPortraitUrl,
         renderIdentityCard,
         renderIdentitySlot,
+        renderPresetRail,
+        renderTeamMain,
         renderTeamBuilder,
     };
 
