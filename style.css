@@ -703,10 +703,17 @@
     gap: 0.35rem;
 }
 
-.echoes-editor-workshop .echoes-moveset__skill-card.echoes-lc-hex {
+.echoes-moveset__skill-card--lc {
+    border-color: var(--echoes-lc-sin-color, rgba(255, 255, 255, 0.2));
     box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+        inset 0 0 0 1px color-mix(in srgb, var(--echoes-lc-sin-color, #888) 35%, transparent),
         0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+.echoes-editor-workshop .echoes-moveset__skill-sin.echoes-lc-hex {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0;
 }
 
 @media (max-width: 900px) {

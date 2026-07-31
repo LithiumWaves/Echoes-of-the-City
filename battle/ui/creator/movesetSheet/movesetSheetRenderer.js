@@ -168,9 +168,9 @@
         const hiddenInPlanner = skill?.showInPlanner === false;
 
         return `
-            <article class="echoes-moveset__skill-card echoes-lc-hex" style="--echoes-lc-sin-color:${sinColor}; border-color:${sinColor};">
+            <article class="echoes-moveset__skill-card echoes-moveset__skill-card--lc" style="--echoes-lc-sin-color:${sinColor};">
                 <header class="echoes-moveset__skill-header">
-                    <div class="echoes-moveset__skill-sin" style="background:${sinColor};">${escapeHtml(String(sinType).charAt(0).toUpperCase())}</div>
+                    <div class="echoes-moveset__skill-sin echoes-lc-hex" style="background:${sinColor};">${escapeHtml(String(sinType).charAt(0).toUpperCase())}</div>
                     <div class="echoes-moveset__skill-title-wrap">
                         <input class="echoes-moveset__skill-name" data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="name" value="${escapeAttr(String(skill?.name || ''))}" placeholder="Skill name" />
                         <input class="echoes-moveset__skill-id" data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="id" value="${escapeAttr(String(skill?.id || ''))}" placeholder="skill-id" />
