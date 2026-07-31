@@ -7263,6 +7263,23 @@ function runSuite() {
         assert(html.includes('echoes-identity-slot--empty'), 'Expected empty identity slots.');
         assert((html.match(/echoes-identity-slot/g) || []).length >= teamBuilder.MAX_TEAM_SIZE, 'Expected fixed slot containers.');
         assert(html.includes('resolved:assets/roster/card-splash.png'), 'Expected splash art in card background.');
+        assert(html.includes('echoes-team--lc'), 'Expected LC team root class.');
+        assert(html.includes('echoes-team__presets--lc'), 'Expected LC preset rail class.');
+        assert(html.includes('teamsbutton.png'), 'Expected teamsbutton asset in preset tabs.');
+        assert(html.includes('Uptie_4_Frame_000.png'), 'Expected uptie frame asset on team cards.');
+        assert(html.includes('echoes-identity-card__frame'), 'Expected identity card frame markup.');
+
+        const cardHtml = teamBuilder.renderIdentityCard(unitList[0], unitList, escapeAttr, escapeHtml, {
+            variant: 'team',
+            unitId: 'card-unit',
+            resolveAssetUrl: (value) => `resolved:${value}`,
+        });
+        assert(cardHtml.includes('echoes-identity-card--team'), 'Expected team card variant class.');
+        assert(cardHtml.includes('echoes-identity-card__frame'), 'Expected frame element on team card.');
+        assert(cardHtml.includes('resolved:assets/characterstab/Uptie_4_Frame_000.png'), 'Expected resolved frame URL.');
+
+        assert(teamBuilder.TEAM_MENU_ASSETS?.presetButton?.includes('teamsbutton.png'), 'Expected TEAM_MENU_ASSETS preset button path.');
+        assert((html.match(/echoes-team__preset-tab--lc/g) || []).length === teamBuilder.MAX_TEAM_PRESETS, 'Expected eight preset tabs.');
     });
 
     test('Creator UI: default battle definition and encounter builder render', () => {

@@ -5,6 +5,12 @@
     const MAX_TEAM_PRESETS = 8;
     const MAX_TEAM_SIZE = 12;
 
+    const TEAM_MENU_ASSETS = {
+        background: 'assets/characterstab/teammenubg.png',
+        presetButton: 'assets/characterstab/teamsbutton.png',
+        cardFrame: 'assets/characterstab/Uptie_4_Frame_000.png',
+    };
+
     const sinPalette = battleModules.sinColors || window.EchoesOfTheCitySinColors || {};
     const SIN_COLORS = sinPalette.SIN_COLORS || {
         wrath: '#c73e3e',
@@ -120,9 +126,18 @@
         const sinLabel = String(sinType).charAt(0).toUpperCase();
         const variantClass = variant === 'roster' ? ' echoes-identity-card--roster' : '';
         const binderClass = variant === 'binder' ? ' echoes-identity-card--binder' : '';
+        const teamClass = variant === 'team' ? ' echoes-identity-card--team' : '';
         const selectedClass = selected ? ' is-selected' : '';
         const portraitStyle = portraitUrl
             ? `background-image:url('${escapeAttr(portraitUrl)}');`
+            : '';
+
+        const frameUrl = variant === 'team' ? resolveAssetUrl(TEAM_MENU_ASSETS.cardFrame) : '';
+        const frameVar = frameUrl ? `--echoes-identity-frame-url:url('${escapeAttr(frameUrl)}');` : '';
+        const cardStyle = `--echoes-identity-sin-color:${sinColor};${frameVar}`;
+
+        const frameMarkup = variant === 'team'
+            ? '<div class="echoes-identity-card__frame" aria-hidden="true"></div>'
             : '';
 
         const removeButton = removable && Number.isInteger(unitIndex)
@@ -137,11 +152,12 @@
 
         return `
             <${tagName}
-                class="echoes-identity-card${variantClass}${binderClass}${selectedClass}"
+                class="echoes-identity-card${variantClass}${binderClass}${teamClass}${selectedClass}"
                 data-unit-id="${escapeAttr(unitId)}"
-                style="--echoes-identity-sin-color:${sinColor};"
+                style="${cardStyle}"
             >
                 ${checkbox}
+                ${frameMarkup}
                 <div class="echoes-identity-card__art" style="${portraitStyle}"></div>
                 <div class="echoes-identity-card__badge" aria-hidden="true">${escapeHtml(sinLabel)}</div>
                 <div class="echoes-identity-card__footer">
@@ -164,7 +180,7 @@
         if (unitId) {
             const unit = getUnitDefinition(unitList, unitId);
             return `
-                <div class="echoes-identity-slot echoes-identity-slot--filled" data-slot-index="${slotIndex}">
+                <div class="echoes-identity-slot echoes-identity-slot--filled echoes-identity-slot--lc" data-slot-index="${slotIndex}">
                     ${renderIdentityCard(unit, unitList, escapeAttr, escapeHtml, {
                         variant: 'team',
                         unitId,
@@ -178,7 +194,7 @@
 
         return `
             <button
-                class="echoes-identity-slot echoes-identity-slot--empty"
+                class="echoes-identity-slot echoes-identity-slot--empty echoes-identity-slot--lc"
                 type="button"
                 data-action="team-focus-roster"
                 data-slot-index="${slotIndex}"
@@ -196,14 +212,20 @@
         const rosterFilter = String(options.rosterFilter || '').trim().toLowerCase();
         const resolveAssetUrl = options.resolveAssetUrl || ((value) => value || '');
 
+        const presetButtonUrl = resolveAssetUrl(TEAM_MENU_ASSETS.presetButton);
+        const presetButtonStyle = presetButtonUrl
+            ? `--echoes-team-preset-button-url:url('${escapeAttr(presetButtonUrl)}');`
+            : '';
+
         const presetTabs = normalized.presets.map((preset, index) => `
             <button
-                class="echoes-team__preset-tab${index === activeIndex ? ' is-active' : ''}"
+                class="echoes-team__preset-tab echoes-team__preset-tab--lc${index === activeIndex ? ' is-active' : ''}"
                 type="button"
                 data-action="team-select-preset"
                 data-preset-index="${index}"
+                style="${presetButtonStyle}"
             >
-                ${escapeHtml(preset.name || `Teams #${index + 1}`)}
+                <span class="echoes-team__preset-tab-label">${escapeHtml(preset.name || `Teams #${index + 1}`)}</span>
             </button>
         `).join('');
 
@@ -248,24 +270,30 @@
         `).join('');
 
         return `
-            <div class="echoes-team">
-                <header class="echoes-team__header">
-                    <label class="echoes-team__preset-name-label">
-                        <span>Preset name</span>
-                        <input
-                            data-action="team-preset-name"
-                            value="${escapeAttr(activePreset.name || '')}"
-                            placeholder="Teams #${activeIndex + 1}"
-                        />
-                    </label>
-                    <span class="echoes-team__count">${unitIds.length} / ${MAX_TEAM_SIZE}</span>
-                </header>
-                <div class="echoes-team__layout">
-                    <nav class="echoes-team__presets" aria-label="Team presets">${presetTabs}</nav>
-                    <section class="echoes-team__grid echoes-identity-grid" aria-label="Active team">
-                        ${teamSlots}
+            <div class="echoes-team echoes-team--lc">
+                <div class="echoes-team__lc-body">
+                    <nav class="echoes-team__presets echoes-team__presets--lc" aria-label="Team presets">
+                        <div class="echoes-team__presets-heading">Teams</div>
+                        ${presetTabs}
+                    </nav>
+                    <section class="echoes-team__center">
+                        <div class="echoes-team__grid-header">
+                            <label class="echoes-team__preset-name">
+                                <input
+                                    class="echoes-team__preset-name-input"
+                                    data-action="team-preset-name"
+                                    value="${escapeAttr(activePreset.name || '')}"
+                                    placeholder="Teams #${activeIndex + 1}"
+                                    aria-label="Team name"
+                                />
+                            </label>
+                            <span class="echoes-team__count">${unitIds.length} / ${MAX_TEAM_SIZE}</span>
+                        </div>
+                        <section class="echoes-team__grid echoes-identity-grid echoes-identity-grid--lc" aria-label="Active team">
+                            ${teamSlots}
+                        </section>
                     </section>
-                    <aside class="echoes-team__roster" aria-label="Unit roster">
+                    <aside class="echoes-team__roster echoes-team__roster--lc" aria-label="Unit roster">
                         <input
                             class="echoes-team__roster-search"
                             type="search"
@@ -286,6 +314,7 @@
         TEAM_PRESETS_STORAGE_KEY,
         MAX_TEAM_PRESETS,
         MAX_TEAM_SIZE,
+        TEAM_MENU_ASSETS,
         SIN_COLORS,
         createDefaultTeamPresetsState,
         normalizeTeamPresetsState,

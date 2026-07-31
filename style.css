@@ -2315,43 +2315,84 @@
     bottom: 16.4%;
     display: flex;
     align-items: stretch;
-    justify-content: flex-start;
-    gap: 0.35%;
-}
-
-.echoes-battle-panel__roster-menu {
-    flex: 0 0 auto;
-    height: 100%;
-    aspect-ratio: 352 / 738;
-    background: url("./assets/characterstab/rostermenu.png") left center / 100% 100% no-repeat;
+    justify-content: center;
 }
 
 .echoes-battle-panel__character-screen {
     position: relative;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    width: 100%;
     height: 100%;
-    aspect-ratio: 2038 / 1134;
-    background: url("./assets/characterstab/characterselectscreen.png") left center / 100% 100% no-repeat;
-}
-
-.echoes-battle-panel__no-character {
-    position: absolute;
-    top: 13.6%;
-    left: 3.8%;
-    width: 10.9%;
-    aspect-ratio: 356 / 491;
-    background: url("./assets/characterstab/nocharacter.png") center / contain no-repeat;
+    max-width: 100%;
+    background: url("./assets/characterstab/teammenubg.png") center / contain no-repeat;
 }
 
 .echoes-battle-panel__character-screen .echoes-team {
     position: absolute;
-    inset: 8% 3.5% 8% 3.5%;
+    inset: 6% 4% 5% 4%;
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
     color: rgba(255, 255, 255, 0.92);
     font: 0.72rem/1.35 "Segoe UI", system-ui, sans-serif;
     pointer-events: auto;
+}
+
+.echoes-team--lc {
+    inset: 5.5% 3.5% 4.5% 3.5%;
+}
+
+.echoes-team__lc-body {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(5.5rem, 7.5%) minmax(0, 1fr) minmax(10rem, 20%);
+    gap: 0.65rem;
+    align-items: stretch;
+}
+
+.echoes-team__center {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    gap: 0.35rem;
+}
+
+.echoes-team__grid-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.2rem 0.45rem 0.35rem;
+    min-height: 1.75rem;
+}
+
+.echoes-team__preset-name {
+    flex: 1;
+    min-width: 0;
+}
+
+.echoes-team__preset-name-input {
+    width: 100%;
+    max-width: 14rem;
+    border: 0;
+    background: transparent;
+    color: #f0d8a8;
+    padding: 0.15rem 0.25rem;
+    font: 700 0.78rem/1.2 "Segoe UI", system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.echoes-team__preset-name-input:focus {
+    outline: 1px solid rgba(255, 180, 80, 0.45);
+    background: rgba(8, 10, 14, 0.35);
+}
+
+.echoes-team__count {
+    opacity: 0.85;
+    font-weight: 600;
+    color: rgba(240, 216, 168, 0.88);
+    font-size: 0.68rem;
 }
 
 .echoes-team__header {
@@ -2381,11 +2422,6 @@
     font: inherit;
 }
 
-.echoes-team__count {
-    opacity: 0.85;
-    font-weight: 600;
-}
-
 .echoes-team__layout {
     flex: 1;
     min-height: 0;
@@ -2401,6 +2437,21 @@
     overflow: auto;
 }
 
+.echoes-team__presets--lc {
+    gap: 0.2rem;
+    padding-top: 0.15rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.echoes-team__presets-heading {
+    font: 700 0.62rem/1.2 "Segoe UI", system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(240, 216, 168, 0.72);
+    padding: 0.15rem 0.25rem 0.35rem;
+}
+
 .echoes-team__preset-tab {
     border: 1px solid rgba(255, 140, 60, 0.22);
     background: rgba(18, 12, 10, 0.72);
@@ -2413,11 +2464,46 @@
     letter-spacing: 0.04em;
 }
 
+.echoes-team__preset-tab--lc {
+    position: relative;
+    border: none;
+    background: var(--echoes-team-preset-button-url, none) center / 100% 100% no-repeat;
+    color: #f0d8a8;
+    padding: 0.55rem 0.65rem;
+    min-height: 2.1rem;
+    text-align: center;
+    filter: brightness(0.92);
+    transition: filter 120ms ease, box-shadow 120ms ease;
+}
+
+.echoes-team__preset-tab-label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 700 0.62rem/1.2 "Segoe UI", system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
 .echoes-team__preset-tab.is-active {
     outline: 2px solid rgba(255, 120, 40, 0.85);
     background: rgba(48, 24, 12, 0.92);
     color: #ffcc66;
     box-shadow: inset 0 0 12px rgba(255, 140, 40, 0.15);
+}
+
+.echoes-team__preset-tab--lc.is-active {
+    outline: none;
+    filter: brightness(1.15);
+    box-shadow:
+        0 0 10px rgba(255, 160, 60, 0.45),
+        inset 0 0 8px rgba(255, 200, 100, 0.2);
+    color: #ffe8a8;
+}
+
+.echoes-team__preset-tab--lc:hover {
+    filter: brightness(1.05);
 }
 
 .echoes-team__grid,
@@ -2429,6 +2515,16 @@
     padding: 0.35rem;
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: rgba(8, 10, 14, 0.42);
+}
+
+.echoes-identity-grid--lc {
+    flex: 1;
+    min-height: 0;
+    border: none;
+    background: transparent;
+    padding: 0.15rem 0.25rem 0.25rem;
+    gap: 0.28rem;
+    overflow: hidden;
 }
 
 .echoes-identity-grid--deploy {
@@ -2458,15 +2554,33 @@
     font: inherit;
 }
 
+.echoes-identity-slot--lc.echoes-identity-slot--empty {
+    aspect-ratio: 2 / 3;
+    border: 1px solid rgba(255, 180, 100, 0.18);
+    background: rgba(8, 8, 10, 0.35);
+    color: rgba(240, 216, 168, 0.45);
+}
+
 .echoes-identity-slot--empty:hover {
     border-color: rgba(255, 160, 80, 0.55);
     color: rgba(255, 220, 180, 0.9);
+}
+
+.echoes-identity-slot--lc.echoes-identity-slot--empty:hover {
+    border-color: rgba(255, 180, 100, 0.42);
+    background: rgba(16, 12, 10, 0.5);
+    color: rgba(255, 220, 180, 0.85);
 }
 
 .echoes-identity-slot__plus {
     font-size: 1.75rem;
     line-height: 1;
     font-weight: 300;
+}
+
+.echoes-identity-slot--lc .echoes-identity-slot__plus {
+    font-size: 1.35rem;
+    opacity: 0.65;
 }
 
 .echoes-identity-card {
@@ -2482,6 +2596,13 @@
     cursor: default;
 }
 
+.echoes-identity-card--team {
+    aspect-ratio: 2 / 3;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
 .echoes-identity-card--roster {
     aspect-ratio: 2 / 2.8;
     width: 100%;
@@ -2494,10 +2615,29 @@
         inset 0 0 18px rgba(0, 0, 0, 0.35);
 }
 
+.echoes-identity-card--team.is-selected {
+    outline: none;
+    box-shadow: 0 0 12px rgba(255, 160, 60, 0.45);
+}
+
+.echoes-identity-card__frame {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: var(--echoes-identity-frame-url, url("./assets/characterstab/Uptie_4_Frame_000.png")) center / 100% 100% no-repeat;
+}
+
 .echoes-identity-card__art {
     position: absolute;
     inset: 0;
     background: rgba(0, 0, 0, 0.4) center top / cover no-repeat;
+}
+
+.echoes-identity-card--team .echoes-identity-card__art {
+    inset: 12% 11% 18% 11%;
+    border-radius: 2px;
+    z-index: 1;
 }
 
 .echoes-identity-card__badge {
@@ -2514,6 +2654,16 @@
     box-shadow: 0 0 6px rgba(0, 0, 0, 0.45);
 }
 
+.echoes-identity-card--team .echoes-identity-card__badge {
+    top: 8%;
+    right: 10%;
+    z-index: 3;
+    width: 1.15rem;
+    height: 1.15rem;
+    font-size: 0.55rem;
+    line-height: 1.15rem;
+}
+
 .echoes-identity-card__footer {
     position: absolute;
     left: 0;
@@ -2525,9 +2675,22 @@
     gap: 0.12rem;
 }
 
+.echoes-identity-card--team .echoes-identity-card__footer {
+    left: 11%;
+    right: 11%;
+    bottom: 10%;
+    padding: 0.2rem 0.15rem 0.1rem;
+    z-index: 3;
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.55) 45%, rgba(0, 0, 0, 0.82) 100%);
+}
+
 .echoes-identity-card__level {
     font: 600 0.62rem/1.2 "Segoe UI", system-ui, sans-serif;
     color: rgba(255, 255, 255, 0.82);
+}
+
+.echoes-identity-card--team .echoes-identity-card__level {
+    font-size: 0.52rem;
 }
 
 .echoes-identity-card__name {
@@ -2540,6 +2703,11 @@
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+}
+
+.echoes-identity-card--team .echoes-identity-card__name {
+    font-size: 0.52rem;
+    -webkit-line-clamp: 1;
 }
 
 .echoes-identity-card__remove {
@@ -2556,6 +2724,12 @@
     line-height: 1;
     opacity: 0;
     transition: opacity 120ms ease;
+    z-index: 4;
+}
+
+.echoes-identity-card--team .echoes-identity-card__remove {
+    top: 8%;
+    left: 10%;
 }
 
 .echoes-identity-card:hover .echoes-identity-card__remove {
@@ -2607,6 +2781,12 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: rgba(8, 10, 14, 0.52);
     padding: 0.35rem;
+}
+
+.echoes-team__roster--lc {
+    border: 1px solid rgba(255, 180, 100, 0.14);
+    background: rgba(8, 10, 14, 0.38);
+    padding: 0.35rem 0.3rem;
 }
 
 .echoes-team__roster-search {
@@ -2780,16 +2960,6 @@
     height: 71.5vh;
     width: auto;
     gap: 0.45vw;
-}
-
-.echoes-battle-panel__screen:fullscreen .echoes-battle-panel__roster-menu {
-    height: 100%;
-}
-
-.echoes-battle-panel__screen:fullscreen .echoes-battle-panel__no-character {
-    top: 13.7%;
-    left: 4.1%;
-    width: 13.4%;
 }
 
 .echoes-battle-ui.is-open .echoes-battle-backdrop {
