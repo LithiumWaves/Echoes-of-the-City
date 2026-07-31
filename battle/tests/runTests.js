@@ -7265,7 +7265,8 @@ function runSuite() {
         assert(html.includes('resolved:assets/roster/card-splash.png'), 'Expected splash art in card background.');
         assert(html.includes('echoes-team--lc'), 'Expected LC team root class.');
         assert(html.includes('echoes-team__presets--lc'), 'Expected LC preset rail class.');
-        assert(html.includes('teamsbutton.png'), 'Expected teamsbutton asset in preset tabs.');
+        assert(html.includes('rosterbutton.png'), 'Expected rosterbutton asset in preset tabs.');
+        assert(html.includes('teammenubg.png'), 'Expected teammenubg grid background asset.');
         assert(html.includes('Uptie_4_Frame_000.png'), 'Expected uptie frame asset on team cards.');
         assert(html.includes('echoes-identity-card__frame'), 'Expected identity card frame markup.');
 
@@ -7278,7 +7279,8 @@ function runSuite() {
         assert(cardHtml.includes('echoes-identity-card__frame'), 'Expected frame element on team card.');
         assert(cardHtml.includes('resolved:assets/characterstab/Uptie_4_Frame_000.png'), 'Expected resolved frame URL.');
 
-        assert(teamBuilder.TEAM_MENU_ASSETS?.presetButton?.includes('teamsbutton.png'), 'Expected TEAM_MENU_ASSETS preset button path.');
+        assert(teamBuilder.TEAM_MENU_ASSETS?.presetButton?.includes('rosterbutton.png'), 'Expected TEAM_MENU_ASSETS preset button path.');
+        assert(teamBuilder.TEAM_MENU_ASSETS?.gridBackground?.includes('teammenubg.png'), 'Expected TEAM_MENU_ASSETS grid background path.');
         assert((html.match(/echoes-team__preset-tab--lc/g) || []).length === teamBuilder.MAX_TEAM_PRESETS, 'Expected eight preset tabs.');
     });
 

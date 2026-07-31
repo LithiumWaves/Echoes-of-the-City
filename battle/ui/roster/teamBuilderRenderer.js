@@ -6,8 +6,8 @@
     const MAX_TEAM_SIZE = 12;
 
     const TEAM_MENU_ASSETS = {
-        background: 'assets/characterstab/teammenubg.png',
-        presetButton: 'assets/characterstab/teamsbutton.png',
+        gridBackground: 'assets/characterstab/teammenubg.png',
+        presetButton: 'assets/characterstab/rosterbutton.png',
         cardFrame: 'assets/characterstab/Uptie_4_Frame_000.png',
     };
 
@@ -217,6 +217,11 @@
             ? `--echoes-team-preset-button-url:url('${escapeAttr(presetButtonUrl)}');`
             : '';
 
+        const gridBackgroundUrl = resolveAssetUrl(TEAM_MENU_ASSETS.gridBackground);
+        const gridBackgroundStyle = gridBackgroundUrl
+            ? `--echoes-team-grid-bg-url:url('${escapeAttr(gridBackgroundUrl)}');`
+            : '';
+
         const presetTabs = normalized.presets.map((preset, index) => `
             <button
                 class="echoes-team__preset-tab echoes-team__preset-tab--lc${index === activeIndex ? ' is-active' : ''}"
@@ -289,7 +294,11 @@
                             </label>
                             <span class="echoes-team__count">${unitIds.length} / ${MAX_TEAM_SIZE}</span>
                         </div>
-                        <section class="echoes-team__grid echoes-identity-grid echoes-identity-grid--lc" aria-label="Active team">
+                        <section
+                            class="echoes-team__grid echoes-identity-grid echoes-identity-grid--lc"
+                            style="${gridBackgroundStyle}"
+                            aria-label="Active team"
+                        >
                             ${teamSlots}
                         </section>
                     </section>
