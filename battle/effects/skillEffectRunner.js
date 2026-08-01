@@ -99,12 +99,12 @@
                 const index = Math.floor(Math.random() * slots.length);
                 return slots[Math.max(0, Math.min(slots.length - 1, index))] || null;
             };
-            const pickByHp = (slots, mode) => {
+            const pickByHp = (slots, mode, useMaxHp = false) => {
                 const sorted = [...slots].sort((a, b) => {
                     const unitA = typeof getUnitById === 'function' ? getUnitById(targetBattle, a.unitId) : null;
                     const unitB = typeof getUnitById === 'function' ? getUnitById(targetBattle, b.unitId) : null;
-                    const hpA = unitA?.hp || 0;
-                    const hpB = unitB?.hp || 0;
+                    const hpA = useMaxHp ? (unitA?.maxHp || 0) : (unitA?.hp || 0);
+                    const hpB = useMaxHp ? (unitB?.maxHp || 0) : (unitB?.hp || 0);
                     if (hpA === hpB) {
                         const orderA = Number.isInteger(unitA?.deploymentOrder) ? unitA.deploymentOrder : a.index;
                         const orderB = Number.isInteger(unitB?.deploymentOrder) ? unitB.deploymentOrder : b.index;
@@ -168,9 +168,61 @@
                 const unit = selectedSlot && typeof getUnitById === 'function' ? getUnitById(targetBattle, selectedSlot.unitId) : null;
                 return unit ? [unit] : [];
             }
+            if (target === 'highestMaxHpAlly' || target === 'lowestMaxHpAlly') {
+                const selectedSlot = pickByHp(getLivingSlots(sourceSide), target === 'highestMaxHpAlly' ? 'highest' : 'lowest', true);
+                const unit = selectedSlot && typeof getUnitById === 'function' ? getUnitById(targetBattle, selectedSlot.unitId) : null;
+                return unit ? [unit] : [];
+            }
+            if (target === 'highestMaxHpOpponent' || target === 'lowestMaxHpOpponent') {
+                const opposingSide = sourceSide && typeof getOpposingSide === 'function' ? getOpposingSide(sourceSide) : null;
+                const selectedSlot = pickByHp(getLivingSlots(opposingSide), target === 'highestMaxHpOpponent' ? 'highest' : 'lowest', true);
+                const unit = selectedSlot && typeof getUnitById === 'function' ? getUnitById(targetBattle, selectedSlot.unitId) : null;
+                return unit ? [unit] : [];
+            }
+            if (target === 'defeatedUnit' || target === 'eventDefeated') {
+                const defeated = runtime?.defeatedUnit || runtime?.eventDefeated || null;
+                return defeated ? [defeated] : [];
+            }
 
             const targetUnit = getEffectTargetUnit(runtime, target);
             return targetUnit ? [targetUnit] : [];
+        }
+
+        function ensureDiceResults(unit) {
+            const runtimeState = ensureUnitRuntimeState(unit);
+            if (!runtimeState) {
+                return null;
+            }
+            if (!runtimeState.diceResults || typeof runtimeState.diceResults !== 'object' || Array.isArray(runtimeState.diceResults)) {
+                runtimeState.diceResults = {};
+            }
+            return runtimeState.diceResults;
+        }
+
+        function getStoredDiceResult(runtime, storeAs, unit) {
+            if (!storeAs || typeof storeAs !== 'string') {
+                return null;
+            }
+            if (runtime?.diceResults && typeof runtime.diceResults === 'object' && Number.isFinite(runtime.diceResults[storeAs])) {
+                return runtime.diceResults[storeAs];
+            }
+            const sourceUnit = unit || getRuntimeSourceUnit(runtime);
+            const diceResults = sourceUnit?.runtimeState?.diceResults;
+            if (diceResults && typeof diceResults === 'object' && Number.isFinite(diceResults[storeAs])) {
+                return diceResults[storeAs];
+            }
+            return null;
+        }
+
+        function resolveBranchWeight(runtime, branch) {
+            if (typeof branch?.weight === 'number' && Number.isFinite(branch.weight)) {
+                return Math.max(0, branch.weight);
+            }
+            if (branch?.weight && typeof branch.weight === 'object') {
+                const resolved = resolveEffectAmount(runtime, { amount: branch.weight });
+                return Math.max(0, typeof resolved === 'number' && Number.isFinite(resolved) ? resolved : 0);
+            }
+            return 0;
         }
 
         function getEffectStatusValue(runtime, amountSource, getter) {
@@ -502,6 +554,9 @@
             }
             if (!unit.runtimeState.counters || typeof unit.runtimeState.counters !== 'object' || Array.isArray(unit.runtimeState.counters)) {
                 unit.runtimeState.counters = {};
+            }
+            if (!unit.runtimeState.diceResults || typeof unit.runtimeState.diceResults !== 'object' || Array.isArray(unit.runtimeState.diceResults)) {
+                unit.runtimeState.diceResults = {};
             }
             return unit.runtimeState;
         }
@@ -1951,16 +2006,17 @@
                         }
                         const selectedBranch = effect.type === 'chooseWeightedActions'
                             ? (() => {
-                                const totalWeight = branches.reduce((sum, branch) => sum + (typeof branch.weight === 'number' && Number.isFinite(branch.weight) ? Math.max(0, branch.weight) : 0), 0);
+                                const weights = branches.map((branch) => resolveBranchWeight(runtime, branch));
+                                const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
                                 if (totalWeight <= 0) {
                                     return branches[0];
                                 }
                                 const roll = (Math.random() || 0) * totalWeight;
                                 let running = 0;
-                                for (const branch of branches) {
-                                    running += typeof branch.weight === 'number' && Number.isFinite(branch.weight) ? Math.max(0, branch.weight) : 0;
+                                for (let index = 0; index < branches.length; index += 1) {
+                                    running += weights[index];
                                     if (roll <= running) {
-                                        return branch;
+                                        return branches[index];
                                     }
                                 }
                                 return branches[branches.length - 1];
@@ -1972,6 +2028,81 @@
                         if (selectedBranch && Array.isArray(selectedBranch.actions) && selectedBranch.actions.length) {
                             applyEffects(targetBattle, selectedBranch.actions, runtimeState);
                         }
+                    }
+                    return;
+                case 'rollDice':
+                    {
+                        const faces = Math.max(2, Math.floor(Number(effect.faces) || 0));
+                        const count = Math.max(1, Math.floor(Number(effect.count) || 1));
+                        const storeAs = typeof effect.storeAs === 'string' ? effect.storeAs : '';
+                        if (!storeAs || faces < 2) {
+                            return;
+                        }
+                        let total = 0;
+                        for (let i = 0; i < count; i += 1) {
+                            total += 1 + Math.floor((Math.random() || 0) * faces);
+                        }
+                        if (!runtime.diceResults || typeof runtime.diceResults !== 'object' || Array.isArray(runtime.diceResults)) {
+                            runtime.diceResults = {};
+                        }
+                        runtime.diceResults[storeAs] = total;
+                        const sourceUnit = getRuntimeSourceUnit(runtime);
+                        const diceTargets = effect.target
+                            ? targetUnits
+                            : [sourceUnit].filter(Boolean);
+                        const unitsToStore = diceTargets.length ? diceTargets : [sourceUnit].filter(Boolean);
+                        unitsToStore.forEach((unit) => {
+                            const diceResults = ensureDiceResults(unit);
+                            if (diceResults) {
+                                diceResults[storeAs] = total;
+                            }
+                        });
+                        // Always persist on the acting unit so later conditions can read it.
+                        if (sourceUnit && !unitsToStore.includes(sourceUnit)) {
+                            const diceResults = ensureDiceResults(sourceUnit);
+                            if (diceResults) {
+                                diceResults[storeAs] = total;
+                            }
+                        }
+                        if (typeof emitEvent === 'function') {
+                            emitEvent(targetBattle, 'dice_rolled', {
+                                storeAs,
+                                faces,
+                                count,
+                                result: total,
+                                unitId: sourceUnit?.id || null,
+                            });
+                        }
+                    }
+                    return;
+                case 'setSkillDamageType':
+                    {
+                        const damageType = effect.damageType;
+                        if (!damageType || !['slash', 'pierce', 'blunt'].includes(damageType)) {
+                            return;
+                        }
+                        const scope = effect.scope === 'allSkills' ? 'allSkills' : 'baseSkills';
+                        const sourceUnit = getRuntimeSourceUnit(runtime);
+                        const units = effect.target
+                            ? targetUnits
+                            : [sourceUnit].filter(Boolean);
+                        const unitsToApply = units.length ? units : [sourceUnit].filter(Boolean);
+                        unitsToApply.forEach((unit) => {
+                            const runtimeState = ensureUnitRuntimeState(unit);
+                            if (!runtimeState) {
+                                return;
+                            }
+                            runtimeState.skillDamageTypeOverride = damageType;
+                            runtimeState.skillDamageTypeOverrideScope = scope;
+                            if (typeof emitEvent === 'function') {
+                                emitEvent(targetBattle, 'skill_damage_type_override', {
+                                    unitId: unit.id,
+                                    unitName: unit.name,
+                                    damageType,
+                                    scope,
+                                });
+                            }
+                        });
                     }
                     return;
                 case 'abortEffects':
@@ -2298,10 +2429,28 @@
                         return;
                     }
                     {
+                        if (effect.when === 'nextTurnStart') {
+                            const runtimeState = ensureUnitRuntimeState(targetUnit);
+                            if (runtimeState) {
+                                runtimeState.pendingRecoverStagger = true;
+                            }
+                            if (typeof emitEvent === 'function') {
+                                emitEvent(targetBattle, 'unit_stagger_recover_queued', {
+                                    unitId: targetUnit.id,
+                                    unitName: targetUnit.name,
+                                    recoverTurn: (targetBattle?.turn || 0) + 1,
+                                });
+                            }
+                            return;
+                        }
                         const previousLevel = targetUnit.staggerLevel || 0;
                         targetUnit.staggerLevel = 0;
                         targetUnit.staggerRecoverTurn = 0;
                         targetUnit.staggerTurnsRemaining = 0;
+                        const runtimeState = ensureUnitRuntimeState(targetUnit);
+                        if (runtimeState) {
+                            delete runtimeState.pendingRecoverStagger;
+                        }
                         if (typeof emitEvent === 'function') {
                             emitEvent(targetBattle, 'unit_stagger_recovered', {
                                 unitId: targetUnit.id,
@@ -2449,6 +2598,10 @@
 
         if (target === 'staggeredUnit') {
             return runtime?.staggeredUnit || null;
+        }
+
+        if (target === 'defeatedUnit') {
+            return runtime?.defeatedUnit || runtime?.eventDefeated || null;
         }
 
         return runtime?.sourceUnit || runtime?.unit || null;
@@ -2685,6 +2838,92 @@
                 ? Math.max(0, Math.min(1, normalized))
                 : 0;
             return (Math.random() || 0) < chance;
+        }
+        case 'diceResultIs':
+        case 'diceResultAtLeast':
+        {
+            const storeAs = condition?.storeAs;
+            const diceUnit = getHookConditionUnit(runtime, condition?.target || 'self');
+            const actual = (() => {
+                if (runtime?.diceResults && typeof runtime.diceResults === 'object' && Number.isFinite(runtime.diceResults[storeAs])) {
+                    return runtime.diceResults[storeAs];
+                }
+                const fromUnit = diceUnit?.runtimeState?.diceResults?.[storeAs];
+                return Number.isFinite(fromUnit) ? fromUnit : null;
+            })();
+            if (actual == null) {
+                return false;
+            }
+            return conditionType === 'diceResultIs'
+                ? actual === conditionValue
+                : actual >= conditionValue;
+        }
+        case 'skillDamageTypeMatchesWeakness':
+        {
+            let checkUnit = getHookConditionUnit(runtime, condition?.target || 'opponent');
+            if (condition?.statusId && runtime?.battle && typeof getStatus === 'function') {
+                const battle = runtime.battle;
+                const sourceSide = runtime?.unit?.side || runtime?.sourceUnit?.side || null;
+                const opposingSide = sourceSide === 'player' ? 'enemy' : (sourceSide === 'enemy' ? 'player' : null);
+                const candidates = [];
+                if (Array.isArray(battle?.enemyUnits)) {
+                    candidates.push(...battle.enemyUnits);
+                }
+                if (Array.isArray(battle?.playerUnits)) {
+                    candidates.push(...battle.playerUnits);
+                }
+                const marked = candidates.find((unit) => {
+                    if (!unit || (unit.hp || 0) <= 0) {
+                        return false;
+                    }
+                    if (opposingSide && unit.side && unit.side !== opposingSide) {
+                        return false;
+                    }
+                    const status = getStatus(unit, condition.statusId);
+                    return Boolean(status) && ((status.count || 0) > 0 || (status.potency || 0) > 0);
+                });
+                if (marked) {
+                    checkUnit = marked;
+                }
+            }
+            if (!checkUnit) {
+                return false;
+            }
+            let damageType = condition?.damageType || null;
+            if (!damageType && condition?.storeAs) {
+                const diceValue = (() => {
+                    if (runtime?.diceResults && Number.isFinite(runtime.diceResults[condition.storeAs])) {
+                        return runtime.diceResults[condition.storeAs];
+                    }
+                    const sourceUnit = getHookConditionUnit(runtime, 'self');
+                    const stored = sourceUnit?.runtimeState?.diceResults?.[condition.storeAs];
+                    return Number.isFinite(stored) ? stored : null;
+                })();
+                if (diceValue != null && condition.damageTypeMap && typeof condition.damageTypeMap === 'object') {
+                    damageType = condition.damageTypeMap[String(diceValue)] || condition.damageTypeMap[diceValue] || null;
+                }
+            }
+            if (!damageType) {
+                damageType = runtime?.skill?.damageType
+                    || getHookConditionUnit(runtime, 'self')?.runtimeState?.skillDamageTypeOverride
+                    || null;
+            }
+            if (!damageType) {
+                return false;
+            }
+            const physical = checkUnit.resistances?.physical || {};
+            const types = ['slash', 'pierce', 'blunt'];
+            const resistForType = (type) => {
+                const override = checkUnit.turnState?.physicalResistanceOverrides?.[type]
+                    ?? checkUnit.turnState?.resistanceOverrides?.[type];
+                if (typeof override === 'number' && Number.isFinite(override)) {
+                    return override;
+                }
+                return typeof physical[type] === 'number' && Number.isFinite(physical[type]) ? physical[type] : 1;
+            };
+            const selectedResist = resistForType(damageType);
+            const maxResist = Math.max(...types.map((type) => resistForType(type)));
+            return selectedResist >= maxResist && selectedResist > 1;
         }
         case 'skillIdIs':
             return matchesExpectedValue(runtime?.skill?.id || null, conditionValue);

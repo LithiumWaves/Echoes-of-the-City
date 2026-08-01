@@ -25,8 +25,12 @@
         { value: 'randomAlly', label: 'Random ally' },
         { value: 'lowestHpOpponent', label: 'Lowest HP opponent' },
         { value: 'highestHpOpponent', label: 'Highest HP opponent' },
+        { value: 'highestMaxHpOpponent', label: 'Highest Max HP opponent' },
+        { value: 'lowestMaxHpOpponent', label: 'Lowest Max HP opponent' },
         { value: 'lowestHpAlly', label: 'Lowest HP ally' },
         { value: 'highestHpAlly', label: 'Highest HP ally' },
+        { value: 'highestMaxHpAlly', label: 'Highest Max HP ally' },
+        { value: 'lowestMaxHpAlly', label: 'Lowest Max HP ally' },
     ];
     const CONTEXT_FIELDS = [
         { value: 'dynamicDamageBonus', label: 'Damage bonus (dynamic)' },
@@ -83,6 +87,9 @@
         criticalHit: 'Critical hit',
         targetStaggered: 'Target is staggered',
         randomChance: 'Random chance (%)',
+        diceResultIs: 'Dice result equals',
+        diceResultAtLeast: 'Dice result is at least',
+        skillDamageTypeMatchesWeakness: 'Damage type matches target weakness',
         coinIndex: 'Coin index is',
         skillCoinPowerSign: 'Coin power sign',
         unitSideIs: 'Unit side is',
@@ -137,7 +144,7 @@
         },
         {
             label: 'Reactive allies & stagger',
-            hooks: ['unitStaggered', 'allyAttackEnd', 'beforeAllyOneSidedAttack'],
+            hooks: ['unitStaggered', 'allyAttackEnd', 'beforeAllyOneSidedAttack', 'onClashWin', 'onClashLose'],
         },
         {
             label: 'Healing',
@@ -190,6 +197,9 @@
         'cancelAttack',
         'chooseRandomActions',
         'chooseWeightedActions',
+        'rollDice',
+        'setSkillDamageType',
+        'recoverStagger',
     ];
 
     const SKILL_EFFECT_PRESETS = [
@@ -1117,6 +1127,48 @@
                 </div>
             `;
             break;
+        case 'rollDice':
+            specificFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                    <label>Faces
+                        <input ${fieldAttrs} data-field="faces" inputmode="numeric" value="${escapeAttr(String(effect?.faces ?? 3))}" placeholder="3" />
+                    </label>
+                    <label>Count
+                        <input ${fieldAttrs} data-field="count" inputmode="numeric" value="${escapeAttr(String(effect?.count ?? 1))}" placeholder="1" />
+                    </label>
+                    <label>Store as
+                        <input ${fieldAttrs} data-field="storeAs" value="${escapeAttr(String(effect?.storeAs || ''))}" placeholder="varunastraRoll" />
+                    </label>
+                </div>
+                <p class="echoes-creator__hint">Use Dice result conditions on later actions in the same hook block.</p>
+            `;
+            break;
+        case 'setSkillDamageType':
+            specificFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                    <label>Damage type</label>
+                    <select ${fieldAttrs} data-field="damageType" style="width:100%;">
+                        ${buildSelectOptions(DAMAGE_TYPES, effect?.damageType || 'slash', escapeAttr)}
+                    </select>
+                    <label>Scope</label>
+                    <select ${fieldAttrs} data-field="scope" style="width:100%;">
+                        <option value="baseSkills" ${!effect?.scope || effect?.scope === 'baseSkills' ? 'selected' : ''}>Base skills (slot 1–3)</option>
+                        <option value="allSkills" ${effect?.scope === 'allSkills' ? 'selected' : ''}>All skills</option>
+                    </select>
+                </div>
+            `;
+            break;
+        case 'recoverStagger':
+            specificFields = `
+                <div class="echoes-creator__field-row">
+                    <label>When</label>
+                    <select ${fieldAttrs} data-field="when" style="width:100%;">
+                        <option value="immediate" ${!effect?.when || effect?.when === 'immediate' ? 'selected' : ''}>Immediate</option>
+                        <option value="nextTurnStart" ${effect?.when === 'nextTurnStart' ? 'selected' : ''}>Next turn start</option>
+                    </select>
+                </div>
+            `;
+            break;
         default:
             specificFields = `
                 <div class="echoes-creator__hint">No form for this action yet — use Expert JSON below, or pick a common action from the list.</div>
@@ -1229,6 +1281,27 @@
                     <input ${fieldAttrs} data-field="value" inputmode="numeric" value="${escapeAttr(String(condition?.value ?? ''))}" placeholder="value" />
                 </div>
             `;
+        } else if (type === 'diceResultIs' || type === 'diceResultAtLeast') {
+            valueFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                    <input ${fieldAttrs} data-field="storeAs" value="${escapeAttr(String(condition?.storeAs || ''))}" placeholder="storeAs key" />
+                    <input ${fieldAttrs} data-field="value" inputmode="numeric" value="${escapeAttr(String(condition?.value ?? ''))}" placeholder="result" />
+                </div>
+            `;
+        } else if (type === 'skillDamageTypeMatchesWeakness') {
+            valueFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                    <select ${fieldAttrs} data-field="damageType" style="width:100%;">
+                        <option value="">(override / skill / dice)</option>
+                        ${buildSelectOptions(DAMAGE_TYPES, condition?.damageType || '', escapeAttr)}
+                    </select>
+                    ${renderStatusSelect(statusList, condition?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
+                </div>
+                <p class="echoes-creator__hint">Optional: mark status to find the analyzed unit. Or set damage type / prior dice storeAs.</p>
+                <div class="echoes-creator__field-row">
+                    <input ${fieldAttrs} data-field="storeAs" value="${escapeAttr(String(condition?.storeAs || ''))}" placeholder="dice storeAs (optional)" />
+                </div>
+            `;
         } else if (['resonanceAtLeast', 'resonanceAtOrBelow', 'absoluteResonanceAtLeast', 'absoluteResonanceAtOrBelow'].includes(type)) {
             valueFields = `
                 <div class="echoes-creator__field-row echoes-creator__field-row--3">
@@ -1248,7 +1321,7 @@
             valueFields = `<input ${fieldAttrs} data-field="value" value="${escapeAttr(String(condition?.value ?? condition?.skillId ?? ''))}" placeholder="value" style="width:100%;" />`;
         }
 
-        const needsTarget = ['hasStatus', 'statusPotencyAtLeast', 'statusPotencyAtOrBelow', 'statusCountAtLeast', 'statusCountAtOrBelow'].includes(type);
+        const needsTarget = ['hasStatus', 'statusPotencyAtLeast', 'statusPotencyAtOrBelow', 'statusCountAtLeast', 'statusCountAtOrBelow', 'skillDamageTypeMatchesWeakness', 'diceResultIs', 'diceResultAtLeast'].includes(type);
         const targetField = needsTarget
             ? `
                 <div class="echoes-creator__field-row" style="margin-top:0.35rem;">

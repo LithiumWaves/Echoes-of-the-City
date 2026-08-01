@@ -234,6 +234,8 @@
         unitStaggered: 'Unit Staggered (any unit)',
         allyAttackEnd: 'Ally Attack End',
         beforeAllyOneSidedAttack: 'Before Ally One-Sided Attack',
+        onClashWin: 'On Clash Win',
+        onClashLose: 'On Clash Lose',
         staggerThresholdCrossed: 'Stagger threshold crossed',
         staggerRecovered: 'Stagger recovered',
         battleEnd: 'Battle End',
@@ -311,6 +313,8 @@
         setDamageCap: { id: 'setDamageCap', label: 'Set Damage Cap' },
         chooseRandomActions: { id: 'chooseRandomActions', label: 'Choose Random Actions' },
         chooseWeightedActions: { id: 'chooseWeightedActions', label: 'Choose Weighted Actions' },
+        rollDice: { id: 'rollDice', label: 'Roll Dice' },
+        setSkillDamageType: { id: 'setSkillDamageType', label: 'Set Skill Damage Type' },
         abortEffects: { id: 'abortEffects', label: 'Abort Effects' },
     };
 
@@ -667,6 +671,10 @@
             return 'Choose random actions.';
         case 'chooseWeightedActions':
             return 'Choose weighted actions.';
+        case 'rollDice':
+            return `Roll ${effect.count || 1}d${effect.faces || '?'} as "${effect.storeAs || 'result'}".`;
+        case 'setSkillDamageType':
+            return `Set ${effect.scope === 'allSkills' ? 'all' : 'base'} skill damage type to ${effect.damageType || '?'}.`;
         case 'abortEffects':
             return 'Abort further effects.';
         default:
@@ -740,6 +748,12 @@
             return `${target} counter "${condition.counterId}" <= ${condition.value ?? 0}`;
         case 'randomChance':
             return `Chance ${condition.value}`;
+        case 'diceResultIs':
+            return `Dice "${condition.storeAs}" == ${condition.value}`;
+        case 'diceResultAtLeast':
+            return `Dice "${condition.storeAs}" >= ${condition.value}`;
+        case 'skillDamageTypeMatchesWeakness':
+            return `Damage type matches ${condition.target || 'opponent'} weakness`;
         case 'skillIdIs':
             return `Skill id is ${condition.value}`;
         case 'skillHasTag':

@@ -8304,10 +8304,278 @@ function runSuite() {
         assert(!validation.errors?.length, validation.errors?.join(', ') || 'Manifest validation failed.');
         const imported = battleModules.content.importContentPack(pack, { allowOverwrite: true });
         assert(imported.counts.units >= 3, `Expected at least 3 units, got ${imported.counts.units}.`);
-        assert(imported.counts.statuses >= 8, `Expected at least 8 statuses, got ${imported.counts.statuses}.`);
+        assert(imported.counts.statuses >= 9, `Expected at least 9 statuses, got ${imported.counts.statuses}.`);
         const iris = battleModules.content.getUnitDefinition('iris-seven-south');
         assert(iris?.skills?.some((skill) => skill.id === 'fall-back-i-got-you'), 'Expected hidden S1-2 skill.');
         assert(iris?.passives?.some((passive) => passive.id === 'iris-dont-thank-me'), 'Expected Dont thank me passive.');
+        assert(iris?.passives?.some((passive) => passive.id === 'iris-modular-weapon-varunastra'), 'Expected Varunastra passive.');
+        assert(iris?.passives?.some((passive) => passive.hooks?.onClashLose), 'Expected clash-lose passive hooks.');
+        const probing = iris.passives.find((passive) => passive.id === 'iris-probing-weaknesses');
+        assert(
+            probing?.hooks?.battleStart?.[0]?.actions?.some((action) => action.target === 'highestMaxHpOpponent'),
+            'Expected Probing to mark highest Max HP opponent.',
+        );
+    });
+
+    test('Effect runner: rollDice, status-weighted branches, setSkillDamageType', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        registerStatusDefinition({
+            id: 'reading_stacks',
+            label: 'Reading',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 99, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const skill = {
+            id: 'dice_skill',
+            name: 'Dice Skill',
+            skillType: 'attack',
+            skillSlot: 'slot-1',
+            basePower: 3,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [
+                {
+                    trigger: 'onSelect',
+                    type: 'rollDice',
+                    target: 'self',
+                    faces: 3,
+                    count: 1,
+                    storeAs: 'typeRoll',
+                },
+                {
+                    trigger: 'onSelect',
+                    type: 'chooseWeightedActions',
+                    branches: [
+                        {
+                            weight: { statusCount: { target: 'self', statusId: 'reading_stacks' }, offset: 1 },
+                            actions: [{ type: 'setSkillDamageType', target: 'self', damageType: 'pierce', scope: 'baseSkills' }],
+                        },
+                        {
+                            weight: 0.0001,
+                            actions: [{ type: 'setSkillDamageType', target: 'self', damageType: 'blunt', scope: 'baseSkills' }],
+                        },
+                    ],
+                },
+            ],
+        };
+        const enemySkill = {
+            id: 'enemy_guard',
+            name: 'Guard',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const createUnit = (id, name, skills, extras = {}) => ({
+            id,
+            name,
+            level: 1,
+            maxHp: 30,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { idle: 'assets/test.png', skills: {} },
+            skills,
+            passives: [],
+            statuses: extras.statuses || [],
+        });
+
+        const previousRandom = Math.random;
+        try {
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({
+                battleDefinition: {
+                    id: 'dice-smoke',
+                    name: 'Dice Smoke',
+                    playerUnits: [createUnit('ally', 'Ally', [skill], {
+                        statuses: [{ id: 'reading_stacks', count: 8, potency: 0 }],
+                    })],
+                    enemyUnits: [createUnit('enemy', 'Enemy', [enemySkill])],
+                    rules: {
+                        encounterType: 'focused',
+                        maxTurns: 1,
+                        victoryCondition: 'defeat-all-enemies',
+                        failureCondition: 'all-allies-defeated',
+                        enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                    },
+                },
+                clamp,
+            });
+
+            engine.selectSlot('player-slot-1');
+            engine.selectSkill('dice_skill');
+            engine.selectTarget('enemy-slot-1');
+            engine.resolveTurn();
+
+            const state = engine.getState();
+            const ally = state.playerUnits[0];
+            assert(ally.runtimeState?.diceResults?.typeRoll === 3, `Expected dice 3, got ${ally.runtimeState?.diceResults?.typeRoll}`);
+            assert(ally.runtimeState?.skillDamageTypeOverride === 'pierce', `Expected pierce override, got ${ally.runtimeState?.skillDamageTypeOverride}`);
+            const resolved = ally.skills.find((entry) => entry.id === 'dice_skill');
+            // Override is applied via getSkillById shallow copy; stored skill def stays slash.
+            assert(resolved.damageType === 'slash', 'Expected definition damageType unchanged.');
+        } finally {
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Passive: highestMaxHpOpponent mark + deferred recoverStagger', () => {
+        const battleModules = createBattleEnvironment();
+        const registerStatusDefinition = battleModules.registry?.registerStatusDefinition || battleModules.registerStatusDefinition;
+        registerStatusDefinition({
+            id: 'analyze_mark',
+            label: 'Analyze',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 10, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        });
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const poke = {
+            id: 'poke',
+            name: 'Poke',
+            skillType: 'attack',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const guard = {
+            id: 'guard',
+            name: 'Guard',
+            skillType: 'guard',
+            basePower: 1,
+            coinPower: 0,
+            coinCount: 1,
+            damageType: 'slash',
+            sinType: 'wrath',
+            effects: [],
+        };
+        const ally = {
+            id: 'ally',
+            name: 'Ally',
+            level: 1,
+            maxHp: 40,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { idle: 'assets/test.png', skills: {} },
+            skills: [poke],
+            passives: [{
+                id: 'mark-max-hp',
+                name: 'Mark Max HP',
+                hooks: {
+                    battleStart: [{
+                        actions: [{
+                            type: 'applyStatus',
+                            target: 'highestMaxHpOpponent',
+                            statusId: 'analyze_mark',
+                            count: 1,
+                        }],
+                    }],
+                },
+            }],
+        };
+        const enemyLow = {
+            id: 'enemy_low',
+            name: 'Low Max',
+            level: 1,
+            maxHp: 20,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { idle: 'assets/test.png', skills: {} },
+            skills: [guard],
+            passives: [],
+        };
+        const enemyHigh = {
+            id: 'enemy_high',
+            name: 'High Max',
+            level: 1,
+            maxHp: 90,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { idle: 'assets/test.png', skills: {} },
+            skills: [guard],
+            passives: [],
+        };
+
+        const engine = battleModules.createBattleEngine({
+            battleDefinition: {
+                id: 'maxhp-mark',
+                name: 'Max HP Mark',
+                playerUnits: [ally],
+                enemyUnits: [enemyLow, enemyHigh],
+                rules: {
+                    encounterType: 'focused',
+                    maxTurns: 2,
+                    victoryCondition: 'defeat-all-enemies',
+                    failureCondition: 'all-allies-defeated',
+                    enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+                },
+            },
+            clamp,
+        });
+
+        const state = engine.getState();
+        // Damage high-max enemy so current HP is lower than the low-max enemy.
+        const high = state.enemyUnits.find((unit) => unit.id === 'enemy_high');
+        const low = state.enemyUnits.find((unit) => unit.id === 'enemy_low');
+        high.hp = 5;
+        assert((high.statuses || []).some((status) => status.id === 'analyze_mark'), 'Expected battleStart mark on highest Max HP enemy.');
+        assert(!(low.statuses || []).some((status) => status.id === 'analyze_mark'), 'Expected low Max HP enemy unmarked.');
+
+        const staggered = state.playerUnits[0];
+        staggered.staggerLevel = 2;
+        staggered.staggerRecoverTurn = state.turn + 3;
+        staggered.staggerTurnsRemaining = 3;
+        staggered.runtimeState = staggered.runtimeState || { flags: {}, counters: {}, diceResults: {} };
+        staggered.runtimeState.pendingRecoverStagger = true;
+
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('poke');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+        assert(engine.advanceTurn(), 'Expected advanceTurn after resolve.');
+
+        const after = engine.getState().playerUnits[0];
+        assert((after.staggerTurnsRemaining || 0) === 0, 'Expected pendingRecoverStagger to clear on next turn start.');
+        assert((after.staggerLevel || 0) === 0, 'Expected stagger level cleared.');
+        assert(!after.runtimeState?.pendingRecoverStagger, 'Expected pending recover flag cleared.');
     });
 
     test('Iris: enemy stagger queues Fall back follow-up', () => {

@@ -64,6 +64,7 @@
         'attackerUnit',
         'actorUnit',
         'staggeredUnit',
+        'defeatedUnit',
     ]);
     const EFFECT_TARGETS = new Set([
         'self',
@@ -76,12 +77,18 @@
         'lowestHpAlly',
         'highestHpOpponent',
         'lowestHpOpponent',
+        'highestMaxHpAlly',
+        'lowestMaxHpAlly',
+        'highestMaxHpOpponent',
+        'lowestMaxHpOpponent',
         'eventDefender',
         'eventAttacker',
         'attacker',
         'defender',
         'staggeredUnit',
         'eventStaggered',
+        'defeatedUnit',
+        'eventDefeated',
     ]);
     const HOOK_CONDITION_TYPES = new Set([
         'always',
@@ -101,6 +108,9 @@
         'counterAtLeast',
         'counterAtOrBelow',
         'randomChance',
+        'diceResultIs',
+        'diceResultAtLeast',
+        'skillDamageTypeMatchesWeakness',
         'skillIdIs',
         'skillHasTag',
         'skillType',
@@ -578,6 +588,42 @@
                 pushError(errors, `${path}.value`, 'must be a number.');
             }
             break;
+        case 'diceResultIs':
+        case 'diceResultAtLeast':
+            if (!condition.storeAs || typeof condition.storeAs !== 'string') {
+                pushError(errors, `${path}.storeAs`, 'must be a non-empty string.');
+            }
+            if (!isFiniteNumber(condition.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            if (condition.faces != null && (!isFiniteNumber(condition.faces) || condition.faces < 1)) {
+                pushError(errors, `${path}.faces`, 'must be a positive number when provided.');
+            }
+            break;
+        case 'skillDamageTypeMatchesWeakness':
+            if (condition.damageType != null && !PHYSICAL_DAMAGE_TYPES.has(condition.damageType)) {
+                pushError(errors, `${path}.damageType`, 'must be slash, pierce, or blunt when provided.');
+            }
+            if (condition.storeAs != null && typeof condition.storeAs !== 'string') {
+                pushError(errors, `${path}.storeAs`, 'must be a string when provided.');
+            }
+            if (condition.statusId != null && typeof condition.statusId !== 'string') {
+                pushError(errors, `${path}.statusId`, 'must be a string when provided.');
+            } else if (typeof condition.statusId === 'string' && typeof registry.isSupportedStatusId === 'function' && !registry.isSupportedStatusId(condition.statusId)) {
+                pushError(errors, `${path}.statusId`, 'must reference a supported status id when provided.');
+            }
+            if (condition.damageTypeMap != null) {
+                if (!condition.damageTypeMap || typeof condition.damageTypeMap !== 'object' || Array.isArray(condition.damageTypeMap)) {
+                    pushError(errors, `${path}.damageTypeMap`, 'must be an object when provided.');
+                } else {
+                    Object.entries(condition.damageTypeMap).forEach(([key, value]) => {
+                        if (!PHYSICAL_DAMAGE_TYPES.has(value)) {
+                            pushError(errors, `${path}.damageTypeMap.${key}`, 'must be slash, pierce, or blunt.');
+                        }
+                    });
+                }
+            }
+            break;
         case 'criticalHit':
             if (condition.value != null && typeof condition.value !== 'boolean') {
                 pushError(errors, `${path}.value`, 'must be a boolean when provided.');
@@ -972,6 +1018,17 @@
         case 'advanceWave':
         case 'amplitudeConvert':
         case 'cancelAttack':
+            if (effect.type === 'recoverStagger') {
+                if (effect.when != null && !['immediate', 'nextTurnStart'].includes(effect.when)) {
+                    pushError(errors, `${path}.when`, 'must be "immediate" or "nextTurnStart" when provided.');
+                }
+                if (effect.amount != null) {
+                    validateAmountDefinition(errors, effect.amount, `${path}.amount`);
+                } else if (effect.value != null && !isFiniteNumber(effect.value)) {
+                    pushError(errors, `${path}.value`, 'must be a number when provided.');
+                }
+                break;
+            }
             if (effect.type !== 'clearShield' && effect.type !== 'burstTremor' && effect.type !== 'amplitudeConvert' && effect.type !== 'cancelAttack' && effect.amount != null) {
                 validateAmountDefinition(errors, effect.amount, `${path}.amount`);
             } else if (effect.type !== 'clearShield' && effect.type !== 'burstTremor' && effect.type !== 'amplitudeConvert' && effect.type !== 'cancelAttack' && !isFiniteNumber(effect.value)) {
@@ -1353,8 +1410,16 @@
                     pushError(errors, `${path}.branches[${branchIndex}]`, 'must be an object.');
                     return;
                 }
-                if (effect.type === 'chooseWeightedActions' && (!isFiniteNumber(branch.weight) || branch.weight <= 0)) {
-                    pushError(errors, `${path}.branches[${branchIndex}].weight`, 'must be a positive number.');
+                if (effect.type === 'chooseWeightedActions') {
+                    if (isFiniteNumber(branch.weight)) {
+                        if (branch.weight <= 0) {
+                            pushError(errors, `${path}.branches[${branchIndex}].weight`, 'must be a positive number.');
+                        }
+                    } else if (branch.weight && typeof branch.weight === 'object' && !Array.isArray(branch.weight)) {
+                        validateAmountDefinition(errors, branch.weight, `${path}.branches[${branchIndex}].weight`);
+                    } else {
+                        pushError(errors, `${path}.branches[${branchIndex}].weight`, 'must be a positive number or amount definition.');
+                    }
                 }
                 if (!Array.isArray(branch.actions)) {
                     pushError(errors, `${path}.branches[${branchIndex}].actions`, 'must be an array of effects.');
@@ -1364,6 +1429,25 @@
                     validateEffect(errors, unitSkillIds, action, `${path}.branches[${branchIndex}].actions[${actionIndex}]`, { requireTrigger: false });
                 });
             });
+            break;
+        case 'rollDice':
+            if (!isFiniteNumber(effect.faces) || effect.faces < 2) {
+                pushError(errors, `${path}.faces`, 'must be a number >= 2.');
+            }
+            if (effect.count != null && (!isFiniteNumber(effect.count) || effect.count < 1)) {
+                pushError(errors, `${path}.count`, 'must be a positive number when provided.');
+            }
+            if (!effect.storeAs || typeof effect.storeAs !== 'string') {
+                pushError(errors, `${path}.storeAs`, 'must be a non-empty string.');
+            }
+            break;
+        case 'setSkillDamageType':
+            if (!effect.damageType || !PHYSICAL_DAMAGE_TYPES.has(effect.damageType)) {
+                pushError(errors, `${path}.damageType`, 'must be slash, pierce, or blunt.');
+            }
+            if (effect.scope != null && !['baseSkills', 'allSkills'].includes(effect.scope)) {
+                pushError(errors, `${path}.scope`, 'must be "baseSkills" or "allSkills" when provided.');
+            }
             break;
         case 'abortEffects':
             break;

@@ -316,7 +316,29 @@
         }
 
         function getSkillById(unit, skillId) {
-            return unit?.skills?.find((skill) => skill.id === skillId) || null;
+            const skill = unit?.skills?.find((entry) => entry.id === skillId) || null;
+            if (!skill) {
+                return null;
+            }
+            const override = unit?.runtimeState?.skillDamageTypeOverride;
+            if (!override || !['slash', 'pierce', 'blunt'].includes(override)) {
+                return skill;
+            }
+            const scope = unit.runtimeState.skillDamageTypeOverrideScope || 'baseSkills';
+            if (scope === 'baseSkills') {
+                const slot = String(skill.skillSlot || '');
+                const isBaseSlot = /^slot-[123]$/i.test(slot);
+                const hasBaseTag = Array.isArray(skill.tags)
+                    && skill.tags.some((tag) => String(tag).toLowerCase() === 'base');
+                const isAttack = !skill.skillType || skill.skillType === 'attack';
+                if (!isAttack || (!isBaseSlot && !hasBaseTag)) {
+                    return skill;
+                }
+            }
+            if (skill.damageType === override) {
+                return skill;
+            }
+            return { ...skill, damageType: override };
         }
 
         function isUnitAlive(unit) {
@@ -2420,6 +2442,31 @@
         }
 
         function progressStaggerTurnState(targetBattle, unit) {
+            const runtimeState = ensureUnitRuntimeState(unit);
+            if (runtimeState?.pendingRecoverStagger) {
+                delete runtimeState.pendingRecoverStagger;
+                const previousLevel = unit.staggerLevel || 0;
+                unit.staggerLevel = 0;
+                unit.staggerRecoverTurn = 0;
+                unit.staggerTurnsRemaining = 0;
+                emitEvent(targetBattle, 'unit_stagger_recovered', {
+                    unitId: unit.id,
+                    unitName: unit.name,
+                    previousLevel,
+                    deferred: true,
+                });
+                invokeScriptedEvents(targetBattle, 'staggerRecovered', {
+                    unit,
+                    previousLevel,
+                });
+                invokeHooks(unit, 'staggerRecovered', {
+                    battle: targetBattle,
+                    unit,
+                    previousLevel,
+                });
+                return;
+            }
+
             if (!unit.staggerRecoverTurn) {
                 unit.staggerTurnsRemaining = 0;
                 return;
@@ -2460,7 +2507,20 @@
                 defeatedUnit: unit,
                 defeatedByUnit: defeatedByUnit || null,
             });
-            invokeHooks(unit, 'unitDefeated', { battle: targetBattle, unit, opponent: defeatedByUnit || null });
+            invokeHooks(unit, 'unitDefeated', {
+                battle: targetBattle,
+                unit,
+                opponent: defeatedByUnit || null,
+                defeatedUnit: unit,
+                sourceUnit: defeatedByUnit || null,
+            });
+            broadcastHooks(targetBattle, 'unitDefeated', {
+                battle: targetBattle,
+                defeatedUnit: unit,
+                sourceUnit: defeatedByUnit || null,
+                opponent: unit,
+                targetUnit: unit,
+            }, { excludeUnitId: unit.id });
         }
 
         function finalizeBattleOnDeaths(targetBattle) {
@@ -3459,6 +3519,26 @@
             });
             applySkillEffects(targetBattle, 'onClashLose', {
                 sourceUnit: clashLoserUnit,
+                targetUnit: clashWinnerUnit,
+                skill: loserSkill,
+                attackContext: loserContext,
+                outcome: 'lose',
+            });
+            invokeHooks(clashWinnerUnit, 'onClashWin', {
+                battle: targetBattle,
+                unit: clashWinnerUnit,
+                sourceUnit: clashWinnerUnit,
+                opponent: clashLoserUnit,
+                targetUnit: clashLoserUnit,
+                skill: winnerSkill,
+                attackContext: winnerContext,
+                outcome: 'win',
+            });
+            invokeHooks(clashLoserUnit, 'onClashLose', {
+                battle: targetBattle,
+                unit: clashLoserUnit,
+                sourceUnit: clashLoserUnit,
+                opponent: clashWinnerUnit,
                 targetUnit: clashWinnerUnit,
                 skill: loserSkill,
                 attackContext: loserContext,

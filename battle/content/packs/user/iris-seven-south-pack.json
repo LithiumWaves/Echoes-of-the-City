@@ -4,7 +4,9 @@
     "name": "Iris (Seven Association South)",
     "version": "1.0.0",
     "engineVersion": "dev",
-    "authors": ["Echoes of the City"],
+    "authors": [
+      "Echoes of the City"
+    ],
     "description": "Full Iris combat kit: stances, Concealed Exoskeleton, Reading, reactive S1-2 follow-up, tremor amplitude, and planner variants.",
     "dependencies": [],
     "featureFlags": {}
@@ -15,11 +17,25 @@
       "label": "Tremor - Gnaw",
       "description": "Amplitude-converted Tremor. Tremor Burst deals combined Tremor and Rupture potency.",
       "stackModel": {
-        "potency": { "enabled": true, "min": 0, "max": 99, "application": "add" },
-        "count": { "enabled": true, "min": 0, "max": 99, "application": "add" },
-        "expireWhen": { "countLte": 0 }
+        "potency": {
+          "enabled": true,
+          "min": 0,
+          "max": 99,
+          "application": "add"
+        },
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 99,
+          "application": "add"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
       },
-      "burstMultiplierByStatusId": { "rupture": 1 }
+      "burstMultiplierByStatusId": {
+        "rupture": 1
+      }
     },
     {
       "id": "iris_analyzing_weakness",
@@ -27,8 +43,15 @@
       "description": "Marked for Iris's analysis. Iris skills gain bonus power against this target.",
       "countOnly": true,
       "stackModel": {
-        "count": { "enabled": true, "min": 0, "max": 10, "application": "add" },
-        "expireWhen": { "countLte": 0 }
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 10,
+          "application": "add"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
       },
       "hooks": {}
     },
@@ -38,15 +61,30 @@
       "description": "Tracks combat analysis. At 12 Count, grants Prod the Weakness for this turn.",
       "countOnly": true,
       "stackModel": {
-        "count": { "enabled": true, "min": 0, "max": 12, "application": "add" },
-        "expireWhen": { "countLte": 0 }
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 12,
+          "application": "add"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
       },
       "hooks": {
         "statusChanged": [
           {
             "conditions": [
-              { "type": "eventStatusIdIs", "value": "iris_reading" },
-              { "type": "statusCountAtLeast", "target": "self", "statusId": "iris_reading", "value": 12 }
+              {
+                "type": "eventStatusIdIs",
+                "value": "iris_reading"
+              },
+              {
+                "type": "statusCountAtLeast",
+                "target": "self",
+                "statusId": "iris_reading",
+                "value": 12
+              }
             ],
             "actions": [
               {
@@ -66,13 +104,25 @@
       "description": "Charge stacks. Maintains shield worth 3 HP per stack; shield break removes 1 stack.",
       "countOnly": true,
       "stackModel": {
-        "count": { "enabled": true, "min": 0, "max": 20, "application": "add" },
-        "expireWhen": { "countLte": 0 }
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 20,
+          "application": "add"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
       },
       "hooks": {
         "statusApplied": [
           {
-            "conditions": [{ "type": "eventStatusIdIs", "value": "iris_concealed_exoskeleton" }],
+            "conditions": [
+              {
+                "type": "eventStatusIdIs",
+                "value": "iris_concealed_exoskeleton"
+              }
+            ],
             "actions": [
               {
                 "type": "gainShield",
@@ -84,7 +134,10 @@
                 "linkedStatusId": "iris_concealed_exoskeleton",
                 "linkedStatusCountDeltaOnBreak": -1,
                 "amount": {
-                  "statusCount": { "target": "self", "statusId": "iris_concealed_exoskeleton" },
+                  "statusCount": {
+                    "target": "self",
+                    "statusId": "iris_concealed_exoskeleton"
+                  },
                   "multiplier": 3
                 }
               }
@@ -93,7 +146,12 @@
         ],
         "statusChanged": [
           {
-            "conditions": [{ "type": "eventStatusIdIs", "value": "iris_concealed_exoskeleton" }],
+            "conditions": [
+              {
+                "type": "eventStatusIdIs",
+                "value": "iris_concealed_exoskeleton"
+              }
+            ],
             "actions": [
               {
                 "type": "gainShield",
@@ -105,7 +163,10 @@
                 "linkedStatusId": "iris_concealed_exoskeleton",
                 "linkedStatusCountDeltaOnBreak": -1,
                 "amount": {
-                  "statusCount": { "target": "self", "statusId": "iris_concealed_exoskeleton" },
+                  "statusCount": {
+                    "target": "self",
+                    "statusId": "iris_concealed_exoskeleton"
+                  },
                   "multiplier": 3
                 }
               }
@@ -123,7 +184,10 @@
             "linkedStatusId": "iris_concealed_exoskeleton",
             "linkedStatusCountDeltaOnBreak": -1,
             "amount": {
-              "statusCount": { "target": "self", "statusId": "iris_concealed_exoskeleton" },
+              "statusCount": {
+                "target": "self",
+                "statusId": "iris_concealed_exoskeleton"
+              },
               "multiplier": 3
             }
           }
@@ -136,8 +200,15 @@
       "description": "Drives stance strength. At 4 Count, Calm down and focus... replaces Impenetrable Defense.",
       "countOnly": true,
       "stackModel": {
-        "count": { "enabled": true, "min": 0, "max": 4, "application": "add" },
-        "expireWhen": { "countLte": 0 }
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 4,
+          "application": "add"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
       },
       "hooks": {}
     },
@@ -147,8 +218,15 @@
       "description": "Defensive stance keyed to Irritation tiers.",
       "countOnly": true,
       "stackModel": {
-        "count": { "enabled": true, "min": 0, "max": 1, "application": "set" },
-        "expireWhen": { "countLte": 0 }
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 1,
+          "application": "set"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
       },
       "hooks": {}
     },
@@ -158,8 +236,15 @@
       "description": "Offensive stance keyed to Irritation tiers.",
       "countOnly": true,
       "stackModel": {
-        "count": { "enabled": true, "min": 0, "max": 1, "application": "set" },
-        "expireWhen": { "countLte": 0 }
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 1,
+          "application": "set"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
       },
       "hooks": {}
     },
@@ -169,15 +254,30 @@
       "description": "Non-decaying weapon assembly track. At 20, grants Modular-Weapon Max Potential.",
       "countOnly": true,
       "stackModel": {
-        "count": { "enabled": true, "min": 0, "max": 20, "application": "add" },
-        "expireWhen": { "countLte": 0 }
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 20,
+          "application": "add"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
       },
       "hooks": {
         "statusChanged": [
           {
             "conditions": [
-              { "type": "eventStatusIdIs", "value": "iris_assembly_progress" },
-              { "type": "statusCountAtLeast", "target": "self", "statusId": "iris_assembly_progress", "value": 20 }
+              {
+                "type": "eventStatusIdIs",
+                "value": "iris_assembly_progress"
+              },
+              {
+                "type": "statusCountAtLeast",
+                "target": "self",
+                "statusId": "iris_assembly_progress",
+                "value": 20
+              }
             ],
             "actions": [
               {
@@ -197,8 +297,15 @@
       "description": "Permanent defense upgrade from Assembly Progress.",
       "countOnly": true,
       "stackModel": {
-        "count": { "enabled": true, "min": 0, "max": 1, "application": "set" },
-        "expireWhen": { "countLte": 0 }
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 1,
+          "application": "set"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
       },
       "hooks": {}
     },
@@ -208,8 +315,33 @@
       "description": "Permanent shield rule upgrade; unlocks S3-2 in planner.",
       "countOnly": true,
       "stackModel": {
-        "count": { "enabled": true, "min": 0, "max": 1, "application": "set" },
-        "expireWhen": { "countLte": 0 }
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 1,
+          "application": "set"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
+      },
+      "hooks": {}
+    },
+    {
+      "id": "iris_assist_defense",
+      "label": "Assist Defense",
+      "description": "Gained when Iris cancels an unopposed attack against a staggered ally.",
+      "countOnly": true,
+      "stackModel": {
+        "count": {
+          "enabled": true,
+          "min": 0,
+          "max": 10,
+          "application": "add"
+        },
+        "expireWhen": {
+          "countLte": 0
+        }
       },
       "hooks": {}
     }
@@ -221,27 +353,295 @@
       "level": 45,
       "maxHp": 110,
       "sp": 0,
-      "speedRange": [2, 8],
+      "speedRange": [
+        2,
+        8
+      ],
       "defenseLevel": 40,
-      "staggerThresholds": [0.6, 0.2],
+      "staggerThresholds": [
+        0.6,
+        0.2
+      ],
       "resistances": {
-        "physical": { "slash": 1, "pierce": 2, "blunt": 0.5 },
+        "physical": {
+          "slash": 1,
+          "pierce": 2,
+          "blunt": 0.5
+        },
         "sin": {
-          "wrath": 1, "lust": 1, "sloth": 1, "gluttony": 1,
-          "gloom": 1, "pride": 1, "envy": 1
+          "wrath": 1,
+          "lust": 1,
+          "sloth": 1,
+          "gluttony": 1,
+          "gloom": 1,
+          "pride": 1,
+          "envy": 1
         }
       },
       "passives": [
         {
+          "id": "iris-probing-weaknesses",
+          "name": "Probing for Weaknesses",
+          "description": "[Combat Start] Mark the highest Max HP enemy with [iris_analyzing_weakness]. On Hit vs marked: +2 [iris_reading]; vs unmarked: +1. Remake mark when the marked unit is Staggered or defeated.",
+          "hooks": {
+            "battleStart": [
+              {
+                "actions": [
+                  {
+                    "type": "clearStatus",
+                    "target": "allOpponents",
+                    "statusId": "iris_analyzing_weakness"
+                  },
+                  {
+                    "type": "applyStatus",
+                    "target": "highestMaxHpOpponent",
+                    "statusId": "iris_analyzing_weakness",
+                    "count": 1
+                  }
+                ]
+              }
+            ],
+            "hitDealt": [
+              {
+                "conditions": [
+                  {
+                    "type": "hasStatus",
+                    "target": "opponent",
+                    "statusId": "iris_analyzing_weakness"
+                  }
+                ],
+                "actions": [
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_reading",
+                    "countDelta": 2
+                  }
+                ]
+              },
+              {
+                "conditions": [
+                  {
+                    "type": "statusCountAtOrBelow",
+                    "target": "opponent",
+                    "statusId": "iris_analyzing_weakness",
+                    "value": 0
+                  }
+                ],
+                "actions": [
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_reading",
+                    "countDelta": 1
+                  }
+                ]
+              }
+            ],
+            "unitStaggered": [
+              {
+                "conditions": [
+                  {
+                    "type": "eventStaggeredUnitSideIs",
+                    "value": "enemy"
+                  },
+                  {
+                    "type": "hasStatus",
+                    "target": "staggeredUnit",
+                    "statusId": "iris_analyzing_weakness"
+                  }
+                ],
+                "actions": [
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_reading",
+                    "countDelta": 3
+                  },
+                  {
+                    "type": "clearStatus",
+                    "target": "allOpponents",
+                    "statusId": "iris_analyzing_weakness"
+                  },
+                  {
+                    "type": "applyStatus",
+                    "target": "highestMaxHpOpponent",
+                    "statusId": "iris_analyzing_weakness",
+                    "count": 1
+                  }
+                ]
+              }
+            ],
+            "unitDefeated": [
+              {
+                "conditions": [
+                  {
+                    "type": "unitSideIs",
+                    "target": "defeatedUnit",
+                    "value": "enemy"
+                  }
+                ],
+                "actions": [
+                  {
+                    "type": "clearStatus",
+                    "target": "allOpponents",
+                    "statusId": "iris_analyzing_weakness"
+                  },
+                  {
+                    "type": "applyStatus",
+                    "target": "highestMaxHpOpponent",
+                    "statusId": "iris_analyzing_weakness",
+                    "count": 1
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "iris-modular-weapon-varunastra",
+          "name": "Modular-Weapon \"Varunastra\"",
+          "description": "[Combat Start] Roll weighted Slash/Blunt/Pierce for Base Skills (biased by [iris_reading]). If the result matches the marked unit's weakness, gain 1 [iris_reading].",
+          "hooks": {
+            "battleStart": [
+              {
+                "actions": [
+                  {
+                    "type": "rollDice",
+                    "target": "self",
+                    "faces": 3,
+                    "count": 1,
+                    "storeAs": "varunastraType"
+                  }
+                ]
+              },
+              {
+                "conditions": [
+                  {
+                    "type": "diceResultIs",
+                    "storeAs": "varunastraType",
+                    "value": 1
+                  }
+                ],
+                "actions": [
+                  {
+                    "type": "setSkillDamageType",
+                    "target": "self",
+                    "damageType": "slash",
+                    "scope": "baseSkills"
+                  }
+                ]
+              },
+              {
+                "conditions": [
+                  {
+                    "type": "diceResultIs",
+                    "storeAs": "varunastraType",
+                    "value": 2
+                  }
+                ],
+                "actions": [
+                  {
+                    "type": "setSkillDamageType",
+                    "target": "self",
+                    "damageType": "blunt",
+                    "scope": "baseSkills"
+                  }
+                ]
+              },
+              {
+                "conditions": [
+                  {
+                    "type": "diceResultIs",
+                    "storeAs": "varunastraType",
+                    "value": 3
+                  }
+                ],
+                "actions": [
+                  {
+                    "type": "setSkillDamageType",
+                    "target": "self",
+                    "damageType": "pierce",
+                    "scope": "baseSkills"
+                  }
+                ]
+              },
+              {
+                "conditions": [
+                  {
+                    "type": "skillDamageTypeMatchesWeakness",
+                    "statusId": "iris_analyzing_weakness"
+                  }
+                ],
+                "actions": [
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_reading",
+                    "countDelta": 1
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
           "id": "iris-fraying-patience",
           "name": "Fraying Patience",
-          "description": "Turn 3+: gain Irritation. Enter Guarded or Aggressive stance based on Irritation tier.",
+          "description": "[Turn End] Starting at Turn 3, gain 1 [iris_irritation]. [Turn Start] on first Irritation, enter [iris_guarded_stance]. On Clash Loss, gain 1 [iris_irritation].",
           "hooks": {
-            "turnStart": [
+            "turnEnd": [
               {
-                "conditions": [{ "type": "turnAtLeast", "value": 3 }],
+                "conditions": [
+                  {
+                    "type": "turnAtLeast",
+                    "value": 3
+                  }
+                ],
                 "actions": [
-                  { "type": "adjustStatus", "target": "self", "statusId": "iris_irritation", "countDelta": 1 }
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_irritation",
+                    "countDelta": 1
+                  }
+                ]
+              }
+            ],
+            "statusChanged": [
+              {
+                "oncePer": "battle",
+                "conditions": [
+                  {
+                    "type": "eventStatusIdIs",
+                    "value": "iris_irritation"
+                  },
+                  {
+                    "type": "statusCountAtLeast",
+                    "target": "self",
+                    "statusId": "iris_irritation",
+                    "value": 1
+                  }
+                ],
+                "actions": [
+                  {
+                    "type": "applyStatus",
+                    "target": "self",
+                    "statusId": "iris_guarded_stance",
+                    "count": 1
+                  }
+                ]
+              }
+            ],
+            "onClashLose": [
+              {
+                "actions": [
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_irritation",
+                    "countDelta": 1
+                  }
                 ]
               }
             ]
@@ -250,11 +650,59 @@
         {
           "id": "iris-unseen-defense",
           "name": "Unseen Defense",
-          "description": "On hit, gain Concealed Exoskeleton (rate capped). Assembly Progress upgrades plating.",
+          "description": "On hit, gain [iris_concealed_exoskeleton] (max 2/turn; 4/turn in [iris_guarded_stance]). Assembly Progress → Fitted / Locked Plating + Modular-Weapon offer.",
           "hooks": {
             "hitTaken": [
               {
-                "oncePer": "turn",
+                "conditions": [
+                  {
+                    "type": "hasStatus",
+                    "target": "self",
+                    "statusId": "iris_guarded_stance"
+                  },
+                  {
+                    "type": "counterAtOrBelow",
+                    "target": "self",
+                    "counterId": "unseenDefenseGains",
+                    "value": 3
+                  }
+                ],
+                "actions": [
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_concealed_exoskeleton",
+                    "countDelta": 2
+                  },
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_assembly_progress",
+                    "countDelta": 1
+                  },
+                  {
+                    "type": "adjustCounter",
+                    "target": "self",
+                    "counterId": "unseenDefenseGains",
+                    "value": 2
+                  }
+                ]
+              },
+              {
+                "conditions": [
+                  {
+                    "type": "statusCountAtOrBelow",
+                    "target": "self",
+                    "statusId": "iris_guarded_stance",
+                    "value": 0
+                  },
+                  {
+                    "type": "counterAtOrBelow",
+                    "target": "self",
+                    "counterId": "unseenDefenseGains",
+                    "value": 1
+                  }
+                ],
                 "actions": [
                   {
                     "type": "adjustStatus",
@@ -267,6 +715,25 @@
                     "target": "self",
                     "statusId": "iris_assembly_progress",
                     "countDelta": 1
+                  },
+                  {
+                    "type": "adjustCounter",
+                    "target": "self",
+                    "counterId": "unseenDefenseGains",
+                    "value": 1
+                  }
+                ]
+              }
+            ],
+            "turnStart": [
+              {
+                "actions": [
+                  {
+                    "type": "adjustCounter",
+                    "target": "self",
+                    "counterId": "unseenDefenseGains",
+                    "operation": "set",
+                    "value": 0
                   }
                 ]
               }
@@ -274,25 +741,63 @@
             "statusChanged": [
               {
                 "conditions": [
-                  { "type": "eventStatusIdIs", "value": "iris_assembly_progress" },
-                  { "type": "statusCountAtLeast", "target": "self", "statusId": "iris_assembly_progress", "value": 10 }
+                  {
+                    "type": "eventStatusIdIs",
+                    "value": "iris_assembly_progress"
+                  },
+                  {
+                    "type": "statusCountAtLeast",
+                    "target": "self",
+                    "statusId": "iris_assembly_progress",
+                    "value": 10
+                  }
                 ],
                 "actions": [
-                  { "type": "applyStatus", "target": "self", "statusId": "iris_fitted_plating", "count": 1 }
+                  {
+                    "type": "applyStatus",
+                    "target": "self",
+                    "statusId": "iris_fitted_plating",
+                    "count": 1
+                  }
                 ]
               },
               {
                 "conditions": [
-                  { "type": "eventStatusIdIs", "value": "iris_assembly_progress" },
-                  { "type": "statusCountAtLeast", "target": "self", "statusId": "iris_assembly_progress", "value": 15 }
+                  {
+                    "type": "eventStatusIdIs",
+                    "value": "iris_assembly_progress"
+                  },
+                  {
+                    "type": "statusCountAtLeast",
+                    "target": "self",
+                    "statusId": "iris_assembly_progress",
+                    "value": 20
+                  }
                 ],
                 "actions": [
-                  { "type": "applyStatus", "target": "self", "statusId": "iris_locked_plating", "count": 1 },
+                  {
+                    "type": "clearStatus",
+                    "target": "self",
+                    "statusId": "iris_fitted_plating"
+                  },
+                  {
+                    "type": "applyStatus",
+                    "target": "self",
+                    "statusId": "iris_locked_plating",
+                    "count": 1
+                  },
                   {
                     "type": "grantSkillOffer",
                     "target": "self",
                     "skillId": "modular-weapon-max",
                     "offerLane": "top"
+                  },
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_assembly_progress",
+                    "countOperation": "set",
+                    "countDelta": 0
                   }
                 ]
               }
@@ -302,18 +807,65 @@
         {
           "id": "iris-broken-frame-standing",
           "name": "Broken Frame, Standing",
-          "description": "Once per encounter, recover from stagger by spending Concealed stacks.",
+          "description": "On Clash Loss, gain 1 [iris_irritation]. Once per Encounter when first Staggered: spend Concealed stacks to recover from Stagger next Turn Start and enter [iris_aggressive_stance].",
           "hooks": {
+            "onClashLose": [
+              {
+                "actions": [
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_irritation",
+                    "countDelta": 1
+                  }
+                ]
+              }
+            ],
             "unitStaggered": [
               {
                 "oncePer": "battle",
                 "conditions": [
-                  { "type": "eventStaggeredUnitIsSelf", "value": true },
-                  { "type": "statusCountAtLeast", "target": "self", "statusId": "iris_concealed_exoskeleton", "value": 3 }
+                  {
+                    "type": "eventStaggeredUnitIsSelf",
+                    "value": true
+                  },
+                  {
+                    "type": "statusCountAtLeast",
+                    "target": "self",
+                    "statusId": "iris_concealed_exoskeleton",
+                    "value": 3
+                  }
                 ],
                 "actions": [
-                  { "type": "adjustStatus", "target": "self", "statusId": "iris_concealed_exoskeleton", "countDelta": -3 },
-                  { "type": "applyStatus", "target": "self", "statusId": "iris_aggressive_stance", "count": 1 }
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_concealed_exoskeleton",
+                    "countDelta": -3
+                  },
+                  {
+                    "type": "recoverStagger",
+                    "target": "self",
+                    "when": "nextTurnStart"
+                  },
+                  {
+                    "type": "applyStatus",
+                    "target": "self",
+                    "statusId": "iris_aggressive_stance",
+                    "count": 1
+                  },
+                  {
+                    "type": "adjustSanity",
+                    "target": "self",
+                    "value": -15,
+                    "reason": "Broken Frame recovery"
+                  },
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_irritation",
+                    "countDelta": 4
+                  }
                 ]
               }
             ]
@@ -322,12 +874,17 @@
         {
           "id": "iris-dont-thank-me",
           "name": "...Don't thank me.",
-          "description": "Once per turn: ally Skill 3 or ally stagger on enemy queues unopposed Fall back, I got you~! Staggered ally targeted by unopposed attack can cancel it and counter.",
+          "description": "Once per turn: ally Skill 3 or ally stagger on enemy queues unopposed Fall back, I got you~! Staggered ally targeted by unopposed attack can cancel it and counter. If the main target was marked, gain 1 [iris_reading].",
           "hooks": {
             "allyAttackEnd": [
               {
                 "oncePer": "turn",
-                "conditions": [{ "type": "eventSkillSlotIs", "value": "slot-3" }],
+                "conditions": [
+                  {
+                    "type": "eventSkillSlotIs",
+                    "value": "slot-3"
+                  }
+                ],
                 "actions": [
                   {
                     "type": "queueUnopposedFollowUp",
@@ -341,8 +898,14 @@
               {
                 "oncePer": "turn",
                 "conditions": [
-                  { "type": "eventStaggeredUnitSideIs", "value": "enemy" },
-                  { "type": "eventSourceSideIs", "value": "player" }
+                  {
+                    "type": "eventStaggeredUnitSideIs",
+                    "value": "enemy"
+                  },
+                  {
+                    "type": "eventSourceSideIs",
+                    "value": "player"
+                  }
                 ],
                 "actions": [
                   {
@@ -357,10 +920,22 @@
               {
                 "oncePer": "turn",
                 "conditions": [
-                  { "type": "targetStaggered", "target": "allyUnit", "value": true }
+                  {
+                    "type": "targetStaggered",
+                    "target": "allyUnit",
+                    "value": true
+                  }
                 ],
                 "actions": [
-                  { "type": "cancelAttack" },
+                  {
+                    "type": "cancelAttack"
+                  },
+                  {
+                    "type": "applyStatus",
+                    "target": "self",
+                    "statusId": "iris_assist_defense",
+                    "count": 1
+                  },
                   {
                     "type": "queueUnopposedFollowUp",
                     "skillId": "fall-back-i-got-you",
@@ -368,42 +943,22 @@
                   }
                 ]
               }
-            ]
-          }
-        },
-        {
-          "id": "iris-probing-weaknesses",
-          "name": "Probing for Weaknesses",
-          "description": "Mark highest Max HP enemy with Analyzing Weakness. Gain Reading on hit.",
-          "hooks": {
-            "battleStart": [
+            ],
+            "attackEnd": [
               {
-                "actions": [
+                "conditions": [
                   {
-                    "type": "applyStatus",
-                    "target": "highestHpOpponent",
-                    "statusId": "iris_analyzing_weakness",
-                    "count": 1
+                    "type": "hasStatus",
+                    "target": "opponent",
+                    "statusId": "iris_analyzing_weakness"
                   }
-                ]
-              }
-            ],
-            "hitDealt": [
-              {
-                "actions": [
-                  { "type": "adjustStatus", "target": "self", "statusId": "iris_reading", "countDelta": 1 }
-                ]
-              }
-            ],
-            "unitStaggered": [
-              {
-                "conditions": [{ "type": "eventStaggeredUnitSideIs", "value": "enemy" }],
+                ],
                 "actions": [
                   {
-                    "type": "applyStatus",
-                    "target": "highestHpOpponent",
-                    "statusId": "iris_analyzing_weakness",
-                    "count": 1
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_reading",
+                    "countDelta": 1
                   }
                 ]
               }
@@ -512,7 +1067,10 @@
           "coinCount": 3,
           "damageType": "pierce",
           "sinType": "gloom",
-          "unbreakableCoins": [2, 3],
+          "unbreakableCoins": [
+            2,
+            3
+          ],
           "effects": [
             {
               "trigger": "onHit",
@@ -533,7 +1091,9 @@
           "id": "full-extension-oscillate",
           "name": "Full Extension - Oscillate",
           "skillSlot": "slot-3",
-          "tags": ["skill-3"],
+          "tags": [
+            "skill-3"
+          ],
           "variantPriority": 0,
           "skillType": "attack",
           "basePower": 12,
@@ -560,7 +1120,9 @@
           "id": "modular-weapon-max",
           "name": "Modular-Weapon Max Potential",
           "skillSlot": "slot-3",
-          "tags": ["skill-3"],
+          "tags": [
+            "skill-3"
+          ],
           "variantPriority": 2,
           "variantConditions": [
             {
@@ -686,23 +1248,40 @@
       "level": 1,
       "maxHp": 80,
       "sp": 0,
-      "speedRange": [5, 5],
+      "speedRange": [
+        5,
+        5
+      ],
       "staggerThresholds": [],
       "resistances": {
-        "physical": { "slash": 1, "pierce": 1, "blunt": 1 },
+        "physical": {
+          "slash": 1,
+          "pierce": 1,
+          "blunt": 1
+        },
         "sin": {
-          "wrath": 1, "lust": 1, "sloth": 1, "gluttony": 1,
-          "gloom": 1, "pride": 1, "envy": 1
+          "wrath": 1,
+          "lust": 1,
+          "sloth": 1,
+          "gluttony": 1,
+          "gloom": 1,
+          "pride": 1,
+          "envy": 1
         }
       },
       "passives": [],
-      "sprites": { "idle": "assets/debugsprites/Vergilius_Idle_Sprite.png", "skills": {} },
+      "sprites": {
+        "idle": "assets/debugsprites/Vergilius_Idle_Sprite.png",
+        "skills": {}
+      },
       "skills": [
         {
           "id": "ally-extension",
           "name": "Ally Extension",
           "skillSlot": "slot-3",
-          "tags": ["skill-3"],
+          "tags": [
+            "skill-3"
+          ],
           "skillType": "attack",
           "basePower": 5,
           "coinPower": 1,
@@ -730,17 +1309,34 @@
       "level": 1,
       "maxHp": 50,
       "sp": 0,
-      "speedRange": [1, 1],
-      "staggerThresholds": [0.6],
+      "speedRange": [
+        1,
+        1
+      ],
+      "staggerThresholds": [
+        0.6
+      ],
       "resistances": {
-        "physical": { "slash": 1, "pierce": 1, "blunt": 1 },
+        "physical": {
+          "slash": 1,
+          "pierce": 1,
+          "blunt": 1
+        },
         "sin": {
-          "wrath": 1, "lust": 1, "sloth": 1, "gluttony": 1,
-          "gloom": 1, "pride": 1, "envy": 1
+          "wrath": 1,
+          "lust": 1,
+          "sloth": 1,
+          "gluttony": 1,
+          "gloom": 1,
+          "pride": 1,
+          "envy": 1
         }
       },
       "passives": [],
-      "sprites": { "idle": "assets/debugsprites/Vergilius_Idle_Sprite.png", "skills": {} },
+      "sprites": {
+        "idle": "assets/debugsprites/Vergilius_Idle_Sprite.png",
+        "skills": {}
+      },
       "skills": [
         {
           "id": "enemy-wait",
@@ -761,13 +1357,18 @@
       "id": "iris-seven-south-smoke",
       "name": "Iris Smoke Test",
       "description": "Deploy Iris from a team preset to playtest the Seven Association South kit.",
-      "enemyUnitIds": ["iris-test-enemy"],
+      "enemyUnitIds": [
+        "iris-test-enemy"
+      ],
       "rules": {
         "encounterType": "focused",
         "maxTurns": 20,
         "victoryCondition": "defeat-all-enemies",
         "failureCondition": "all-allies-defeated",
-        "enemyAiProfile": { "skill": "first", "target": "firstLiving" }
+        "enemyAiProfile": {
+          "skill": "first",
+          "target": "firstLiving"
+        }
       }
     }
   ]
