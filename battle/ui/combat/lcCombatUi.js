@@ -188,7 +188,22 @@
         return Number.isFinite(direct) ? direct : 0;
     }
 
-    function renderLcSinResourceRail(battle, escapeHtml) {
+    function renderLcSinResourceRail(battle, escapeHtml, options = {}) {
+        const {
+            variant = 'field',
+            layout = 'horizontal',
+            resolveAssetUrl = null,
+            escapeAttribute = (value) => String(value),
+        } = options;
+        const lcChrome = battleModules.lcChrome || window.EchoesOfTheCityLcChrome || null;
+        const frameStyle = layout === 'vertical' && lcChrome
+            ? lcChrome.resolveAssetStyle(
+                lcChrome.LC_BATTLE_UI_ASSETS.sinRailFrame,
+                resolveAssetUrl,
+                escapeAttribute,
+            )
+            : '';
+
         const entries = SIN_TYPES.map((sinType) => {
             const count = getSinResourceCount(battle, sinType);
             const color = SIN_COLORS[sinType] || '#888';
@@ -201,8 +216,15 @@
         }).join('');
 
         return `
-            <aside class="echoes-lc-sin-rail echoes-lc-sin-rail--field" aria-label="Sin resources">
-                ${entries}
+            <aside
+                class="echoes-lc-sin-rail echoes-lc-sin-rail--${variant} echoes-lc-sin-rail--${layout}${frameStyle ? ' has-frame' : ''}"
+                aria-label="Sin resources"
+                ${frameStyle ? `style="${frameStyle}"` : ''}
+            >
+                ${layout === 'vertical' ? '<span class="echoes-lc-sin-rail__title">SIN</span>' : ''}
+                <div class="echoes-lc-sin-rail__entries">
+                    ${entries}
+                </div>
             </aside>
         `;
     }
@@ -412,6 +434,8 @@
     function renderLcDashboard(battle, uiState, deps) {
         const {
             escapeHtml,
+            escapeAttribute,
+            resolveAssetUrl,
             getPhaseLabel,
             getResolvedBattle,
             renderResolutionFeed,
@@ -419,6 +443,7 @@
             renderDebugRollControls,
         } = deps;
 
+        const lcChrome = battleModules.lcChrome || window.EchoesOfTheCityLcChrome || null;
         const sortedSlots = sortDashboardSlots(battle, battle.playerSlots || []);
         const displaySlots = padSlotArray(sortedSlots, LC_MAX_COLUMNS);
         const activeSlots = sortedSlots.slice(0, LC_MAX_COLUMNS);
@@ -430,30 +455,80 @@
 
         const resolvedBattle = getResolvedBattle(battle, uiState);
         const debugToolsEnabled = uiState?.debugToolsEnabled !== false;
+        const resolveDisabled = battle.phase !== 'select' || battle.winner || uiState?.isPlaybackRunning;
+        const startStyle = lcChrome?.resolveAssetStyle(
+            lcChrome.LC_BATTLE_UI_ASSETS.startButton,
+            resolveAssetUrl,
+            escapeAttribute,
+        );
+
+        const gearLeft = lcChrome?.renderBackplateLayer({
+            className: 'echoes-lc-stage-frame__gear echoes-lc-stage-frame__gear--left',
+            assetPath: lcChrome.LC_BATTLE_UI_ASSETS.gearColumnLeft,
+            resolveAssetUrl,
+            escapeAttribute,
+        }) || '<div class="echoes-lc-stage-frame__gear echoes-lc-stage-frame__gear--left" aria-hidden="true"></div>';
+        const gearRight = lcChrome?.renderBackplateLayer({
+            className: 'echoes-lc-stage-frame__gear echoes-lc-stage-frame__gear--right',
+            assetPath: lcChrome.LC_BATTLE_UI_ASSETS.gearColumnRight,
+            resolveAssetUrl,
+            escapeAttribute,
+        }) || '<div class="echoes-lc-stage-frame__gear echoes-lc-stage-frame__gear--right" aria-hidden="true"></div>';
 
         return `
-            <section class="echoes-battle-panel__combat-planner echoes-lc-dashboard">
-                <div class="echoes-lc-dashboard__main">
-                    <div class="echoes-lc-stage-frame">
-                        <div class="echoes-lc-stage-frame__gear echoes-lc-stage-frame__gear--left" aria-hidden="true"></div>
-                        <div class="echoes-lc-stage-grid">
-                            <div class="echoes-lc-skill-rows">
-                                <div class="echoes-lc-skill-row echoes-lc-skill-row--top">
-                                    ${topRow}
+            <section class="echoes-battle-panel__combat-planner echoes-lc-dashboard echoes-lc-dashboard--lc-mode">
+                <div class="echoes-lc-dashboard-console">
+                    ${lcChrome?.renderBackplateLayer({
+                        className: 'echoes-lc-dashboard-console__backplate',
+                        assetPath: lcChrome.LC_BATTLE_UI_ASSETS.dashboardBackplate,
+                        resolveAssetUrl,
+                        escapeAttribute,
+                    }) || ''}
+                    <div class="echoes-lc-dashboard__main">
+                        <div class="echoes-lc-stage-frame">
+                            ${gearLeft}
+                            <div class="echoes-lc-stage-grid">
+                                <div class="echoes-lc-skill-rows">
+                                    <div class="echoes-lc-skill-row echoes-lc-skill-row--top">
+                                        ${topRow}
+                                    </div>
+                                    ${sinChain}
+                                    <div class="echoes-lc-skill-row echoes-lc-skill-row--bottom">
+                                        ${bottomRow}
+                                    </div>
                                 </div>
-                                ${sinChain}
-                                <div class="echoes-lc-skill-row echoes-lc-skill-row--bottom">
-                                    ${bottomRow}
+                                <div class="echoes-lc-portrait-row">
+                                    ${portraitRow}
                                 </div>
                             </div>
-                            <div class="echoes-lc-portrait-row">
-                                ${portraitRow}
-                            </div>
+                            ${gearRight}
                         </div>
-                        <div class="echoes-lc-stage-frame__gear echoes-lc-stage-frame__gear--right" aria-hidden="true"></div>
+                    </div>
+                    <div class="echoes-lc-dashboard-console__actions">
+                        <button
+                            class="echoes-lc-console-toggle echoes-lc-console-toggle--win${uiState?.turnDebugEnabled ? ' is-active' : ''}"
+                            type="button"
+                            data-action="toggle-turn-debug"
+                            title="Win rate debug"
+                        >Win Rate ▲</button>
+                        <button
+                            class="echoes-lc-console-toggle echoes-lc-console-toggle--damage${uiState?.inspect?.isOpen ? ' is-active' : ''}"
+                            type="button"
+                            data-action="toggle-inspect"
+                            title="Damage breakdown"
+                        >Damage ▲</button>
+                        <button
+                            class="echoes-lc-start-button${startStyle ? ' has-image' : ''}"
+                            type="button"
+                            data-action="resolve-turn"
+                            style="${startStyle}"
+                            ${resolveDisabled ? 'disabled' : ''}
+                        >
+                            <span class="echoes-lc-start-button__label">START</span>
+                        </button>
                     </div>
                 </div>
-                <aside class="echoes-lc-dashboard__sidebar">
+                <aside class="echoes-lc-dashboard__sidebar echoes-lc-dashboard__sidebar--debug-only">
                     ${uiState?.debugPatchMessage ? `<p class="echoes-lc-dashboard__notice">${escapeHtml(uiState.debugPatchMessage)}</p>` : ''}
                     <div class="echoes-lc-dashboard__phase">
                         <span>Resolution</span>
