@@ -29,6 +29,7 @@
             ],
         };
         const lcCombatUi = battleModules.lcCombatUi || window.EchoesOfTheCityLcCombatUi || null;
+        const lcBattleHud = battleModules.lcBattleHud || window.EchoesOfTheCityLcBattleHud || null;
 
         function getAllUnits(battle) {
             return [...battle.playerUnits, ...battle.enemyUnits];
@@ -447,6 +448,16 @@
             const intentBorderUrl = !isPlayer && intentSkill?.borderPath
                 ? resolveAssetUrl(intentSkill.borderPath)
                 : '';
+            const fieldChromeMarkup = lcBattleHud?.renderLcFieldUnitChrome
+                ? lcBattleHud.renderLcFieldUnitChrome(unit, slot, side, {
+                    escapeAttribute,
+                    escapeHtml,
+                    resolveAssetUrl,
+                })
+                : `
+                    <span class="echoes-battle-panel__field-shadow"></span>
+                    <span class="echoes-battle-panel__field-ring"></span>
+                `;
 
             return `
                 <button
@@ -459,23 +470,13 @@
                     ${(battle.phase !== 'select' && isPlayer) || uiState?.isPlaybackRunning ? 'disabled' : ''}
                 >
                     ${intentBorderUrl ? `<span class="echoes-battle-panel__field-intent-icon" style="background-image:url('${intentBorderUrl}')"></span>` : ''}
-                    <span class="echoes-battle-panel__field-speed">${slot.speed}</span>
-                    <span class="echoes-battle-panel__field-shadow"></span>
-                    <span class="echoes-battle-panel__field-ring"></span>
+                    ${fieldChromeMarkup}
                     <span class="echoes-battle-panel__field-sprite">
                         <img src="${unitSprite}" alt="${unit.name}">
                         ${staggerOverlayUrl
                             ? `<img class="echoes-battle-panel__field-stagger-overlay" src="${staggerOverlayUrl}" alt="Staggered">`
                             : ''}
                     </span>
-                    <div class="echoes-battle-panel__field-vitals-lc">
-                        ${lcCombatUi?.renderLcUnitVitals
-                            ? lcCombatUi.renderLcUnitVitals(unit, { escapeHtml, variant: 'field' })
-                            : `
-                                <span class="echoes-battle-panel__field-hp-lc">${unit.hp}</span>
-                                <span class="echoes-battle-panel__field-sp-lc">${unit.sp}</span>
-                            `}
-                    </div>
                     ${renderMiniStatuses(unit)}
                 </button>
             `;
@@ -1523,10 +1524,16 @@
         }
 
         function renderBattlefield(battle, activePlayerSlot, uiState) {
-            const debugToolsEnabled = uiState?.debugToolsEnabled !== false;
-            const sinRailMarkup = lcCombatUi?.renderLcSinResourceRail
-                ? lcCombatUi.renderLcSinResourceRail(battle, escapeHtml)
+            const hasCustomBg = Boolean(resolveBattlefieldBackground(battle));
+            const topHudMarkup = lcBattleHud?.renderLcBattleTopHud
+                ? lcBattleHud.renderLcBattleTopHud(battle, uiState, {
+                    escapeHtml,
+                    escapeAttribute,
+                    resolveAssetUrl,
+                    getResolvedBattle,
+                })
                 : '';
+
             const playerMarkup = (() => {
                 const seenUnitIds = new Set();
                 return battle.playerSlots
@@ -1544,79 +1551,11 @@
                 .map((slot) => renderFieldUnitWithUiState(battle, getUnitById(battle, slot.unitId), slot, 'enemy', activePlayerSlot, uiState))
                 .join('');
 
-            const resolveDisabled = battle.phase !== 'select' || battle.winner || uiState?.isPlaybackRunning;
-            const resolveLabel = uiState?.isPlaybackRunning ? 'Resolving...' : 'DUEL';
-            const hasCustomBg = Boolean(resolveBattlefieldBackground(battle));
-
             return `
-                <section class="echoes-battle-panel__combat-battlefield${hasCustomBg ? ' echoes-battle-panel__combat-battlefield--custom-bg' : ''}">
+                <section class="echoes-battle-panel__combat-battlefield echoes-battle-panel__combat-battlefield--lc${hasCustomBg ? ' echoes-battle-panel__combat-battlefield--custom-bg' : ''}">
                     ${renderBattlefieldBackgroundLayers(battle)}
-                    <div class="echoes-battle-panel__combat-hud">
-                        <div class="echoes-battle-panel__combat-counter-stack echoes-battle-panel__combat-counter-stack--lc">
-                            <div class="echoes-battle-panel__combat-counter echoes-battle-panel__combat-counter--lc">
-                                <span>WAVE</span>
-                                <strong>${battle.wave || 1} / ${battle.totalWaves || 1}</strong>
-                            </div>
-                            <div class="echoes-battle-panel__combat-counter echoes-battle-panel__combat-counter--lc">
-                                <span>TURN</span>
-                                <strong>${battle.turn}</strong>
-                            </div>
-                        </div>
-                        <div class="echoes-battle-panel__combat-controls echoes-battle-panel__combat-controls--lc">
-                            ${debugToolsEnabled
-                                ? `
-                                    <button
-                                        class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost echoes-battle-panel__combat-button--lc${uiState?.turnDebugEnabled ? ' is-active' : ''}"
-                                        type="button"
-                                        data-action="toggle-turn-debug"
-                                    >
-                                        Debug
-                                    </button>
-                                `
-                                : ''}
-                            <button
-                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost echoes-battle-panel__combat-button--lc${uiState?.inspect?.isOpen ? ' is-active' : ''}"
-                                type="button"
-                                data-action="toggle-inspect"
-                            >
-                                Inspect
-                            </button>
-                            <button
-                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--duel"
-                                type="button"
-                                data-action="resolve-turn"
-                                ${resolveDisabled ? 'disabled' : ''}
-                            >
-                                ${resolveLabel}
-                            </button>
-                            <button
-                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost echoes-battle-panel__combat-button--lc"
-                                type="button"
-                                data-action="next-turn"
-                                ${getResolvedBattle(battle, uiState).phase !== 'resolved' || getResolvedBattle(battle, uiState).winner || uiState?.isPlaybackRunning ? 'disabled' : ''}
-                            >
-                                Next
-                            </button>
-                            <button
-                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost echoes-battle-panel__combat-button--lc"
-                                type="button"
-                                data-action="reset-fight"
-                            >
-                                Reset
-                            </button>
-                            <button
-                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost echoes-battle-panel__combat-button--lc"
-                                type="button"
-                                data-action="quit-battle"
-                            >
-                                Quit
-                            </button>
-                        </div>
-                    </div>
-
-                    ${sinRailMarkup}
-
-                    <div class="echoes-battle-panel__combat-stage-area">
+                    ${topHudMarkup}
+                    <div class="echoes-battle-panel__combat-stage-area echoes-battle-panel__combat-stage-area--lc">
                         ${renderTargetOverlayWithUiState(battle, activePlayerSlot, uiState)}
                         ${renderResolutionCard(getResolvedBattle(battle, uiState), activePlayerSlot, uiState)}
                         ${renderPlaybackOverlay(battle, uiState)}
@@ -1743,20 +1682,32 @@
             }
 
             const activePlayerSlot = getActivePlayerSlot(battle);
+            const verticalSinRailMarkup = lcCombatUi?.renderLcSinResourceRail
+                ? lcCombatUi.renderLcSinResourceRail(battle, escapeHtml, {
+                    variant: 'combat',
+                    layout: 'vertical',
+                    resolveAssetUrl,
+                    escapeAttribute,
+                })
+                : '';
+
             mountElement.innerHTML = `
-                <div class="echoes-battle-panel__combat-limbus">
-                    ${renderBattlefield(battle, activePlayerSlot, uiState)}
-                    <div
-                        class="echoes-battle-panel__combat-resize-handle"
-                        data-resize-handle="battlefield"
-                        role="separator"
-                        aria-orientation="horizontal"
-                        aria-label="Resize battlefield"
-                        tabindex="0"
-                    >
-                        <span></span>
+                <div class="echoes-battle-panel__combat-limbus echoes-battle-panel__combat-limbus--lc">
+                    <div class="echoes-battle-panel__combat-limbus-body">
+                        ${renderBattlefield(battle, activePlayerSlot, uiState)}
+                        <div
+                            class="echoes-battle-panel__combat-resize-handle echoes-battle-panel__combat-resize-handle--lc"
+                            data-resize-handle="battlefield"
+                            role="separator"
+                            aria-orientation="horizontal"
+                            aria-label="Resize battlefield"
+                            tabindex="0"
+                        >
+                            <span></span>
+                        </div>
+                        ${renderLcDashboardWrapper(battle, activePlayerSlot, uiState)}
                     </div>
-                    ${renderLcDashboardWrapper(battle, activePlayerSlot, uiState)}
+                    ${verticalSinRailMarkup}
                 </div>
             `;
         }
