@@ -7551,48 +7551,11 @@ function runSuite() {
         assert(lcCombatUi.didCrossStaggerThreshold(resolvedBattle.enemyUnits[0], 100, 40), 'Expected stagger threshold cross.');
     });
 
-    test('LC chrome and battle HUD helpers', () => {
-        const battleRoot = path.resolve(__dirname, '..');
-        clearRequireCache(battleRoot);
-        global.window = { EchoesOfTheCityBattleModules: {} };
-        require(path.resolve(battleRoot, 'ui/lc/lcChrome.js'));
-        require(path.resolve(battleRoot, 'ui/combat/lcBattleHud.js'));
-
-        const lcChrome = global.window.EchoesOfTheCityLcChrome;
-        const lcBattleHud = global.window.EchoesOfTheCityLcBattleHud;
-        assert(lcChrome?.LC_BATTLE_UI_ASSETS?.dashboardBackplate, 'Expected battle UI asset map.');
-        const counterHtml = lcChrome.renderBrassCounter('ENEMY', '3', { subValue: '/ 12' });
-        assert(counterHtml.includes('echoes-lc-brass-counter'), 'Expected brass counter markup.');
-
-        const topHudHtml = lcBattleHud.renderLcBattleTopHud({
-            turn: 2,
-            wave: 1,
-            totalWaves: 1,
-            enemyUnits: [{ hp: 50 }, { hp: 0 }],
-            phase: 'select',
-        }, {}, {
-            escapeHtml: (value) => String(value),
-            escapeAttribute: (value) => String(value),
-            getResolvedBattle: (battle) => battle,
-        });
-        assert(topHudHtml.includes('echoes-lc-battle-top-hud'), 'Expected top HUD.');
-        assert(topHudHtml.includes('ENEMY'), 'Expected enemy counter label.');
-        assert(topHudHtml.includes('TURN'), 'Expected turn counter label.');
-
-        const enemyHpHtml = lcBattleHud.renderLcEnemyHpBar({ hp: 62, maxHp: 100 }, {
-            escapeHtml: (value) => String(value),
-            escapeAttribute: (value) => String(value),
-        });
-        assert(enemyHpHtml.includes('echoes-lc-enemy-hp-bar'), 'Expected enemy HP bar.');
-    });
-
-    test('Battle renderer: LC battle shell markup', () => {
+    test('Battle renderer: quit button, custom background, and field hex vitals', () => {
         const battleRoot = path.resolve(__dirname, '..');
         clearRequireCache(battleRoot);
         global.window = { EchoesOfTheCityBattleModules: {} };
         require(path.resolve(battleRoot, 'ui/sinColors.js'));
-        require(path.resolve(battleRoot, 'ui/lc/lcChrome.js'));
-        require(path.resolve(battleRoot, 'ui/combat/lcBattleHud.js'));
         require(path.resolve(battleRoot, 'ui/combat/lcCombatUi.js'));
         require(path.resolve(battleRoot, 'registry/battleRegistry.js'));
         require(path.resolve(battleRoot, 'core/battleRenderer.js'));
@@ -7645,18 +7608,12 @@ function runSuite() {
 
         renderer.render(battle, {});
         const html = mountElement.innerHTML;
-        assert(html.includes('combat-limbus--lc'), 'Expected LC combat shell.');
-        assert(html.includes('echoes-lc-battle-top-hud'), 'Expected LC top HUD.');
-        assert(html.includes('data-action="quit-battle"'), 'Expected quit battle control.');
+        assert(html.includes('data-action="quit-battle"'), 'Expected quit battle button.');
         assert(html.includes('echoes-battle-panel__field-bg'), 'Expected field background layer.');
+        assert(html.includes('--echoes-field-bg-image'), 'Expected field background CSS variable.');
         assert(html.includes('combat-battlefield--custom-bg'), 'Expected custom background modifier class.');
-        assert(html.includes('echoes-lc-enemy-hp-bar'), 'Expected enemy overhead HP bar.');
-        assert(html.includes('echoes-lc-field-speed-hex'), 'Expected field speed hex.');
-        assert(html.includes('echoes-lc-start-button'), 'Expected START gear button.');
-        assert(html.includes('data-action="resolve-turn"'), 'Expected resolve turn action.');
-        assert(html.includes('echoes-lc-sin-rail--vertical'), 'Expected vertical sin rail.');
-        assert(html.includes('echoes-lc-dashboard-console'), 'Expected dashboard console backplate.');
-        assert(!html.includes('echoes-battle-panel__field-vitals-lc'), 'Field units should not use foot vitals.');
+        assert(html.includes('echoes-battle-panel__field-vitals-lc'), 'Expected field vitals below units.');
+        assert(!html.includes('echoes-battle-panel__field-hex-vitals'), 'Field units should not use hex overlay.');
     });
 
     test('Schema: rules.background validates image path', () => {

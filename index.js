@@ -95,8 +95,6 @@
         'battle/ui/roster/teamBuilderRenderer.js',
         'battle/ui/drive/driveMenuRenderer.js',
         'battle/ui/inspect/inspectState.js',
-        'battle/ui/lc/lcChrome.js',
-        'battle/ui/combat/lcBattleHud.js',
         'battle/ui/combat/lcCombatUi.js',
         'battle/audio/combatSounds.js',
         'battle/core/damageFormula.js',
