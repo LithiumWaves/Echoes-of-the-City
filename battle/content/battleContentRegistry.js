@@ -820,7 +820,15 @@
             });
 
             normalizedPack.statuses.forEach((statusDefinition) => {
-                const registeredDefinition = registerStatusDefinition(statusDefinition, options);
+                const aliases = Array.isArray(statusDefinition?.aliases)
+                    ? statusDefinition.aliases.filter((alias) => typeof alias === 'string' && alias)
+                    : [];
+                const definitionForRegistry = { ...statusDefinition };
+                delete definitionForRegistry.aliases;
+                const registeredDefinition = registerStatusDefinition(definitionForRegistry, {
+                    ...options,
+                    aliases,
+                });
                 registeredIds.statuses.push(registeredDefinition.id);
             });
 

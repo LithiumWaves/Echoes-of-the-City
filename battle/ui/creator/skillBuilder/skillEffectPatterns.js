@@ -93,15 +93,13 @@
                 statusSource: 'self',
                 amount: {
                     clamp: {
-                        max: [
-                            2,
-                            {
-                                floor: {
-                                    statusCount: { target: 'self', statusId: '' },
-                                    multiplier: 0.2,
-                                },
+                        value: {
+                            floor: {
+                                statusCount: { target: 'self', statusId: '' },
+                                multiplier: 0.2,
                             },
-                        ],
+                        },
+                        max: 2,
                     },
                 },
             }],

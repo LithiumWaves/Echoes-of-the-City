@@ -9,26 +9,71 @@
         if (!token) {
             return '';
         }
-        const tagRenderer = battleModules.skillTagRenderer || window.EchoesOfTheCitySkillTagRenderer;
-        if (typeof tagRenderer?.resolveStatus === 'function' || tagRenderer?.classifyTag) {
-            // Prefer catalog resolution matching tag renderer logic.
-        }
         const normalized = normalizeToken(token);
         const compact = normalized.replace(/[_-]/g, '');
         const list = catalog?.statusList || [];
-        const match = list.find((entry) => {
+        if (!list.length) {
+            return '';
+        }
+
+        const scored = list.map((entry) => {
             const id = normalizeToken(entry.id);
             const label = normalizeToken(entry.label || entry.name || '');
-            return id === normalized
-                || id.replace(/[_-]/g, '') === compact
-                || label === normalized
-                || label.replace(/[_-]/g, '') === compact;
-        });
-        if (match) {
-            return match.id;
+            const idCompact = id.replace(/[_-]/g, '');
+            const labelCompact = label.replace(/[_-]/g, '');
+            let score = 0;
+            if (id === normalized || label === normalized) {
+                score = 100;
+            } else if (idCompact === compact || labelCompact === compact) {
+                score = 90;
+            } else if (idCompact.endsWith(compact) || compact.endsWith(idCompact)) {
+                // iris_concealed_exoskeleton ↔ concealed_exoskeleton
+                score = 80;
+            } else if (labelCompact.includes(compact) || compact.includes(labelCompact)) {
+                score = 60;
+            }
+            return { entry, score };
+        }).filter((item) => item.score > 0);
+
+        scored.sort((a, b) => b.score - a.score);
+        if (scored[0]) {
+            return scored[0].entry.id;
         }
-        // Fallback: hyphenated id from underscore token
-        return normalized.replace(/_/g, '-');
+        // Do not invent unsupported ids — leave blank for the author to pick.
+        return '';
+    }
+
+    function syncNestedStatusIds(effect) {
+        if (!effect || typeof effect !== 'object' || !effect.statusId) {
+            return effect;
+        }
+        const statusId = effect.statusId;
+        const visit = (node) => {
+            if (!node || typeof node !== 'object') {
+                return;
+            }
+            if (Array.isArray(node)) {
+                node.forEach(visit);
+                return;
+            }
+            if (node.statusCount && typeof node.statusCount === 'object') {
+                if (!node.statusCount.statusId) {
+                    node.statusCount.statusId = statusId;
+                }
+            }
+            if (node.statusPotency && typeof node.statusPotency === 'object') {
+                if (!node.statusPotency.statusId) {
+                    node.statusPotency.statusId = statusId;
+                }
+            }
+            Object.keys(node).forEach((key) => {
+                if (key !== 'statusCount' && key !== 'statusPotency') {
+                    visit(node[key]);
+                }
+            });
+        };
+        visit(effect.amount);
+        return effect;
     }
 
     function extractBracketTokens(line) {
@@ -139,7 +184,7 @@
         const perStacks = Number(match[2]) || 5;
         const maxBonus = match[4] != null ? Number(match[4]) : 2;
         const stepMultiplier = 1 / perStacks;
-        return [{
+        return [syncNestedStatusIds({
             trigger: 'onSelect',
             type: 'modifyContext',
             field: 'clashPowerBonus',
@@ -148,18 +193,16 @@
             statusSource: 'self',
             amount: {
                 clamp: {
-                    max: [
-                        maxBonus,
-                        {
-                            floor: {
-                                statusCount: { target: 'self', statusId },
-                                multiplier: stepMultiplier,
-                            },
+                    value: {
+                        floor: {
+                            statusCount: { target: 'self', statusId },
+                            multiplier: stepMultiplier,
                         },
-                    ],
+                    },
+                    max: maxBonus,
                 },
             },
-        }];
+        })];
     }
 
     function tryParseSlotAggro(line) {
@@ -348,7 +391,7 @@
                 return;
             }
             if (result.effects.length) {
-                result.effects.forEach((effect) => effects.push(effect));
+                result.effects.forEach((effect) => effects.push(syncNestedStatusIds(effect)));
                 matched.push({ line: index + 1, kind: 'effect', count: result.effects.length, text: String(rawLine).trim() });
                 return;
             }
@@ -363,6 +406,7 @@
     const descriptionCombatSync = {
         compileEffectsFromDescription,
         resolveStatusId,
+        syncNestedStatusIds,
         extractBracketTokens,
         parseLine,
     };

@@ -1802,8 +1802,8 @@
 
         if (unit.sprites == null || typeof unit.sprites !== 'object' || Array.isArray(unit.sprites)) {
             pushError(errors, `${path}.sprites`, 'must be an object.');
-        } else if (!unit.sprites.idle || typeof unit.sprites.idle !== 'string') {
-            pushError(errors, `${path}.sprites.idle`, 'must be a string.');
+        } else if (typeof unit.sprites.idle !== 'string') {
+            pushError(errors, `${path}.sprites.idle`, 'must be a string (empty allowed while drafting).');
         } else if (unit.sprites.splash != null && (typeof unit.sprites.splash !== 'string' || !unit.sprites.splash)) {
             pushError(errors, `${path}.sprites.splash`, 'must be a non-empty string when provided.');
         }

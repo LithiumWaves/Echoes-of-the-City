@@ -7512,6 +7512,9 @@ function runSuite() {
 
         const clash = result.effects.find((effect) => effect.field === 'clashPowerBonus');
         assert(clash, 'Expected clash power stepped amount.');
+        assert(clash.amount?.clamp?.value?.floor?.statusCount?.statusId === 'concealed-exoskeleton', 'Expected clash clamp.value.floor.statusCount.statusId.');
+        assert(clash.amount?.clamp?.max === 2, 'Expected clash clamp.max number.');
+        assert(!Array.isArray(clash.amount?.clamp?.max), 'Expected clamp.max to be a number, not an array.');
 
         const aggro = result.effects.find((effect) => effect.type === 'adjustSlotAggro');
         assert(aggro && aggro.value === 3, 'Expected +3 slot aggro.');
@@ -7530,6 +7533,108 @@ function runSuite() {
         assert(rupture, 'Expected Inflict rupture potency/count.');
         assert(rupture.potency === 2 && rupture.count === 1, 'Expected rupture 2 potency and 1 count.');
         assert(rupture.coinIndex === 2, 'Expected rupture under Coin 2.');
+
+        assert(sync.resolveStatusId('unknown_goblin_status', catalog) === '', 'Expected unresolved status tokens to stay empty.');
+        assert(
+            sync.resolveStatusId('concealed_exoskeleton', {
+                statusList: [{ id: 'iris_concealed_exoskeleton', label: 'Concealed Exoskeleton' }],
+            }) === 'iris_concealed_exoskeleton',
+            'Expected suffix/catalog match to Iris concealed id.',
+        );
+    });
+
+    test('Kit save wiring: clash pattern validates, empty idle allowed, Iris aliases resolve', () => {
+        const battleModules = createBattleEnvironment();
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillEffectPatterns.js'));
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/descriptionCombatSync.js'));
+
+        const patterns = global.window.EchoesOfTheCitySkillEffectPatterns;
+        const sync = global.window.EchoesOfTheCityDescriptionCombatSync;
+        const validateUnitDefinition = battleModules.schema.validateUnitDefinition;
+        const registerStatusDefinition = battleModules.registry.registerStatusDefinition;
+        assert(typeof patterns?.compilePattern === 'function', 'Expected compilePattern.');
+
+        registerStatusDefinition({
+            id: 'iris_concealed_exoskeleton',
+            label: 'Concealed Exoskeleton',
+            countOnly: true,
+            stackModel: {
+                count: { enabled: true, min: 0, max: 20, application: 'add' },
+                expireWhen: { countLte: 0 },
+            },
+            hooks: {},
+        }, { aliases: ['concealed-exoskeleton', 'concealed_exoskeleton'], allowOverwrite: true });
+
+        const compiledClash = patterns.compilePattern('clash_per_n_stacks')[0];
+        assert(compiledClash.amount?.clamp?.value, 'Expected clash pattern clamp.value.');
+        assert(typeof compiledClash.amount.clamp.max === 'number', 'Expected clash pattern clamp.max number.');
+
+        const clashEffects = [{
+            ...compiledClash,
+            statusId: 'iris_concealed_exoskeleton',
+            amount: {
+                clamp: {
+                    value: {
+                        floor: {
+                            statusCount: { target: 'self', statusId: 'iris_concealed_exoskeleton' },
+                            multiplier: 0.2,
+                        },
+                    },
+                    max: 2,
+                },
+            },
+        }];
+
+        const unit = {
+            id: 'kit-save-unit',
+            name: 'Kit Save',
+            level: 1,
+            maxHp: 50,
+            sp: 0,
+            speedRange: [1, 1],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            staggerThresholds: [],
+            sprites: { idle: '', skills: {} },
+            skills: [{
+                id: 'predictive-cuts',
+                name: 'Predictive Cuts',
+                skillType: 'attack',
+                basePower: 3,
+                coinPower: 4,
+                coinCount: 2,
+                damageType: 'slash',
+                sinType: 'gluttony',
+                effects: [
+                    ...clashEffects,
+                    {
+                        trigger: 'onHit',
+                        type: 'applyStatus',
+                        target: 'self',
+                        statusId: 'iris_concealed_exoskeleton',
+                        count: 1,
+                        coinIndex: 1,
+                    },
+                ],
+            }],
+            passives: [],
+        };
+
+        const validated = validateUnitDefinition(unit);
+        assert(!validated.errors.length, `Expected kit draft to validate: ${validated.errors.join(', ')}`);
+
+        const catalog = {
+            statusList: [{ id: 'iris_concealed_exoskeleton', label: 'Concealed Exoskeleton', countOnly: true }],
+        };
+        assert(sync.resolveStatusId('concealed-exoskeleton', catalog) === 'iris_concealed_exoskeleton', 'Expected hyphen alias resolve.');
+        assert(sync.resolveStatusId('concealed_exoskeleton', catalog) === 'iris_concealed_exoskeleton', 'Expected underscore resolve.');
+        assert(battleModules.registry.isSupportedStatusId('concealed-exoskeleton'), 'Expected registry alias supported.');
+
+        const pack = JSON.parse(fs.readFileSync(path.resolve(battleRoot, 'content', 'packs', 'user', 'iris-seven-south-pack.json'), 'utf8'));
+        battleModules.content.importContentPack(pack, { allowOverwrite: true });
+        assert(battleModules.registry.isSupportedStatusId('concealed_exoskeleton'), 'Expected Iris pack aliases to register.');
     });
 
     test('Skill effect patterns: compile and humanize Predictive Cuts patterns', () => {

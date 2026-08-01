@@ -124,7 +124,7 @@
                             <button class="echoes-editor-workshop__action echoes-editor-workshop__action--accent" type="button" data-action="creator-skill-add-pattern" data-skill-index="${skillIndex}" data-scope="onSelect">Add</button>
                         </div>
                     </header>
-                    <p class="echoes-creator__hint">Slot aggro applies on attack end; bonus may persist until the engine clears it each turn.</p>
+                    <p class="echoes-creator__hint">Slot aggro applies on attack end; bonus may persist until the engine clears it each turn. Pattern lines that mention a status need a Status chosen in Advanced fields (or use Wire combat from description).</p>
                     <div class="echoes-skill-sentence-list">${onUseRows || '<span class="echoes-creator__hint">No On Use combat lines.</span>'}</div>
                     ${attackEndRows ? `
                         <h5 class="echoes-skill-inspector__subheading">After attack</h5>

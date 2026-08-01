@@ -1176,8 +1176,10 @@
             break;
         }
 
-        return `
-            <div class="echoes-creator__effect-card">
+        const hideTarget = type === 'modifyContext' || type === 'modifyCoinMap';
+        const targetBlock = hideTarget
+            ? `<p class="echoes-creator__hint">Power / damage bonuses apply to this skill’s combat context (not an Inflict/Gain target). Use the status gate below for “on self” stack checks.</p>`
+            : `
                 <div class="echoes-creator__field-row echoes-creator__field-row--2">
                     <label>What happens</label>
                     ${typeSelect}
@@ -1185,7 +1187,22 @@
                     ${targetSelect}
                 </div>
                 <p class="echoes-creator__hint">Use Self for Gain…; Opponent for Inflict….</p>
+            `;
+        const typeOnlyBlock = hideTarget
+            ? `
+                <div class="echoes-creator__field-row">
+                    <label>What happens</label>
+                    ${typeSelect}
+                </div>
+            `
+            : '';
+
+        return `
+            <div class="echoes-creator__effect-card">
+                ${hideTarget ? typeOnlyBlock : ''}
+                ${targetBlock}
                 ${specificFields}
+                ${type === 'modifyContext' && !effect?.statusId ? '<p class="echoes-creator__hint">Pick a <strong>Status</strong> for gated Coin/Clash Power lines (or Wire combat from description).</p>' : ''}
                 ${renderEffectFilters(effect, catalog, escapeAttr, fieldAttrs, options)}
                 <details class="echoes-creator__advanced">
                     <summary>Expert: edit raw JSON</summary>
@@ -1719,6 +1736,28 @@
             if (getStatusMetricMode(trimmed, catalog) === 'stacks') {
                 cleanStackOnlyEffectFields(effect, effect.type || 'applyStatus');
             }
+            // Keep nested amount statusCount / statusPotency ids in sync for clash/scaled amounts.
+            const syncNested = (node) => {
+                if (!node || typeof node !== 'object') {
+                    return;
+                }
+                if (Array.isArray(node)) {
+                    node.forEach(syncNested);
+                    return;
+                }
+                if (node.statusCount && typeof node.statusCount === 'object') {
+                    node.statusCount.statusId = trimmed;
+                }
+                if (node.statusPotency && typeof node.statusPotency === 'object') {
+                    node.statusPotency.statusId = trimmed;
+                }
+                Object.keys(node).forEach((key) => {
+                    if (key !== 'statusCount' && key !== 'statusPotency') {
+                        syncNested(node[key]);
+                    }
+                });
+            };
+            syncNested(effect.amount);
             return;
         }
         if (field === 'amount') {

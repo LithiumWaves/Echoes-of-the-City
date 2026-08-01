@@ -53,7 +53,11 @@
           "countLte": 0
         }
       },
-      "hooks": {}
+      "hooks": {},
+      "aliases": [
+        "analyzing-weakness",
+        "analyzing_weakness"
+      ]
     },
     {
       "id": "iris_reading",
@@ -96,7 +100,11 @@
             ]
           }
         ]
-      }
+      },
+      "aliases": [
+        "reading",
+        "reading..."
+      ]
     },
     {
       "id": "iris_concealed_exoskeleton",
@@ -192,7 +200,11 @@
             }
           }
         ]
-      }
+      },
+      "aliases": [
+        "concealed-exoskeleton",
+        "concealed_exoskeleton"
+      ]
     },
     {
       "id": "iris_irritation",
@@ -210,7 +222,10 @@
           "countLte": 0
         }
       },
-      "hooks": {}
+      "hooks": {},
+      "aliases": [
+        "irritation"
+      ]
     },
     {
       "id": "iris_guarded_stance",
@@ -228,7 +243,11 @@
           "countLte": 0
         }
       },
-      "hooks": {}
+      "hooks": {},
+      "aliases": [
+        "guarded-stance",
+        "guarded_stance"
+      ]
     },
     {
       "id": "iris_aggressive_stance",
@@ -246,7 +265,11 @@
           "countLte": 0
         }
       },
-      "hooks": {}
+      "hooks": {},
+      "aliases": [
+        "aggressive-stance",
+        "aggressive_stance"
+      ]
     },
     {
       "id": "iris_assembly_progress",
@@ -289,7 +312,11 @@
             ]
           }
         ]
-      }
+      },
+      "aliases": [
+        "assembly-progress",
+        "assembly_progress"
+      ]
     },
     {
       "id": "iris_fitted_plating",
@@ -307,7 +334,11 @@
           "countLte": 0
         }
       },
-      "hooks": {}
+      "hooks": {},
+      "aliases": [
+        "fitted-plating",
+        "fitted_plating"
+      ]
     },
     {
       "id": "iris_locked_plating",
@@ -325,7 +356,11 @@
           "countLte": 0
         }
       },
-      "hooks": {}
+      "hooks": {},
+      "aliases": [
+        "locked-plating",
+        "locked_plating"
+      ]
     },
     {
       "id": "iris_assist_defense",
@@ -343,7 +378,11 @@
           "countLte": 0
         }
       },
-      "hooks": {}
+      "hooks": {},
+      "aliases": [
+        "assist-defense",
+        "assist_defense"
+      ]
     }
   ],
   "units": [
