@@ -29,6 +29,7 @@
         'battle/content/packs/base/statuses/missingStatusesBatch2.js',
         'battle/content/packs/base/statuses/chargeBarrier.js',
         'battle/content/packs/base/statuses/tremor.js',
+        'battle/content/packs/user/statuses/tremorGnaw.js',
         'battle/content/packs/base/statuses/aggro.js',
         'battle/content/packs/base/statuses/fairyLure.js',
         'battle/content/packs/base/statuses/concussion.js',
@@ -1590,18 +1591,18 @@
             parsed = normalizeCreatorDraft('unit', resolveCreatorUnitParsed());
             state.creatorJsonInput = JSON.stringify(parsed, null, 2);
         } else {
-            const raw = String(state.creatorJsonInput || '').trim();
-            if (!raw) {
-                setCreatorMessage('error', 'Paste JSON first.');
-                renderCreatorScreen();
-                return;
-            }
-            try {
-                parsed = JSON.parse(raw);
-            } catch (error) {
-                setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
-                renderCreatorScreen();
-                return;
+        const raw = String(state.creatorJsonInput || '').trim();
+        if (!raw) {
+            setCreatorMessage('error', 'Paste JSON first.');
+            renderCreatorScreen();
+            return;
+        }
+        try {
+            parsed = JSON.parse(raw);
+        } catch (error) {
+            setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
+            renderCreatorScreen();
+            return;
             }
         }
 
@@ -1659,18 +1660,18 @@
             parsed = normalizeCreatorDraft('unit', resolveCreatorUnitParsed());
             state.creatorJsonInput = JSON.stringify(parsed, null, 2);
         } else {
-            const raw = String(state.creatorJsonInput || '').trim();
-            if (!raw) {
-                setCreatorMessage('error', 'Paste JSON first.');
-                renderCreatorScreen();
-                return;
-            }
-            try {
-                parsed = JSON.parse(raw);
-            } catch (error) {
-                setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
-                renderCreatorScreen();
-                return;
+        const raw = String(state.creatorJsonInput || '').trim();
+        if (!raw) {
+            setCreatorMessage('error', 'Paste JSON first.');
+            renderCreatorScreen();
+            return;
+        }
+        try {
+            parsed = JSON.parse(raw);
+        } catch (error) {
+            setCreatorMessage('error', `Invalid JSON: ${error?.message || error}`);
+            renderCreatorScreen();
+            return;
             }
         }
         try {
@@ -2019,33 +2020,33 @@
                                 <div class="echoes-creator__field-row">
                                     <label>Card ID</label>
                                     <input data-action="creator-unit-field" data-field="id" value="${escapeAttribute(String(unitDraft?.id || ''))}" />
-                                </div>
+                        </div>
                                 <div class="echoes-creator__field-row">
                                     <label>Display name</label>
                                     <input data-action="creator-unit-field" data-field="name" value="${escapeAttribute(String(unitDraft?.name || ''))}" />
-                                </div>
+                        </div>
                                 <div class="echoes-creator__field-row">
                                     <label>Level</label>
                                     <input data-action="creator-unit-field" data-field="level" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.level ?? 1))}" />
-                                </div>
+                        </div>
                                 <div class="echoes-creator__field-row">
                                     <label>Max HP</label>
                                     <input data-action="creator-unit-field" data-field="maxHp" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.maxHp ?? 100))}" />
-                                </div>
+                        </div>
                                 <div class="echoes-creator__field-row">
                                     <label>SP</label>
                                     <input data-action="creator-unit-field" data-field="sp" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.sp ?? 0))}" />
-                                </div>
+                        </div>
                                 <div class="echoes-creator__field-row">
                                     <label>Defense Level</label>
                                     <input data-action="creator-unit-field" data-field="defenseLevel" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.defenseLevel ?? 0))}" />
-                                </div>
-                            </div>
+                        </div>
+                    </div>
                             <div class="echoes-editor-field-grid echoes-editor-field-grid--2">
                                 <div class="echoes-creator__field-row">
                                     <label>Speed Min</label>
                                     <input data-action="creator-unit-speed" data-index="0" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.speedRange?.[0] ?? 1))}" />
-                                </div>
+                        </div>
                                 <div class="echoes-creator__field-row">
                                     <label>Speed Max</label>
                                     <input data-action="creator-unit-speed" data-index="1" inputmode="numeric" value="${escapeAttribute(String(unitDraft?.speedRange?.[1] ?? 1))}" />
@@ -2111,8 +2112,8 @@
                             class="echoes-creator__raw-json"
                             placeholder='Paste a unit JSON object here...'
                         >${escapeHtml(state.creatorJsonInput || '')}</textarea>
-                    </details>
-                </div>
+                                                </details>
+                                            </div>
             `
             : '';
 
@@ -2124,7 +2125,7 @@
                         <button class="echoes-editor-workshop__action" type="button" data-action="creator-validate">${escapeHtml(LABELS.validate)}</button>
                         <button class="echoes-editor-workshop__action" type="button" data-action="creator-save-workshop">${escapeHtml(LABELS.bindToCollection)}</button>
                         <button class="echoes-editor-workshop__action echoes-editor-workshop__action--accent" type="button" data-action="creator-playtest">${escapeHtml(LABELS.trialRun)}</button>
-                    </div>
+                                        </div>
                     ${encounterBuilder?.renderEncounterBuilder(
                         battleDraft,
                         unitListForEncounter,
@@ -2142,8 +2143,8 @@
                             class="echoes-creator__raw-json"
                             placeholder='Paste a battle JSON object here...'
                         >${escapeHtml(state.creatorJsonInput || '')}</textarea>
-                    </details>
-                </div>
+                                    </details>
+                        </div>
             `
             : '';
 
@@ -2157,9 +2158,9 @@
                         <select class="echoes-editor-workshop__select" data-action="creator-status-template-pick">
                             <option value="">— Start from template —</option>
                             ${statusTemplates.map((template) => `<option value="${escapeAttribute(template.id)}">${escapeHtml(template.label)}</option>`).join('')}
-                        </select>
+                                                                </select>
                         <button class="echoes-editor-workshop__action echoes-editor-workshop__action--ghost" type="button" data-action="creator-status-apply-template">Use Template</button>
-                    </div>
+                                                            </div>
 
                     <p class="echoes-editor-workshop__tip">Forge a Status Effect: choose triggers, conditions, and outcomes — no JSON required for most effects.</p>
 
@@ -2167,30 +2168,30 @@
                         <div class="echoes-creator__field-row">
                             <label>Id</label>
                             <input data-action="creator-status-field" data-field="id" value="${escapeAttribute(String(statusView?.draft?.id || ''))}" />
-                        </div>
+                                                                    </div>
                         <div class="echoes-creator__field-row">
                             <label>Display name</label>
                             <input data-action="creator-status-field" data-field="name" value="${escapeAttribute(String(statusView?.draft?.name || statusView?.draft?.label || ''))}" />
-                        </div>
+                                                                    </div>
                         <div class="echoes-creator__field-row">
                             <label>Label (UI)</label>
                             <input data-action="creator-status-field" data-field="label" value="${escapeAttribute(String(statusView?.draft?.label || ''))}" />
-                        </div>
+                                                                </div>
                         <div class="echoes-creator__field-row">
                             <label>Icon path</label>
                             <input data-action="creator-status-field" data-field="iconPath" value="${escapeAttribute(String(statusView?.draft?.iconPath || ''))}" placeholder="assets/statuseffects/..." />
-                        </div>
-                    </div>
+                                                                    </div>
+                                                                </div>
 
                     <div class="echoes-creator__field-row">
                         <label>Description (shown to players)</label>
                         <textarea data-action="creator-status-field" data-field="description" rows="2">${escapeHtml(String(statusView?.draft?.description || ''))}</textarea>
-                    </div>
+                                                                    </div>
 
                     <div class="echoes-creator__field-row">
                         <label>Tags (comma separated)</label>
                         <input data-action="creator-status-tags" value="${escapeAttribute(statusTags)}" placeholder="buff, custom, damage" />
-                    </div>
+                                                                </div>
 
                     <details class="echoes-editor-workshop__details" open>
                         <summary class="echoes-editor-workshop__details-summary">Stack rules</summary>
@@ -2209,7 +2210,7 @@
                                     <div class="echoes-creator__field-row echoes-creator__field-row--2">
                                         <input data-action="creator-status-stack-field" data-bucket="potency" data-field="min" inputmode="numeric" value="${escapeAttribute(String(statusView?.potency?.min ?? 0))}" placeholder="Min" />
                                         <input data-action="creator-status-stack-field" data-bucket="potency" data-field="max" inputmode="numeric" value="${escapeAttribute(String(statusView?.potency?.max ?? 99))}" placeholder="Max" />
-                                    </div>
+                                                            </div>
                                 </fieldset>
                                 <fieldset class="echoes-creator__fieldset">
                                     <legend>Count</legend>
@@ -2220,15 +2221,15 @@
                                     <div class="echoes-creator__field-row echoes-creator__field-row--2">
                                         <input data-action="creator-status-stack-field" data-bucket="count" data-field="min" inputmode="numeric" value="${escapeAttribute(String(statusView?.count?.min ?? 0))}" placeholder="Min" />
                                         <input data-action="creator-status-stack-field" data-bucket="count" data-field="max" inputmode="numeric" value="${escapeAttribute(String(statusView?.count?.max ?? 99))}" placeholder="Max" />
-                                    </div>
+                                                </div>
                                 </fieldset>
-                            </div>
+                                            </div>
                             <label class="echoes-creator__checkbox">
                                 <input type="checkbox" data-action="creator-status-expire-count" ${statusView?.expireWhen?.countLte != null ? 'checked' : ''} />
                                 Expire when count reaches 0
                             </label>
-                        </div>
-                    </details>
+                                        </div>
+                                    </details>
 
                     <details class="echoes-editor-workshop__details" open>
                         <summary class="echoes-editor-workshop__details-summary">Behavior — triggers &amp; effects</summary>
@@ -2380,7 +2381,7 @@
                 bodyMarkup: `
                     <div class="echoes-drive__loading">
                         <p class="echoes-drive__preview-empty">Loading registered battle definitions...</p>
-                    </div>
+                        </div>
                 `,
                 footerMarkup: driveMenu.renderFooterNav('drive', escapeHtml),
             }) || `
@@ -2654,7 +2655,7 @@
         if (action === 'launch-selected-battle') {
             try {
                 if (isDebugBattleId(state.selectedBattleId)) {
-                    await initializeBattleHandler(state.selectedBattleId);
+                await initializeBattleHandler(state.selectedBattleId);
                     renderCombatScreen();
                     return;
                 }
@@ -2754,7 +2755,7 @@
             if (state.combatPhase === 'deploy') {
                 renderDeployScreen();
             } else {
-                renderBattleStartScreen();
+            renderBattleStartScreen();
             }
             return;
         }
@@ -2876,7 +2877,7 @@
                 state.creatorBattleDraftCache = cloneCreatorDraft(authoring);
                 state.creatorJsonInput = JSON.stringify(authoring, null, 2);
             } else {
-                state.creatorJsonInput = definition ? JSON.stringify(definition, null, 2) : '';
+            state.creatorJsonInput = definition ? JSON.stringify(definition, null, 2) : '';
             }
             setCreatorMessage('success', definition ? `Loaded ${entityType} "${entityId}".` : `Missing ${entityType} "${entityId}".`);
             renderCreatorScreen();
@@ -3837,8 +3838,8 @@
                     }
                 });
                 rerenderCreatorAfterUnitEdit();
-                return;
-            }
+                        return;
+                    }
 
             const scope = hookFieldTarget.dataset.creatorScope || null;
             const hookName = hookFieldTarget.dataset.hookName || null;
@@ -3915,30 +3916,38 @@
                 });
                 rerenderCreatorAfterUnitEdit();
             }
-            return;
-        }
+                        return;
+                    }
 
         const skillToggle = event.target.closest('[data-action="creator-unit-skill-toggle"]');
         if (skillToggle) {
             const index = Number(skillToggle.dataset.index);
             const field = skillToggle.dataset.field || null;
-            if (Number.isInteger(index) && field === 'showInPlanner') {
+            if (Number.isInteger(index) && field) {
                 updateCreatorUnitJson((draft) => {
                     draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
                     const skill = draft.skills[index];
                     if (!skill || typeof skill !== 'object') {
-                        return;
-                    }
-                    if (skillToggle.checked) {
-                        delete skill.showInPlanner;
-                    } else {
-                        skill.showInPlanner = false;
+                            return;
+                        }
+                    if (field === 'showInPlanner') {
+                        if (skillToggle.checked) {
+                            delete skill.showInPlanner;
+                        } else {
+                            skill.showInPlanner = false;
+                        }
+                    } else if (field === 'cannotClash' || field === 'skipDefenseSkills') {
+                        if (skillToggle.checked) {
+                            skill[field] = true;
+                        } else {
+                            delete skill[field];
+                        }
                     }
                 });
                 rerenderCreatorAfterUnitEdit();
             }
-            return;
-        }
+                        return;
+                    }
 
         const passiveReq = event.target.closest('[data-action="creator-passive-req"]');
         if (passiveReq) {
@@ -3949,8 +3958,8 @@
                     draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
                     const passive = draft.passives[index];
                     if (!passive || typeof passive !== 'object') {
-                        return;
-                    }
+                            return;
+                        }
                     passive.requirements = passive.requirements && typeof passive.requirements === 'object'
                         ? passive.requirements
                         : {};
@@ -4047,10 +4056,31 @@
                     if (!skill || typeof skill !== 'object') {
                         return;
                     }
-                    if (['id', 'name', 'damageType', 'sinType', 'skillType', 'description', 'skillSlot'].includes(field)) {
+                    if (['id', 'name', 'damageType', 'sinType', 'skillType', 'description', 'skillSlot', 'targeting', 'tags', 'unbreakableCoins'].includes(field)) {
+                        if (field === 'tags') {
+                            const trimmed = String(skillField.value ?? '').trim();
+                            if (!trimmed) {
+                                delete skill.tags;
+                            } else {
+                                skill.tags = trimmed.split(',').map((entry) => entry.trim()).filter(Boolean);
+                            }
+                            return;
+                        }
+                        if (field === 'unbreakableCoins') {
+                            const trimmed = String(skillField.value ?? '').trim();
+                            if (!trimmed) {
+                                delete skill.unbreakableCoins;
+                            } else {
+                                skill.unbreakableCoins = trimmed.split(',').map((entry) => Math.round(normalizeNumberInput(entry.trim(), 0))).filter((entry) => Number.isFinite(entry) && entry > 0);
+                                if (!skill.unbreakableCoins.length) {
+                                    delete skill.unbreakableCoins;
+                                }
+                            }
+                            return;
+                        }
                         skill[field] = normalizeStringInput(skillField.value, '');
-                        if (field === 'skillSlot' && !skill[field]) {
-                            delete skill.skillSlot;
+                        if ((field === 'skillSlot' || field === 'targeting') && !skill[field]) {
+                            delete skill[field];
                         }
                         return;
                     }

@@ -209,6 +209,7 @@
             defenseMode: false,
             skillOffer: { top: null, bottom: null },
             selectedOfferSlot: null,
+            aggroBonus: 0,
         };
     }
 
@@ -279,6 +280,7 @@
                     adjustEncounterResource,
                     gainShield,
                     clearShield,
+                    queueUnopposedFollowUp,
                 });
             }
 
@@ -430,7 +432,7 @@
             const hookContext = {
                 ...context,
                 unit: context?.unit || unit,
-                sourceUnit: context?.sourceUnit || context?.unit || unit,
+                sourceUnit: context?.sourceUnit || context?.actorUnit || context?.attackerUnit || context?.unit || unit,
                 opponent: context?.opponent || context?.targetUnit || null,
                 targetUnit: context?.targetUnit || context?.opponent || null,
             };
@@ -486,6 +488,120 @@
                 }
                 invokeHookDefinition(passive?.hooks?.[hookName], passive, 'passive');
             });
+        }
+
+        function broadcastHooks(targetBattle, hookName, context, options = {}) {
+            if (!targetBattle) {
+                return;
+            }
+
+            const { sideFilter, excludeUnitId } = options;
+            getAllUnits(targetBattle)
+                .filter((unit) => isUnitAlive(unit))
+                .filter((unit) => {
+                    if (excludeUnitId && unit.id === excludeUnitId) {
+                        return false;
+                    }
+                    if (sideFilter && unit.side !== sideFilter) {
+                        return false;
+                    }
+                    return true;
+                })
+                .forEach((listenerUnit) => {
+                    invokeHooks(listenerUnit, hookName, {
+                        ...context,
+                        battle: targetBattle,
+                        unit: listenerUnit,
+                        listenerUnit,
+                    });
+                });
+        }
+
+        function invokeAllyHooksForDefender(targetBattle, defender, hookName, context) {
+            if (!targetBattle || !defender) {
+                return;
+            }
+
+            const allies = getUnitsForSide(targetBattle, defender.side)
+                .filter((unit) => isUnitAlive(unit) && unit.id !== defender.id);
+            allies.forEach((ally) => {
+                invokeHooks(ally, hookName, {
+                    ...context,
+                    battle: targetBattle,
+                    unit: ally,
+                    listenerUnit: ally,
+                    defenderUnit: defender,
+                    allyUnit: defender,
+                });
+            });
+        }
+
+        function ensureQueuedFollowUps(targetBattle) {
+            if (!targetBattle.runtimeState || typeof targetBattle.runtimeState !== 'object') {
+                targetBattle.runtimeState = {};
+            }
+            if (!Array.isArray(targetBattle.runtimeState.queuedUnopposedFollowUps)) {
+                targetBattle.runtimeState.queuedUnopposedFollowUps = [];
+            }
+            return targetBattle.runtimeState.queuedUnopposedFollowUps;
+        }
+
+        function queueUnopposedFollowUp(targetBattle, attacker, defender, skillId) {
+            if (!targetBattle || !attacker || !defender || !skillId) {
+                return false;
+            }
+            ensureQueuedFollowUps(targetBattle).push({
+                attackerUnitId: attacker.id,
+                defenderUnitId: defender.id,
+                skillId,
+            });
+            return true;
+        }
+
+        function processQueuedUnopposedFollowUps(targetBattle) {
+            const queue = ensureQueuedFollowUps(targetBattle);
+            if (!queue.length) {
+                return [];
+            }
+
+            const entries = queue.slice();
+            targetBattle.runtimeState.queuedUnopposedFollowUps = [];
+            const presentations = [];
+
+            entries.forEach((entry) => {
+                if (targetBattle.winner) {
+                    return;
+                }
+                const attacker = getUnitById(targetBattle, entry.attackerUnitId);
+                const defender = getUnitById(targetBattle, entry.defenderUnitId);
+                if (!attacker || !defender || !isUnitAlive(attacker) || !isUnitAlive(defender)) {
+                    return;
+                }
+                const hits = resolveFollowUpSkill(targetBattle, attacker, defender, entry.skillId);
+                if (!hits.length) {
+                    return;
+                }
+                const followUpSkill = getSkillById(attacker, entry.skillId);
+                const totalDamage = hits.reduce((sum, hit) => sum + hit.damage, 0);
+                const attackerSlot = getSlotsForSide(targetBattle, attacker.side).find((slot) => slot.unitId === attacker.id) || null;
+                const defenderSlot = getSlotsForSide(targetBattle, defender.side).find((slot) => slot.unitId === defender.id) || null;
+                const presentation = createOneSidedPresentation(
+                    attackerSlot || { id: 'follow-up', side: attacker.side, index: 0 },
+                    defenderSlot || { id: 'follow-up-target', side: defender.side, index: 0 },
+                    attacker,
+                    defender,
+                    followUpSkill,
+                    hits,
+                    totalDamage,
+                );
+                targetBattle.resolutionHistory.push(presentation);
+                presentations.push(presentation);
+                if (!isUnitAlive(defender)) {
+                    markUnitDefeated(targetBattle, defender, attacker);
+                }
+            });
+
+            return presentations;
         }
 
         function pushBattleLog(targetBattle, message) {
@@ -1842,6 +1958,7 @@
                 refreshSpeedOrder,
                 ensureActivePlayerSlot,
                 burstTremor,
+                queueUnopposedFollowUp,
             })
             : (() => {});
 
@@ -2103,6 +2220,7 @@
                     })),
                 cancelled: Boolean(ammoResult.canceled),
                 cancelReason: ammoResult.reason || null,
+                primaryTargetUnit: targetUnit || null,
             };
             if (context.cancelled) {
                 return context;
@@ -2178,7 +2296,7 @@
         function applyAttackEndEffects(targetBattle, attacker, skill, attackContext) {
             applySkillEffects(targetBattle, 'onAttackEnd', {
                 sourceUnit: attacker,
-                targetUnit: null,
+                targetUnit: attackContext?.primaryTargetUnit || null,
                 skill,
                 attackContext,
             });
@@ -2187,7 +2305,22 @@
                 battle: targetBattle,
                 unit: attacker,
                 skill,
+                attackContext,
             });
+
+            broadcastHooks(targetBattle, 'allyAttackEnd', {
+                battle: targetBattle,
+                actorUnit: attacker,
+                sourceUnit: attacker,
+                skill,
+                attackContext,
+                targetUnit: attackContext?.primaryTargetUnit || null,
+            }, {
+                sideFilter: attacker.side,
+                excludeUnitId: attacker.id,
+            });
+
+            processQueuedUnopposedFollowUps(targetBattle);
         }
 
         function ensureDefenseState(slot) {
@@ -2273,6 +2406,15 @@
                 nextHp,
                 sourceUnitId: sourceUnit?.id || null,
                 sourceUnitName: sourceUnit?.name || null,
+            });
+            broadcastHooks(targetBattle, 'unitStaggered', {
+                battle: targetBattle,
+                staggeredUnit: unit,
+                sourceUnit: sourceUnit || null,
+                threshold: crossedThreshold,
+                staggerLevel: unit.staggerLevel,
+                previousHp,
+                nextHp,
             });
             return true;
         }
@@ -2652,6 +2794,28 @@
                 .join(', ');
         }
 
+        function getUnbreakableCoinIndices(skill, context) {
+            const fromSkill = Array.isArray(skill?.unbreakableCoins) ? skill.unbreakableCoins : [];
+            const fromContext = Array.isArray(context?.unbreakableCoins) ? context.unbreakableCoins : [];
+            return [...new Set([...fromSkill, ...fromContext].filter((value) => Number.isInteger(value) && value > 0))];
+        }
+
+        function decrementClashCoins(skill, context, currentCoins) {
+            if (currentCoins <= 0) {
+                return currentCoins;
+            }
+
+            const totalCoins = Math.max(0, (skill?.coinCount || 0) + (context?.coinCountBonus || 0));
+            const brokenCoins = totalCoins - currentCoins;
+            const activeCoinIndex = brokenCoins + 1;
+            const unbreakable = getUnbreakableCoinIndices(skill, context);
+            if (unbreakable.includes(activeCoinIndex)) {
+                return currentCoins;
+            }
+
+            return currentCoins - 1;
+        }
+
         function resolveClash(targetBattle, leftSlot, rightSlot, leftUnit, leftSkill, rightUnit, rightSkill, leftContext, rightContext) {
             let leftCoins = Math.max(0, (leftSkill.coinCount || 0) + (leftContext?.coinCountBonus || 0));
             let rightCoins = Math.max(0, (rightSkill.coinCount || 0) + (rightContext?.coinCountBonus || 0));
@@ -2686,7 +2850,7 @@
 
                     if (repeatedTieCount >= 6) {
                         if (leftSlot.speed >= rightSlot.speed) {
-                            rightCoins -= 1;
+                            rightCoins = decrementClashCoins(rightSkill, rightContext, rightCoins);
                             rounds.push({
                                 result: 'left-speed-break',
                                 leftPower,
@@ -2704,7 +2868,7 @@
                                 rightFlips: formatCoinFlips(rightRoll.flips),
                             });
                         } else {
-                            leftCoins -= 1;
+                            leftCoins = decrementClashCoins(leftSkill, leftContext, leftCoins);
                             rounds.push({
                                 result: 'right-speed-break',
                                 leftPower,
@@ -2730,7 +2894,7 @@
                 repeatedTieCount = 0;
 
                 if (leftPower > rightPower) {
-                    rightCoins -= 1;
+                    rightCoins = decrementClashCoins(rightSkill, rightContext, rightCoins);
                     rounds.push({
                         result: 'left-win',
                         leftPower,
@@ -2751,7 +2915,7 @@
                         rightFlips: formatCoinFlips(rightRoll.flips),
                     });
                 } else {
-                    leftCoins -= 1;
+                    leftCoins = decrementClashCoins(leftSkill, leftContext, leftCoins);
                     rounds.push({
                         result: 'right-win',
                         leftPower,
@@ -3420,9 +3584,35 @@
             const actingSkill = getSkillById(actingUnit, actingSlot.selectedSkillId);
             const attackContext = actingSlot.attackContext || createSkillContext(targetBattle, actingUnit, actingSlot, actingSkill, targetUnit);
             actingSlot.attackContext = attackContext;
-            const defendingSkill = getActiveDefenseSkill(targetBattle, targetSlot, actingSlot);
+            const skipDefenseSkills = Boolean(actingSkill?.cannotClash || actingSkill?.skipDefenseSkills);
+            const defendingSkill = skipDefenseSkills
+                ? null
+                : getActiveDefenseSkill(targetBattle, targetSlot, actingSlot);
             const defendContext = { damageReductionMultiplier: 1, damageReductionFlat: 0 };
             const defenseState = ensureDefenseState(targetSlot);
+
+            invokeAllyHooksForDefender(targetBattle, targetUnit, 'beforeAllyOneSidedAttack', {
+                battle: targetBattle,
+                attackerUnit: actingUnit,
+                defenderUnit: targetUnit,
+                skill: actingSkill,
+                attackContext,
+                actingSlot,
+                targetSlot,
+            });
+
+            if (attackContext.cancelled) {
+                emitEvent(targetBattle, 'engagement_started', {
+                    engagementType: 'one-sided',
+                    attackerName: actingUnit.name,
+                    defenderName: targetUnit.name,
+                    skillName: actingSkill.name,
+                });
+                if (!options.skipAttackEnd) {
+                    applyAttackEndEffects(targetBattle, actingUnit, actingSkill, attackContext);
+                }
+                return;
+            }
 
             emitEvent(targetBattle, 'engagement_started', {
                 engagementType: 'one-sided',
@@ -3695,9 +3885,10 @@
                 .filter((candidate) => isSlotAlive(currentBattle, candidate))
                 .map((candidate) => {
                     const unit = getUnitById(currentBattle, candidate.unitId);
+                    const slotAggro = Number.isFinite(candidate.aggroBonus) ? candidate.aggroBonus : 0;
                     return {
                         slot: candidate,
-                        weightBonus: Math.max(0, getAiTargetWeightBonus(unit)),
+                        weightBonus: Math.max(0, getAiTargetWeightBonus(unit)) + Math.max(0, slotAggro),
                     };
                 });
 
@@ -4724,12 +4915,21 @@
 
             const candidates = getSlotsForSide(targetBattle, opponentSide)
                 .filter((candidate) => candidate?.id && isSlotAlive(targetBattle, candidate) && candidate.id !== primaryTargetSlot.id);
-            candidates.sort((left, right) => {
-                if (right.speed !== left.speed) {
-                    return right.speed - left.speed;
+            if (skill?.targeting === 'indiscriminate') {
+                for (let index = candidates.length - 1; index > 0; index -= 1) {
+                    const swapIndex = Math.floor(Math.random() * (index + 1));
+                    const temp = candidates[index];
+                    candidates[index] = candidates[swapIndex];
+                    candidates[swapIndex] = temp;
                 }
-                return left.index - right.index;
-            });
+            } else {
+                candidates.sort((left, right) => {
+                    if (right.speed !== left.speed) {
+                        return right.speed - left.speed;
+                    }
+                    return left.index - right.index;
+                });
+            }
 
             const untargeted = candidates.filter((candidate) => !targetedBySide.has(candidate.id));
             const alreadyTargeted = candidates.filter((candidate) => targetedBySide.has(candidate.id));
@@ -4961,6 +5161,7 @@
                 const targetSkill = targetSlot.selectedSkillId ? getSkillById(targetUnit, targetSlot.selectedSkillId) : null;
 
                 const mutualTarget = (
+                    !actingSkill?.cannotClash &&
                     !targetSlot.resolved &&
                     targetSlot.targetSlotId === slot.id &&
                     Boolean(targetSlot.selectedSkillId) &&

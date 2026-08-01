@@ -56,6 +56,15 @@
         'mirrorOpponent',
     ]);
     const HOOK_BLOCK_ONCE_PER = new Set(['battle', 'turn', 'skill', 'coin']);
+    const HOOK_CONDITION_TARGETS = new Set([
+        'self',
+        'opponent',
+        'allyUnit',
+        'defenderUnit',
+        'attackerUnit',
+        'actorUnit',
+        'staggeredUnit',
+    ]);
     const EFFECT_TARGETS = new Set([
         'self',
         'opponent',
@@ -67,6 +76,12 @@
         'lowestHpAlly',
         'highestHpOpponent',
         'lowestHpOpponent',
+        'eventDefender',
+        'eventAttacker',
+        'attacker',
+        'defender',
+        'staggeredUnit',
+        'eventStaggered',
     ]);
     const HOOK_CONDITION_TYPES = new Set([
         'always',
@@ -112,10 +127,19 @@
         'panicValueAtOrBelow',
         'waveAtLeast',
         'waveAtOrBelow',
+        'turnAtLeast',
+        'turnAtOrBelow',
         'resonanceAtLeast',
         'resonanceAtOrBelow',
         'absoluteResonanceAtLeast',
         'absoluteResonanceAtOrBelow',
+        'eventStaggeredUnitSideIs',
+        'eventStaggeredUnitIsSelf',
+        'eventSourceSideIs',
+        'eventActorSideIs',
+        'eventActorIsAlly',
+        'skillSlotIs',
+        'eventSkillSlotIs',
     ]);
 
     function cloneDefinition(definition) {
@@ -504,8 +528,8 @@
             return;
         }
 
-        if (condition.target != null && !['self', 'opponent'].includes(condition.target)) {
-            pushError(errors, `${path}.target`, 'must be "self" or "opponent" when provided.');
+        if (condition.target != null && !HOOK_CONDITION_TARGETS.has(condition.target)) {
+            pushError(errors, `${path}.target`, 'must be a supported hook condition target when provided.');
         }
 
         switch (condition.type) {
@@ -946,9 +970,11 @@
         case 'setWave':
         case 'spawnWave':
         case 'advanceWave':
-            if (effect.type !== 'clearShield' && effect.amount != null) {
+        case 'amplitudeConvert':
+        case 'cancelAttack':
+            if (effect.type !== 'clearShield' && effect.type !== 'burstTremor' && effect.type !== 'amplitudeConvert' && effect.type !== 'cancelAttack' && effect.amount != null) {
                 validateAmountDefinition(errors, effect.amount, `${path}.amount`);
-            } else if (effect.type !== 'clearShield' && !isFiniteNumber(effect.value)) {
+            } else if (effect.type !== 'clearShield' && effect.type !== 'burstTremor' && effect.type !== 'amplitudeConvert' && effect.type !== 'cancelAttack' && !isFiniteNumber(effect.value)) {
                 pushError(errors, `${path}.value`, 'must be a number.');
             }
             if (effect.reason != null && typeof effect.reason !== 'string') {
@@ -1414,9 +1440,41 @@
         case 'setFollowUpSkill':
             if (!effect.skillId || typeof effect.skillId !== 'string') {
                 pushError(errors, `${path}.skillId`, 'must be a non-empty string.');
-            } else if (!unitSkillIds.has(effect.skillId)) {
+            } else if (unitSkillIds.size > 0 && !unitSkillIds.has(effect.skillId)) {
                 pushError(errors, `${path}.skillId`, 'must reference another skill on the same unit.');
             }
+            break;
+        case 'queueUnopposedFollowUp':
+            if (!effect.skillId || typeof effect.skillId !== 'string') {
+                pushError(errors, `${path}.skillId`, 'must be a non-empty string.');
+            } else if (unitSkillIds.size > 0 && !unitSkillIds.has(effect.skillId)) {
+                pushError(errors, `${path}.skillId`, 'must reference another skill on the same unit.');
+            }
+            break;
+        case 'amplitudeConvert':
+            if (effect.fromStatusId != null && typeof effect.fromStatusId !== 'string') {
+                pushError(errors, `${path}.fromStatusId`, 'must be a string when provided.');
+            }
+            if (effect.toStatusId != null && typeof effect.toStatusId !== 'string') {
+                pushError(errors, `${path}.toStatusId`, 'must be a string when provided.');
+            }
+            break;
+        case 'grantSkillOffer':
+            if (!effect.skillId || typeof effect.skillId !== 'string') {
+                pushError(errors, `${path}.skillId`, 'must be a non-empty string.');
+            } else if (unitSkillIds.size > 0 && !unitSkillIds.has(effect.skillId)) {
+                pushError(errors, `${path}.skillId`, 'must reference another skill on the same unit.');
+            }
+            if (effect.offerLane != null && effect.offerLane !== 'top' && effect.offerLane !== 'bottom') {
+                pushError(errors, `${path}.offerLane`, 'must be "top" or "bottom" when provided.');
+            }
+            break;
+        case 'adjustSlotAggro':
+            if (!isFiniteNumber(effect.value)) {
+                pushError(errors, `${path}.value`, 'must be a number.');
+            }
+            break;
+        case 'cancelAttack':
             break;
         case 'modifyPhysicalResistance':
             if (!effect.damageType || !PHYSICAL_DAMAGE_TYPES.has(effect.damageType)) {
@@ -1496,6 +1554,37 @@
         }
         if (skill.attackWeight != null && (!Number.isInteger(skill.attackWeight) || skill.attackWeight <= 0)) {
             pushError(errors, `${path}.attackWeight`, 'must be a positive integer when provided.');
+        }
+        if (skill.cannotClash != null && typeof skill.cannotClash !== 'boolean') {
+            pushError(errors, `${path}.cannotClash`, 'must be a boolean when provided.');
+        }
+        if (skill.skipDefenseSkills != null && typeof skill.skipDefenseSkills !== 'boolean') {
+            pushError(errors, `${path}.skipDefenseSkills`, 'must be a boolean when provided.');
+        }
+        if (skill.targeting != null && typeof skill.targeting !== 'string') {
+            pushError(errors, `${path}.targeting`, 'must be a string when provided.');
+        }
+        if (skill.unbreakableCoins != null) {
+            if (!Array.isArray(skill.unbreakableCoins)) {
+                pushError(errors, `${path}.unbreakableCoins`, 'must be an array of positive integers when provided.');
+            } else {
+                skill.unbreakableCoins.forEach((coinIndex, index) => {
+                    if (!Number.isInteger(coinIndex) || coinIndex <= 0) {
+                        pushError(errors, `${path}.unbreakableCoins[${index}]`, 'must be a positive integer.');
+                    }
+                });
+            }
+        }
+        if (skill.tags != null) {
+            if (!Array.isArray(skill.tags)) {
+                pushError(errors, `${path}.tags`, 'must be an array of strings when provided.');
+            } else {
+                skill.tags.forEach((tag, index) => {
+                    if (typeof tag !== 'string' || !tag.trim()) {
+                        pushError(errors, `${path}.tags[${index}]`, 'must be a non-empty string.');
+                    }
+                });
+            }
         }
         if (skill.skillSlot != null && typeof skill.skillSlot !== 'string') {
             pushError(errors, `${path}.skillSlot`, 'must be a string when provided.');

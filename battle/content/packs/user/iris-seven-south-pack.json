@@ -1,0 +1,774 @@
+{
+  "manifest": {
+    "id": "iris-seven-south-pack",
+    "name": "Iris (Seven Association South)",
+    "version": "1.0.0",
+    "engineVersion": "dev",
+    "authors": ["Echoes of the City"],
+    "description": "Full Iris combat kit: stances, Concealed Exoskeleton, Reading, reactive S1-2 follow-up, tremor amplitude, and planner variants.",
+    "dependencies": [],
+    "featureFlags": {}
+  },
+  "statuses": [
+    {
+      "id": "tremor_gnaw",
+      "label": "Tremor - Gnaw",
+      "description": "Amplitude-converted Tremor. Tremor Burst deals combined Tremor and Rupture potency.",
+      "stackModel": {
+        "potency": { "enabled": true, "min": 0, "max": 99, "application": "add" },
+        "count": { "enabled": true, "min": 0, "max": 99, "application": "add" },
+        "expireWhen": { "countLte": 0 }
+      },
+      "burstMultiplierByStatusId": { "rupture": 1 }
+    },
+    {
+      "id": "iris_analyzing_weakness",
+      "label": "Analyzing Weakness",
+      "description": "Marked for Iris's analysis. Iris skills gain bonus power against this target.",
+      "countOnly": true,
+      "stackModel": {
+        "count": { "enabled": true, "min": 0, "max": 10, "application": "add" },
+        "expireWhen": { "countLte": 0 }
+      },
+      "hooks": {}
+    },
+    {
+      "id": "iris_reading",
+      "label": "Reading...",
+      "description": "Tracks combat analysis. At 12 Count, grants Prod the Weakness for this turn.",
+      "countOnly": true,
+      "stackModel": {
+        "count": { "enabled": true, "min": 0, "max": 12, "application": "add" },
+        "expireWhen": { "countLte": 0 }
+      },
+      "hooks": {
+        "statusChanged": [
+          {
+            "conditions": [
+              { "type": "eventStatusIdIs", "value": "iris_reading" },
+              { "type": "statusCountAtLeast", "target": "self", "statusId": "iris_reading", "value": 12 }
+            ],
+            "actions": [
+              {
+                "type": "grantSkillOffer",
+                "target": "self",
+                "skillId": "prod-the-weakness",
+                "offerLane": "top"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "iris_concealed_exoskeleton",
+      "label": "Concealed Exoskeleton",
+      "description": "Charge stacks. Maintains shield worth 3 HP per stack; shield break removes 1 stack.",
+      "countOnly": true,
+      "stackModel": {
+        "count": { "enabled": true, "min": 0, "max": 20, "application": "add" },
+        "expireWhen": { "countLte": 0 }
+      },
+      "hooks": {
+        "statusApplied": [
+          {
+            "conditions": [{ "type": "eventStatusIdIs", "value": "iris_concealed_exoskeleton" }],
+            "actions": [
+              {
+                "type": "gainShield",
+                "target": "self",
+                "shieldId": "iris_concealed_shield",
+                "operation": "set",
+                "stackSize": 3,
+                "expiresAt": "turnEnd",
+                "linkedStatusId": "iris_concealed_exoskeleton",
+                "linkedStatusCountDeltaOnBreak": -1,
+                "amount": {
+                  "statusCount": { "target": "self", "statusId": "iris_concealed_exoskeleton" },
+                  "multiplier": 3
+                }
+              }
+            ]
+          }
+        ],
+        "statusChanged": [
+          {
+            "conditions": [{ "type": "eventStatusIdIs", "value": "iris_concealed_exoskeleton" }],
+            "actions": [
+              {
+                "type": "gainShield",
+                "target": "self",
+                "shieldId": "iris_concealed_shield",
+                "operation": "set",
+                "stackSize": 3,
+                "expiresAt": "turnEnd",
+                "linkedStatusId": "iris_concealed_exoskeleton",
+                "linkedStatusCountDeltaOnBreak": -1,
+                "amount": {
+                  "statusCount": { "target": "self", "statusId": "iris_concealed_exoskeleton" },
+                  "multiplier": 3
+                }
+              }
+            ]
+          }
+        ],
+        "turnStart": [
+          {
+            "type": "gainShield",
+            "target": "self",
+            "shieldId": "iris_concealed_shield",
+            "operation": "set",
+            "stackSize": 3,
+            "expiresAt": "turnEnd",
+            "linkedStatusId": "iris_concealed_exoskeleton",
+            "linkedStatusCountDeltaOnBreak": -1,
+            "amount": {
+              "statusCount": { "target": "self", "statusId": "iris_concealed_exoskeleton" },
+              "multiplier": 3
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "iris_irritation",
+      "label": "Irritation",
+      "description": "Drives stance strength. At 4 Count, Calm down and focus... replaces Impenetrable Defense.",
+      "countOnly": true,
+      "stackModel": {
+        "count": { "enabled": true, "min": 0, "max": 4, "application": "add" },
+        "expireWhen": { "countLte": 0 }
+      },
+      "hooks": {}
+    },
+    {
+      "id": "iris_guarded_stance",
+      "label": "Guarded Stance",
+      "description": "Defensive stance keyed to Irritation tiers.",
+      "countOnly": true,
+      "stackModel": {
+        "count": { "enabled": true, "min": 0, "max": 1, "application": "set" },
+        "expireWhen": { "countLte": 0 }
+      },
+      "hooks": {}
+    },
+    {
+      "id": "iris_aggressive_stance",
+      "label": "Aggressive Stance",
+      "description": "Offensive stance keyed to Irritation tiers.",
+      "countOnly": true,
+      "stackModel": {
+        "count": { "enabled": true, "min": 0, "max": 1, "application": "set" },
+        "expireWhen": { "countLte": 0 }
+      },
+      "hooks": {}
+    },
+    {
+      "id": "iris_assembly_progress",
+      "label": "Assembly Progress",
+      "description": "Non-decaying weapon assembly track. At 20, grants Modular-Weapon Max Potential.",
+      "countOnly": true,
+      "stackModel": {
+        "count": { "enabled": true, "min": 0, "max": 20, "application": "add" },
+        "expireWhen": { "countLte": 0 }
+      },
+      "hooks": {
+        "statusChanged": [
+          {
+            "conditions": [
+              { "type": "eventStatusIdIs", "value": "iris_assembly_progress" },
+              { "type": "statusCountAtLeast", "target": "self", "statusId": "iris_assembly_progress", "value": 20 }
+            ],
+            "actions": [
+              {
+                "type": "grantSkillOffer",
+                "target": "self",
+                "skillId": "modular-weapon-max",
+                "offerLane": "top"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "iris_fitted_plating",
+      "label": "Fitted Plating",
+      "description": "Permanent defense upgrade from Assembly Progress.",
+      "countOnly": true,
+      "stackModel": {
+        "count": { "enabled": true, "min": 0, "max": 1, "application": "set" },
+        "expireWhen": { "countLte": 0 }
+      },
+      "hooks": {}
+    },
+    {
+      "id": "iris_locked_plating",
+      "label": "Locked Plating",
+      "description": "Permanent shield rule upgrade; unlocks S3-2 in planner.",
+      "countOnly": true,
+      "stackModel": {
+        "count": { "enabled": true, "min": 0, "max": 1, "application": "set" },
+        "expireWhen": { "countLte": 0 }
+      },
+      "hooks": {}
+    }
+  ],
+  "units": [
+    {
+      "id": "iris-seven-south",
+      "name": "Iris",
+      "level": 45,
+      "maxHp": 110,
+      "sp": 0,
+      "speedRange": [2, 8],
+      "defenseLevel": 40,
+      "staggerThresholds": [0.6, 0.2],
+      "resistances": {
+        "physical": { "slash": 1, "pierce": 2, "blunt": 0.5 },
+        "sin": {
+          "wrath": 1, "lust": 1, "sloth": 1, "gluttony": 1,
+          "gloom": 1, "pride": 1, "envy": 1
+        }
+      },
+      "passives": [
+        {
+          "id": "iris-fraying-patience",
+          "name": "Fraying Patience",
+          "description": "Turn 3+: gain Irritation. Enter Guarded or Aggressive stance based on Irritation tier.",
+          "hooks": {
+            "turnStart": [
+              {
+                "conditions": [{ "type": "turnAtLeast", "value": 3 }],
+                "actions": [
+                  { "type": "adjustStatus", "target": "self", "statusId": "iris_irritation", "countDelta": 1 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "iris-unseen-defense",
+          "name": "Unseen Defense",
+          "description": "On hit, gain Concealed Exoskeleton (rate capped). Assembly Progress upgrades plating.",
+          "hooks": {
+            "hitTaken": [
+              {
+                "oncePer": "turn",
+                "actions": [
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_concealed_exoskeleton",
+                    "countDelta": 1
+                  },
+                  {
+                    "type": "adjustStatus",
+                    "target": "self",
+                    "statusId": "iris_assembly_progress",
+                    "countDelta": 1
+                  }
+                ]
+              }
+            ],
+            "statusChanged": [
+              {
+                "conditions": [
+                  { "type": "eventStatusIdIs", "value": "iris_assembly_progress" },
+                  { "type": "statusCountAtLeast", "target": "self", "statusId": "iris_assembly_progress", "value": 10 }
+                ],
+                "actions": [
+                  { "type": "applyStatus", "target": "self", "statusId": "iris_fitted_plating", "count": 1 }
+                ]
+              },
+              {
+                "conditions": [
+                  { "type": "eventStatusIdIs", "value": "iris_assembly_progress" },
+                  { "type": "statusCountAtLeast", "target": "self", "statusId": "iris_assembly_progress", "value": 15 }
+                ],
+                "actions": [
+                  { "type": "applyStatus", "target": "self", "statusId": "iris_locked_plating", "count": 1 },
+                  {
+                    "type": "grantSkillOffer",
+                    "target": "self",
+                    "skillId": "modular-weapon-max",
+                    "offerLane": "top"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "iris-broken-frame-standing",
+          "name": "Broken Frame, Standing",
+          "description": "Once per encounter, recover from stagger by spending Concealed stacks.",
+          "hooks": {
+            "unitStaggered": [
+              {
+                "oncePer": "battle",
+                "conditions": [
+                  { "type": "eventStaggeredUnitIsSelf", "value": true },
+                  { "type": "statusCountAtLeast", "target": "self", "statusId": "iris_concealed_exoskeleton", "value": 3 }
+                ],
+                "actions": [
+                  { "type": "adjustStatus", "target": "self", "statusId": "iris_concealed_exoskeleton", "countDelta": -3 },
+                  { "type": "applyStatus", "target": "self", "statusId": "iris_aggressive_stance", "count": 1 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "iris-dont-thank-me",
+          "name": "...Don't thank me.",
+          "description": "Once per turn: ally Skill 3 or ally stagger on enemy queues unopposed Fall back, I got you~! Staggered ally targeted by unopposed attack can cancel it and counter.",
+          "hooks": {
+            "allyAttackEnd": [
+              {
+                "oncePer": "turn",
+                "conditions": [{ "type": "eventSkillSlotIs", "value": "slot-3" }],
+                "actions": [
+                  {
+                    "type": "queueUnopposedFollowUp",
+                    "skillId": "fall-back-i-got-you",
+                    "target": "eventDefender"
+                  }
+                ]
+              }
+            ],
+            "unitStaggered": [
+              {
+                "oncePer": "turn",
+                "conditions": [
+                  { "type": "eventStaggeredUnitSideIs", "value": "enemy" },
+                  { "type": "eventSourceSideIs", "value": "player" }
+                ],
+                "actions": [
+                  {
+                    "type": "queueUnopposedFollowUp",
+                    "skillId": "fall-back-i-got-you",
+                    "target": "staggeredUnit"
+                  }
+                ]
+              }
+            ],
+            "beforeAllyOneSidedAttack": [
+              {
+                "oncePer": "turn",
+                "conditions": [
+                  { "type": "targetStaggered", "target": "allyUnit", "value": true }
+                ],
+                "actions": [
+                  { "type": "cancelAttack" },
+                  {
+                    "type": "queueUnopposedFollowUp",
+                    "skillId": "fall-back-i-got-you",
+                    "target": "attacker"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "iris-probing-weaknesses",
+          "name": "Probing for Weaknesses",
+          "description": "Mark highest Max HP enemy with Analyzing Weakness. Gain Reading on hit.",
+          "hooks": {
+            "battleStart": [
+              {
+                "actions": [
+                  {
+                    "type": "applyStatus",
+                    "target": "highestHpOpponent",
+                    "statusId": "iris_analyzing_weakness",
+                    "count": 1
+                  }
+                ]
+              }
+            ],
+            "hitDealt": [
+              {
+                "actions": [
+                  { "type": "adjustStatus", "target": "self", "statusId": "iris_reading", "countDelta": 1 }
+                ]
+              }
+            ],
+            "unitStaggered": [
+              {
+                "conditions": [{ "type": "eventStaggeredUnitSideIs", "value": "enemy" }],
+                "actions": [
+                  {
+                    "type": "applyStatus",
+                    "target": "highestHpOpponent",
+                    "statusId": "iris_analyzing_weakness",
+                    "count": 1
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "sprites": {
+        "idle": "assets/debugsprites/Vergilius_Idle_Sprite.png",
+        "skills": {
+          "predictive-cuts": "assets/debugsprites/Vergilius_Skill_1.gif",
+          "dissective-frame": "assets/debugsprites/Vergilius_Skill_2.gif",
+          "full-extension-oscillate": "assets/debugsprites/Vergilius_Skill_3.gif",
+          "impenetrable-defense": "assets/debugsprites/Vergilius_Skill_3.gif"
+        }
+      },
+      "skills": [
+        {
+          "id": "fall-back-i-got-you",
+          "name": "Fall back, I got you~!",
+          "skillType": "attack",
+          "showInPlanner": false,
+          "cannotClash": true,
+          "skipDefenseSkills": true,
+          "basePower": 10,
+          "coinPower": 4,
+          "coinCount": 2,
+          "damageType": "slash",
+          "sinType": "sloth",
+          "effects": [],
+          "description": "Unclashable unopposed follow-up triggered by ...Don't thank me."
+        },
+        {
+          "id": "predictive-cuts",
+          "name": "Predictive Cuts",
+          "skillSlot": "slot-1",
+          "skillType": "attack",
+          "basePower": 8,
+          "coinPower": 3,
+          "coinCount": 3,
+          "damageType": "slash",
+          "sinType": "sloth",
+          "effects": [
+            {
+              "trigger": "onHit",
+              "type": "applyStatus",
+              "statusId": "tremor",
+              "potency": 3,
+              "count": 1,
+              "coinIndex": 1
+            },
+            {
+              "trigger": "onAttackEnd",
+              "type": "adjustSlotAggro",
+              "target": "self",
+              "value": 3
+            }
+          ],
+          "description": "Skill 1. Tremor coin; +3 Aggro to this slot next turn."
+        },
+        {
+          "id": "dissective-frame",
+          "name": "Dissective Frame",
+          "skillSlot": "slot-2",
+          "variantPriority": 0,
+          "skillType": "attack",
+          "basePower": 9,
+          "coinPower": 3,
+          "coinCount": 3,
+          "damageType": "pierce",
+          "sinType": "gloom",
+          "effects": [
+            {
+              "trigger": "onHit",
+              "type": "applyStatus",
+              "statusId": "rupture",
+              "potency": 2,
+              "count": 1,
+              "coinIndex": 2
+            },
+            {
+              "trigger": "onAttackEnd",
+              "type": "adjustSlotAggro",
+              "target": "self",
+              "value": 3
+            }
+          ],
+          "description": "Skill 2 base. Rupture coin."
+        },
+        {
+          "id": "prod-the-weakness",
+          "name": "Prod the Weakness",
+          "skillSlot": "slot-2",
+          "variantPriority": 2,
+          "variantConditions": [
+            {
+              "type": "statusCountAtLeast",
+              "target": "self",
+              "statusId": "iris_reading",
+              "value": 12
+            }
+          ],
+          "skillType": "attack",
+          "basePower": 14,
+          "coinPower": 5,
+          "coinCount": 3,
+          "damageType": "pierce",
+          "sinType": "gloom",
+          "unbreakableCoins": [2, 3],
+          "effects": [
+            {
+              "trigger": "onHit",
+              "type": "amplitudeConvert",
+              "fromStatusId": "tremor",
+              "toStatusId": "tremor_gnaw"
+            },
+            {
+              "trigger": "onAttackEnd",
+              "type": "adjustSlotAggro",
+              "target": "self",
+              "value": 5
+            }
+          ],
+          "description": "Skill 2-2. Reading 12 gate. Amplitude conversion; unbreakable coins 2-3."
+        },
+        {
+          "id": "full-extension-oscillate",
+          "name": "Full Extension - Oscillate",
+          "skillSlot": "slot-3",
+          "tags": ["skill-3"],
+          "variantPriority": 0,
+          "skillType": "attack",
+          "basePower": 12,
+          "coinPower": 4,
+          "coinCount": 4,
+          "damageType": "slash",
+          "sinType": "wrath",
+          "effects": [
+            {
+              "trigger": "onHit",
+              "type": "burstTremor",
+              "coinIndex": 3
+            },
+            {
+              "trigger": "onAttackEnd",
+              "type": "adjustSlotAggro",
+              "target": "self",
+              "value": 5
+            }
+          ],
+          "description": "Skill 3. Tremor burst on coin 3."
+        },
+        {
+          "id": "modular-weapon-max",
+          "name": "Modular-Weapon Max Potential",
+          "skillSlot": "slot-3",
+          "tags": ["skill-3"],
+          "variantPriority": 2,
+          "variantConditions": [
+            {
+              "type": "statusCountAtLeast",
+              "target": "self",
+              "statusId": "iris_locked_plating",
+              "value": 1
+            }
+          ],
+          "skillType": "attack",
+          "basePower": 16,
+          "coinPower": 5,
+          "coinCount": 4,
+          "damageType": "slash",
+          "sinType": "wrath",
+          "effects": [
+            {
+              "trigger": "onHit",
+              "type": "amplitudeConvert",
+              "fromStatusId": "tremor",
+              "toStatusId": "tremor_gnaw"
+            },
+            {
+              "trigger": "onAttackEnd",
+              "type": "adjustSlotAggro",
+              "target": "self",
+              "value": 5
+            }
+          ],
+          "description": "Skill 3-2. Locked Plating gate."
+        },
+        {
+          "id": "impenetrable-defense",
+          "name": "Impenetrable Defense",
+          "skillSlot": "defense",
+          "variantPriority": 0,
+          "skillType": "guard",
+          "basePower": 8,
+          "coinPower": 2,
+          "coinCount": 1,
+          "damageType": "slash",
+          "sinType": "pride",
+          "effects": [
+            {
+              "trigger": "onSelect",
+              "type": "applyStatus",
+              "target": "self",
+              "statusId": "iris_guarded_stance",
+              "count": 1
+            }
+          ],
+          "description": "Defense skill. Enter Guarded Stance."
+        },
+        {
+          "id": "calm-down-focus",
+          "name": "Calm down and focus...",
+          "skillSlot": "defense",
+          "variantPriority": 2,
+          "variantConditions": [
+            {
+              "type": "statusCountAtLeast",
+              "target": "self",
+              "statusId": "iris_irritation",
+              "value": 4
+            }
+          ],
+          "skillType": "guard",
+          "basePower": 10,
+          "coinPower": 3,
+          "coinCount": 1,
+          "damageType": "slash",
+          "sinType": "pride",
+          "effects": [
+            {
+              "trigger": "onSelect",
+              "type": "applyStatus",
+              "target": "self",
+              "statusId": "iris_guarded_stance",
+              "count": 1
+            },
+            {
+              "trigger": "onSelect",
+              "type": "adjustStatus",
+              "target": "self",
+              "statusId": "iris_irritation",
+              "countDelta": -2
+            }
+          ],
+          "description": "Defense variant at 4 Irritation."
+        },
+        {
+          "id": "dissect-distend",
+          "name": "Dissect, Distend",
+          "skillType": "attack",
+          "panicSkill": true,
+          "targeting": "indiscriminate",
+          "attackWeight": 4,
+          "basePower": 14,
+          "coinPower": 5,
+          "coinCount": 4,
+          "damageType": "slash",
+          "sinType": "gloom",
+          "effects": [
+            {
+              "trigger": "onHit",
+              "type": "amplitudeConvert",
+              "fromStatusId": "tremor",
+              "toStatusId": "tremor_gnaw"
+            },
+            {
+              "trigger": "onHit",
+              "type": "burstTremor",
+              "coinIndex": 4
+            }
+          ],
+          "description": "Panic skill. Indiscriminate AoE, Attack Weight 4."
+        }
+      ]
+    },
+    {
+      "id": "iris-test-ally-s3",
+      "name": "Iris Test Ally",
+      "level": 1,
+      "maxHp": 80,
+      "sp": 0,
+      "speedRange": [5, 5],
+      "staggerThresholds": [],
+      "resistances": {
+        "physical": { "slash": 1, "pierce": 1, "blunt": 1 },
+        "sin": {
+          "wrath": 1, "lust": 1, "sloth": 1, "gluttony": 1,
+          "gloom": 1, "pride": 1, "envy": 1
+        }
+      },
+      "passives": [],
+      "sprites": { "idle": "assets/debugsprites/Vergilius_Idle_Sprite.png", "skills": {} },
+      "skills": [
+        {
+          "id": "ally-extension",
+          "name": "Ally Extension",
+          "skillSlot": "slot-3",
+          "tags": ["skill-3"],
+          "skillType": "attack",
+          "basePower": 5,
+          "coinPower": 1,
+          "coinCount": 1,
+          "damageType": "slash",
+          "sinType": "wrath",
+          "effects": []
+        },
+        {
+          "id": "ally-poke",
+          "name": "Ally Poke",
+          "skillType": "attack",
+          "basePower": 1,
+          "coinPower": 0,
+          "coinCount": 1,
+          "damageType": "slash",
+          "sinType": "wrath",
+          "effects": []
+        }
+      ]
+    },
+    {
+      "id": "iris-test-enemy",
+      "name": "Iris Test Enemy",
+      "level": 1,
+      "maxHp": 50,
+      "sp": 0,
+      "speedRange": [1, 1],
+      "staggerThresholds": [0.6],
+      "resistances": {
+        "physical": { "slash": 1, "pierce": 1, "blunt": 1 },
+        "sin": {
+          "wrath": 1, "lust": 1, "sloth": 1, "gluttony": 1,
+          "gloom": 1, "pride": 1, "envy": 1
+        }
+      },
+      "passives": [],
+      "sprites": { "idle": "assets/debugsprites/Vergilius_Idle_Sprite.png", "skills": {} },
+      "skills": [
+        {
+          "id": "enemy-wait",
+          "name": "Wait",
+          "skillType": "attack",
+          "basePower": 1,
+          "coinPower": 0,
+          "coinCount": 1,
+          "damageType": "slash",
+          "sinType": "wrath",
+          "effects": []
+        }
+      ]
+    }
+  ],
+  "battles": [
+    {
+      "id": "iris-seven-south-smoke",
+      "name": "Iris Smoke Test",
+      "description": "Deploy Iris from a team preset to playtest the Seven Association South kit.",
+      "enemyUnitIds": ["iris-test-enemy"],
+      "rules": {
+        "encounterType": "focused",
+        "maxTurns": 20,
+        "victoryCondition": "defeat-all-enemies",
+        "failureCondition": "all-allies-defeated",
+        "enemyAiProfile": { "skill": "first", "target": "firstLiving" }
+      }
+    }
+  ]
+}

@@ -85,6 +85,15 @@
         damageSourceIs: 'Damage source is',
         eventStatusIdIs: 'Event status is',
         lastEventTypeIs: 'Last event type is',
+        eventStaggeredUnitSideIs: 'Staggered unit side is',
+        eventStaggeredUnitIsSelf: 'Staggered unit is self',
+        eventSourceSideIs: 'Event source side is',
+        eventActorSideIs: 'Event actor side is',
+        eventActorIsAlly: 'Event actor is ally',
+        eventSkillSlotIs: 'Event skill slot is',
+        skillSlotIs: 'Skill slot is',
+        turnAtLeast: 'Turn is at least',
+        turnAtOrBelow: 'Turn is at most',
         statusCountGreaterThanStatus: 'Status count > other status',
         speedGreaterThan: 'Speed > other target',
     };
@@ -105,6 +114,10 @@
         {
             label: 'Status events',
             hooks: ['statusApplied', 'statusChanged', 'statusExpired', 'statusConsumed', 'statusInflicted', 'statusReceived', 'beforeStatusTrigger', 'afterStatusTrigger'],
+        },
+        {
+            label: 'Reactive allies & stagger',
+            hooks: ['unitStaggered', 'allyAttackEnd', 'beforeAllyOneSidedAttack'],
         },
         {
             label: 'Healing',
@@ -148,8 +161,15 @@
         'copyStatus',
         'transferStatus',
         'convertStatus',
+        'amplitudeConvert',
         'clearStatusesByTag',
         'setFollowUpSkill',
+        'queueUnopposedFollowUp',
+        'grantSkillOffer',
+        'adjustSlotAggro',
+        'cancelAttack',
+        'chooseRandomActions',
+        'chooseWeightedActions',
     ];
 
     const SKILL_EFFECT_PRESETS = [
@@ -223,6 +243,76 @@
                 countOnly: true,
                 stackModel: {
                     count: { enabled: true, min: 0, max: 10, application: 'add' },
+                    expireWhen: { countLte: 0 },
+                },
+                hooks: {},
+            }),
+        },
+        {
+            id: 'concealed-charge-shield',
+            label: 'Concealed Exoskeleton (charge + shield sync)',
+            definition: () => ({
+                id: 'concealed-exoskeleton',
+                name: 'Concealed Exoskeleton',
+                label: 'Concealed Exoskeleton',
+                description: 'Charge stacks. Shield worth 3 HP per stack; shield break removes 1 stack.',
+                countOnly: true,
+                stackModel: {
+                    count: { enabled: true, min: 0, max: 20, application: 'add' },
+                    expireWhen: { countLte: 0 },
+                },
+                hooks: {
+                    statusApplied: [
+                        {
+                            conditions: [{ type: 'eventStatusIdIs', value: 'concealed-exoskeleton' }],
+                            actions: [
+                                {
+                                    type: 'gainShield',
+                                    target: 'self',
+                                    shieldId: 'concealed_shield',
+                                    operation: 'set',
+                                    stackSize: 3,
+                                    expiresAt: 'turnEnd',
+                                    linkedStatusId: 'concealed-exoskeleton',
+                                    linkedStatusCountDeltaOnBreak: -1,
+                                    amount: {
+                                        statusCount: { target: 'self', statusId: 'concealed-exoskeleton' },
+                                        multiplier: 3,
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    turnStart: [
+                        {
+                            type: 'gainShield',
+                            target: 'self',
+                            shieldId: 'concealed_shield',
+                            operation: 'set',
+                            stackSize: 3,
+                            expiresAt: 'turnEnd',
+                            linkedStatusId: 'concealed-exoskeleton',
+                            linkedStatusCountDeltaOnBreak: -1,
+                            amount: {
+                                statusCount: { target: 'self', statusId: 'concealed-exoskeleton' },
+                                multiplier: 3,
+                            },
+                        },
+                    ],
+                },
+            }),
+        },
+        {
+            id: 'stance-pair',
+            label: 'Stance pair (Guarded / Aggressive)',
+            definition: () => ({
+                id: 'guarded-stance',
+                name: 'Guarded Stance',
+                label: 'Guarded Stance',
+                description: 'Defensive stance buff package.',
+                countOnly: true,
+                stackModel: {
+                    count: { enabled: true, min: 0, max: 1, application: 'set' },
                     expireWhen: { countLte: 0 },
                 },
                 hooks: {},

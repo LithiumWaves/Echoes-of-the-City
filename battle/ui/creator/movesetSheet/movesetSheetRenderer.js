@@ -167,6 +167,11 @@
 
         const followUpEffect = (Array.isArray(skill?.effects) ? skill.effects : []).find((effect) => effect?.type === 'setFollowUpSkill');
         const hiddenInPlanner = skill?.showInPlanner === false;
+        const cannotClash = Boolean(skill?.cannotClash);
+        const skipDefenseSkills = Boolean(skill?.skipDefenseSkills);
+        const targeting = skill?.targeting || '';
+        const skillTags = Array.isArray(skill?.tags) ? skill.tags.join(', ') : '';
+        const unbreakableCoins = Array.isArray(skill?.unbreakableCoins) ? skill.unbreakableCoins.join(', ') : '';
 
         return `
             <article class="echoes-moveset__skill-card echoes-moveset__skill-card--lc" style="--echoes-lc-sin-color:${sinColor};">
@@ -194,6 +199,11 @@
                     <label>Slot<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="skillSlot" value="${escapeAttr(String(skill?.skillSlot || ''))}" placeholder="slot-1" /></label>
                     <label>Variant prio<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="variantPriority" inputmode="numeric" value="${escapeAttr(String(skill?.variantPriority ?? ''))}" placeholder="0" /></label>
                     <label class="echoes-creator__checkbox"><input type="checkbox" data-action="creator-unit-skill-toggle" data-index="${skillIndex}" data-field="showInPlanner" ${!hiddenInPlanner ? 'checked' : ''} /> Show in planner</label>
+                    <label class="echoes-creator__checkbox"><input type="checkbox" data-action="creator-unit-skill-toggle" data-index="${skillIndex}" data-field="cannotClash" ${cannotClash ? 'checked' : ''} /> Cannot clash</label>
+                    <label class="echoes-creator__checkbox"><input type="checkbox" data-action="creator-unit-skill-toggle" data-index="${skillIndex}" data-field="skipDefenseSkills" ${skipDefenseSkills ? 'checked' : ''} /> Skip defense skills</label>
+                    <label>Targeting<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="targeting" value="${escapeAttr(String(targeting))}" placeholder="indiscriminate" /></label>
+                    <label>Tags<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="tags" value="${escapeAttr(skillTags)}" placeholder="skill-3" /></label>
+                    <label>Unbreakable coins<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="unbreakableCoins" value="${escapeAttr(unbreakableCoins)}" placeholder="2, 3" /></label>
                     <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-skill-add-variant" data-index="${skillIndex}">+ Variant</button>
                 </div>
                 ${renderVariantConditionsSection(skill, skillIndex, catalog, creatorUi, escapeAttr, escapeHtml)}

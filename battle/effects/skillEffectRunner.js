@@ -30,6 +30,7 @@
             refreshSpeedOrder,
             ensureActivePlayerSlot,
             burstTremor,
+            queueUnopposedFollowUp,
         } = deps || {};
 
         function getStatusDefinition(statusId) {
@@ -1160,6 +1161,87 @@
                 case 'setFollowUpSkill':
                     if (context && effect.skillId) {
                         context.followUpSkillIdOnClashLose = effect.skillId;
+                    }
+                    return;
+                case 'queueUnopposedFollowUp':
+                    if (typeof queueUnopposedFollowUp !== 'function' || !effect.skillId) {
+                        return;
+                    }
+                    {
+                        const followUpAttacker = runtime?.unit || sourceUnit;
+                        let followUpDefender = null;
+                        if (effect.target === 'eventAttacker' || effect.target === 'attacker') {
+                            followUpDefender = runtime?.attackerUnit || runtime?.actorUnit || null;
+                        } else if (effect.target === 'eventDefender' || effect.target === 'defender') {
+                            followUpDefender = runtime?.defenderUnit || runtime?.allyUnit || runtime?.targetUnit || null;
+                        } else if (effect.target === 'staggeredUnit' || effect.target === 'eventStaggered') {
+                            followUpDefender = runtime?.staggeredUnit || null;
+                        } else {
+                            followUpDefender = getEffectTargetUnit(runtime, effect.target || 'opponent');
+                        }
+                        if (followUpAttacker && followUpDefender) {
+                            queueUnopposedFollowUp(targetBattle, followUpAttacker, followUpDefender, effect.skillId);
+                        }
+                    }
+                    return;
+                case 'cancelAttack':
+                    if (runtime?.attackContext) {
+                        runtime.attackContext.cancelled = true;
+                        runtime.attackContext.cancelReason = effect.reason || 'cancelled';
+                    }
+                    return;
+                case 'amplitudeConvert':
+                    if (!targetUnits.length || typeof applyStatus !== 'function' || typeof getStatus !== 'function') {
+                        return;
+                    }
+                    {
+                        const fromStatusId = effect.fromStatusId || 'tremor';
+                        const toStatusId = effect.toStatusId || 'tremor_gnaw';
+                        targetUnits.forEach((unit) => {
+                            const fromStatus = getStatus(unit, fromStatusId);
+                            if (!fromStatus) {
+                                return;
+                            }
+                            clearUnitStatus(targetBattle, unit, fromStatusId, { mode: 'cleared' });
+                            applyStatus(targetBattle, unit, toStatusId, {
+                                potency: fromStatus.potency || 0,
+                                count: fromStatus.count || 0,
+                            });
+                        });
+                    }
+                    return;
+                case 'grantSkillOffer':
+                    if (!effect.skillId || typeof getAllSlots !== 'function') {
+                        return;
+                    }
+                    {
+                        const offerUnit = targetUnits[0] || runtime?.unit || sourceUnit;
+                        const offerSlot = getSlotForUnit(targetBattle, offerUnit)
+                            || (runtime?.slotId ? getSlotById(targetBattle, runtime.slotId) : null)
+                            || (runtime?.attackContext?.slotId ? getSlotById(targetBattle, runtime.attackContext.slotId) : null);
+                        if (!offerSlot) {
+                            return;
+                        }
+                        if (!offerSlot.skillOffer || typeof offerSlot.skillOffer !== 'object') {
+                            offerSlot.skillOffer = { top: null, bottom: null };
+                        }
+                        const lane = effect.offerLane === 'bottom' ? 'bottom' : 'top';
+                        offerSlot.skillOffer[lane] = effect.skillId;
+                    }
+                    return;
+                case 'adjustSlotAggro':
+                    {
+                        const aggroUnit = targetUnits[0] || runtime?.unit || sourceUnit;
+                        const aggroSlot = getSlotForUnit(targetBattle, aggroUnit)
+                            || (runtime?.slotId ? getSlotById(targetBattle, runtime.slotId) : null)
+                            || (runtime?.attackContext?.slotId ? getSlotById(targetBattle, runtime.attackContext.slotId) : null);
+                        if (!aggroSlot) {
+                            return;
+                        }
+                        const delta = Number.isFinite(effect.value)
+                            ? effect.value
+                            : (Number.isFinite(resolveEffectAmount(runtime, effect)) ? resolveEffectAmount(runtime, effect) : 0);
+                        aggroSlot.aggroBonus = Math.max(0, (Number.isFinite(aggroSlot.aggroBonus) ? aggroSlot.aggroBonus : 0) + delta);
                     }
                     return;
                 case 'modifyPhysicalResistance':
@@ -2335,6 +2417,18 @@
             return runtime?.targetUnit || runtime?.opponent || null;
         }
 
+        if (target === 'allyUnit' || target === 'defenderUnit') {
+            return runtime?.defenderUnit || runtime?.allyUnit || null;
+        }
+
+        if (target === 'attackerUnit' || target === 'actorUnit') {
+            return runtime?.attackerUnit || runtime?.actorUnit || null;
+        }
+
+        if (target === 'staggeredUnit') {
+            return runtime?.staggeredUnit || null;
+        }
+
         return runtime?.sourceUnit || runtime?.unit || null;
     }
 
@@ -2667,6 +2761,20 @@
                 : 1;
             return wave <= conditionValue;
         }
+        case 'turnAtLeast':
+        {
+            const turn = typeof runtime?.battle?.turn === 'number' && Number.isFinite(runtime.battle.turn)
+                ? runtime.battle.turn
+                : 0;
+            return turn >= conditionValue;
+        }
+        case 'turnAtOrBelow':
+        {
+            const turn = typeof runtime?.battle?.turn === 'number' && Number.isFinite(runtime.battle.turn)
+                ? runtime.battle.turn
+                : 0;
+            return turn <= conditionValue;
+        }
         case 'resonanceAtLeast':
         case 'resonanceAtOrBelow':
         case 'absoluteResonanceAtLeast':
@@ -2694,6 +2802,41 @@
             return condition.type === 'resonanceAtLeast' || condition.type === 'absoluteResonanceAtLeast'
                 ? value >= conditionValue
                 : value <= conditionValue;
+        }
+        case 'eventStaggeredUnitSideIs':
+            return (runtime?.staggeredUnit?.side || null) === conditionValue;
+        case 'eventStaggeredUnitIsSelf':
+        {
+            const staggered = runtime?.staggeredUnit || null;
+            const listener = runtime?.unit || runtime?.listenerUnit || null;
+            if (!staggered || !listener) {
+                return conditionValue === false;
+            }
+            return (staggered.id === listener.id) === (conditionValue ?? true);
+        }
+        case 'eventSourceSideIs':
+            return (runtime?.sourceUnit?.side || null) === conditionValue;
+        case 'eventActorSideIs':
+            return (runtime?.actorUnit?.side || null) === conditionValue;
+        case 'eventActorIsAlly':
+        {
+            const actor = runtime?.actorUnit || null;
+            const listener = runtime?.unit || runtime?.listenerUnit || null;
+            if (!actor || !listener) {
+                return conditionValue === false;
+            }
+            const isAlly = actor.side === listener.side && actor.id !== listener.id;
+            return isAlly === (conditionValue ?? true);
+        }
+        case 'skillSlotIs':
+        {
+            const skillSlot = runtime?.skill?.skillSlot || null;
+            return matchesExpectedValue(skillSlot, conditionValue);
+        }
+        case 'eventSkillSlotIs':
+        {
+            const eventSkillSlot = runtime?.skill?.skillSlot || null;
+            return matchesExpectedValue(eventSkillSlot, conditionValue);
         }
         default:
             return false;

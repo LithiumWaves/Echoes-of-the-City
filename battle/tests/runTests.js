@@ -7905,6 +7905,259 @@ function runSuite() {
         assert(lcCombatUi.shouldUseLcEngagementPlayback({ isRunning: true, entry: oneSidedEntry }), 'Expected one-sided playback to use LC UI.');
     });
 
+    test('Iris pack imports and validates', () => {
+        const battleModules = createBattleEnvironment();
+        const packPath = path.resolve(battleRoot, 'content', 'packs', 'user', 'iris-seven-south-pack.json');
+        const pack = JSON.parse(fs.readFileSync(packPath, 'utf8'));
+        const validation = battleModules.schema.validateContentPackManifest(pack.manifest);
+        assert(!validation.errors?.length, validation.errors?.join(', ') || 'Manifest validation failed.');
+        const imported = battleModules.content.importContentPack(pack, { allowOverwrite: true });
+        assert(imported.counts.units >= 3, `Expected at least 3 units, got ${imported.counts.units}.`);
+        assert(imported.counts.statuses >= 8, `Expected at least 8 statuses, got ${imported.counts.statuses}.`);
+        const iris = battleModules.content.getUnitDefinition('iris-seven-south');
+        assert(iris?.skills?.some((skill) => skill.id === 'fall-back-i-got-you'), 'Expected hidden S1-2 skill.');
+        assert(iris?.passives?.some((passive) => passive.id === 'iris-dont-thank-me'), 'Expected Dont thank me passive.');
+    });
+
+    test('Iris: enemy stagger queues Fall back follow-up', () => {
+        const battleModules = createBattleEnvironment();
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses'));
+        const pack = JSON.parse(fs.readFileSync(path.resolve(battleRoot, 'content', 'packs', 'user', 'iris-seven-south-pack.json'), 'utf8'));
+        battleModules.content.importContentPack(pack, { allowOverwrite: true });
+
+        const iris = JSON.parse(JSON.stringify(battleModules.content.getUnitDefinition('iris-seven-south')));
+        const enemy = JSON.parse(JSON.stringify(battleModules.content.getUnitDefinition('iris-test-enemy')));
+        iris.passives = iris.passives.filter((passive) => passive.id === 'iris-dont-thank-me');
+        iris.skills = [
+            {
+                id: 'stagger-hit',
+                name: 'Stagger Hit',
+                skillType: 'attack',
+                basePower: 12,
+                coinPower: 2,
+                coinCount: 1,
+                damageType: 'slash',
+                sinType: 'wrath',
+                effects: [],
+            },
+            ...iris.skills.filter((skill) => skill.id === 'fall-back-i-got-you'),
+        ];
+        enemy.maxHp = 100;
+        enemy.staggerThresholds = [0.9];
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const battleDefinition = {
+            id: 'iris-stagger-followup-test',
+            name: 'Iris Stagger Followup Test',
+            playerUnits: [iris],
+            enemyUnits: [enemy],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [true],
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousRandom = Math.random;
+        try {
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            const battleState = engine.getState();
+            const irisSlot = battleState.playerSlots.find((slot) => slot.id === 'player-slot-1');
+            if (irisSlot) {
+                irisSlot.skillOffer = { top: 'stagger-hit', bottom: null };
+            }
+            assert(engine.selectSlot('player-slot-1'), 'Expected Iris slot selection.');
+            assert(engine.selectSkill('stagger-hit'), 'Expected stagger-hit selection.');
+            assert(engine.selectTarget('enemy-slot-1'), 'Expected enemy target selection.');
+            engine.resolveTurn();
+
+            const events = engine.getState().events;
+            assert(events.some((event) => event.type === 'unit_staggered'), 'Expected enemy stagger event.');
+            const followUpHits = events.filter((event) => event.type === 'hit_resolved' && event.data?.skillId === 'fall-back-i-got-you');
+            assert(followUpHits.length >= 1, `Expected Fall back follow-up hits, got ${followUpHits.length}.`);
+        } finally {
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Iris: ally Skill 3 queues Fall back follow-up once per turn', () => {
+        const battleModules = createBattleEnvironment();
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses'));
+        const pack = JSON.parse(fs.readFileSync(path.resolve(battleRoot, 'content', 'packs', 'user', 'iris-seven-south-pack.json'), 'utf8'));
+        battleModules.content.importContentPack(pack, { allowOverwrite: true });
+
+        const iris = JSON.parse(JSON.stringify(battleModules.content.getUnitDefinition('iris-seven-south')));
+        const ally = JSON.parse(JSON.stringify(battleModules.content.getUnitDefinition('iris-test-ally-s3')));
+        const enemy = JSON.parse(JSON.stringify(battleModules.content.getUnitDefinition('iris-test-enemy')));
+        iris.passives = iris.passives.filter((passive) => passive.id === 'iris-dont-thank-me');
+        iris.skills = iris.skills.filter((skill) => skill.id === 'fall-back-i-got-you' || skill.id === 'impenetrable-defense');
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const battleDefinition = {
+            id: 'iris-ally-s3-followup-test',
+            name: 'Iris Ally S3 Followup Test',
+            playerUnits: [iris, ally],
+            enemyUnits: [enemy],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = {
+            'player-slot-1': [true],
+            'player-slot-2': [true],
+            'enemy-slot-1': [false],
+        };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const previousRandom = Math.random;
+        try {
+            Math.random = () => 0.99;
+            const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+            const battleState = engine.getState();
+            const irisSlot = battleState.playerSlots.find((slot) => slot.id === 'player-slot-1');
+            const allySlot = battleState.playerSlots.find((slot) => slot.id === 'player-slot-2');
+            if (irisSlot) {
+                irisSlot.skillOffer = { top: 'impenetrable-defense', bottom: null };
+            }
+            if (allySlot) {
+                allySlot.skillOffer = { top: 'ally-extension', bottom: null };
+            }
+            assert(engine.selectSlot('player-slot-1'), 'Expected Iris slot selection.');
+            assert(engine.selectSkill('impenetrable-defense'), 'Expected Iris guard selection.');
+            assert(engine.selectSlot('player-slot-2'), 'Expected ally slot selection.');
+            assert(engine.selectSkill('ally-extension'), 'Expected ally S3 selection.');
+            assert(engine.selectTarget('enemy-slot-1'), 'Expected enemy target selection.');
+            engine.resolveTurn();
+
+            const events = engine.getState().events;
+            const followUpHits = events.filter((event) => event.type === 'hit_resolved' && event.data?.skillId === 'fall-back-i-got-you');
+            assert(followUpHits.length >= 1, `Expected Fall back follow-up from ally S3, got ${followUpHits.length}.`);
+        } finally {
+            Math.random = previousRandom;
+        }
+    });
+
+    test('Iris: concealed exoskeleton syncs shield stacks', () => {
+        const battleModules = createBattleEnvironment();
+        const pack = JSON.parse(fs.readFileSync(path.resolve(battleRoot, 'content', 'packs', 'user', 'iris-seven-south-pack.json'), 'utf8'));
+        battleModules.content.importContentPack(pack, { allowOverwrite: true });
+
+        const iris = JSON.parse(JSON.stringify(battleModules.content.getUnitDefinition('iris-seven-south')));
+        iris.passives = [];
+        iris.skills = [];
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const battleDefinition = {
+            id: 'iris-concealed-shield-test',
+            name: 'Iris Concealed Shield Test',
+            playerUnits: [iris],
+            enemyUnits: [JSON.parse(JSON.stringify(battleModules.content.getUnitDefinition('iris-test-enemy')))],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp });
+        engine.addStatus('player', { id: 'iris_concealed_exoskeleton', count: 3 }, 0);
+        const unit = engine.getState().playerUnits[0];
+        const shieldTotal = (unit.shields || [])
+            .filter((entry) => entry.id === 'iris_concealed_shield')
+            .reduce((sum, entry) => sum + (entry.amount || 0), 0);
+        assert(shieldTotal >= 9, `Expected shield amount >= 9, got ${shieldTotal}.`);
+    });
+
+    test('Engine: amplitudeConvert tremor to tremor_gnaw', () => {
+        const battleModules = createBattleEnvironment();
+        requireAllScripts(path.resolve(battleRoot, 'content', 'packs', 'base', 'statuses'));
+        const pack = JSON.parse(fs.readFileSync(path.resolve(battleRoot, 'content', 'packs', 'user', 'iris-seven-south-pack.json'), 'utf8'));
+        battleModules.content.importContentPack(pack, { allowOverwrite: true });
+
+        const attacker = {
+            id: 'amp-attacker',
+            name: 'Amp Attacker',
+            level: 1,
+            maxHp: 50,
+            sp: 0,
+            speedRange: [2, 2],
+            staggerThresholds: [],
+            resistances: {
+                physical: { slash: 1, pierce: 1, blunt: 1 },
+                sin: { wrath: 1, lust: 1, sloth: 1, gluttony: 1, gloom: 1, pride: 1, envy: 1 },
+            },
+            sprites: { idle: 'assets/test.png', skills: {} },
+            skills: [{
+                id: 'amp-hit',
+                name: 'Amp Hit',
+                skillType: 'attack',
+                basePower: 1,
+                coinPower: 0,
+                coinCount: 1,
+                damageType: 'slash',
+                sinType: 'wrath',
+                effects: [{
+                    trigger: 'onHit',
+                    type: 'amplitudeConvert',
+                    fromStatusId: 'tremor',
+                    toStatusId: 'tremor_gnaw',
+                }],
+            }],
+            passives: [],
+        };
+        const defender = JSON.parse(JSON.stringify(battleModules.content.getUnitDefinition('iris-test-enemy')));
+
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const battleDefinition = {
+            id: 'iris-amplitude-convert-test',
+            name: 'Iris Amplitude Convert Test',
+            playerUnits: [attacker],
+            enemyUnits: [defender],
+            rules: {
+                encounterType: 'focused',
+                maxTurns: 1,
+                victoryCondition: 'defeat-all-enemies',
+                failureCondition: 'all-allies-defeated',
+                enemyAiProfile: { skill: 'first', target: 'firstLiving' },
+            },
+        };
+
+        const forcedTokens = { 'player-slot-1': [true], 'enemy-slot-1': [false] };
+        const peekRollToken = (slotId) => forcedTokens[slotId]?.[0];
+        const consumeRollToken = (slotId) => forcedTokens[slotId]?.shift();
+
+        const engine = battleModules.createBattleEngine({ battleDefinition, clamp, peekRollToken, consumeRollToken });
+        engine.addStatus('enemy', { id: 'tremor', potency: 5, count: 2 }, 0);
+        engine.selectSlot('player-slot-1');
+        engine.selectSkill('amp-hit');
+        engine.selectTarget('enemy-slot-1');
+        engine.resolveTurn();
+
+        const enemy = engine.getState().enemyUnits[0];
+        const gnaw = enemy.statuses.find((status) => status.id === 'tremor_gnaw');
+        assert(gnaw, 'Expected tremor_gnaw after amplitude conversion.');
+        assert(!enemy.statuses.some((status) => status.id === 'tremor'), 'Expected tremor to be cleared.');
+        assert(gnaw.potency === 5 && gnaw.count === 2, `Expected gnaw potency/count preserved, got ${gnaw.potency}/${gnaw.count}.`);
+    });
+
     test('Combat sounds: event mapping and attack hit picks', () => {
         const battleRoot = path.resolve(__dirname, '..');
         clearRequireCache(battleRoot);

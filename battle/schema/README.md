@@ -84,6 +84,11 @@ Optional:
 - `borderPath: string`
 - `description: string`
 - `showInPlanner: boolean` (set `false` for follow-up-only skills)
+- `cannotClash: boolean` (force one-sided resolution; skip mutual clash)
+- `skipDefenseSkills: boolean` (one-sided attacks ignore defender guard/counter/evade selection)
+- `targeting: "indiscriminate"` (random living enemies up to `attackWeight`)
+- `unbreakableCoins: number[]` (coin indices that do not break on clash loss)
+- `tags: string[]` (e.g. `skill-3` for ally-hook detection via `eventSkillSlotIs` or `skillHasTag`)
 - `skillSlot: string` (planner groups variants into one slot)
 - `variantPriority: number` (higher priority wins when multiple variants match)
 - `variantConditions: HookCondition[]` (all must pass for this variant to be active in planner)
@@ -138,6 +143,12 @@ Supported `type` values (current):
 - `clearShield`
 - `retargetSlot`
 - `burstTremor`
+- `amplitudeConvert` (`fromStatusId`, `toStatusId` — Tremor → Tremor - Gnaw preserving potency/count)
+- `queueUnopposedFollowUp` (`skillId`, `target`: `eventDefender` | `attacker` | `staggeredUnit`)
+- `grantSkillOffer` (`skillId`, `offerLane`: `top` | `bottom`)
+- `adjustSlotAggro` (slot-scoped aggro bonus for AI targeting)
+- `cancelAttack` (assist defense — sets `attackContext.cancelled`)
+- `chooseRandomActions` / `chooseWeightedActions`
 - `consumeStatus`
 - `adjustEncounterResource`
 
@@ -237,6 +248,9 @@ Supported passive hook names (current):
 - `attackEnd`
 - `turnEnd`
 - `unitDefeated`
+- `unitStaggered` (broadcast when any unit staggers; context: `staggeredUnit`, `sourceUnit`)
+- `allyAttackEnd` (broadcast to allies after an ally attack ends; context: `actorUnit`, `skill`, `targetUnit`)
+- `beforeAllyOneSidedAttack` (ally listener when staggered ally would be hit one-sided; context: `attackerUnit`, `defenderUnit`)
 - `staggerThresholdCrossed` (scripted events may filter with optional `threshold` HP fraction, e.g. `0.75`)
 - `staggerRecovered`
 - `battleEnd`
@@ -285,3 +299,45 @@ Notes:
   - `hitDealt` + `damageAtLeast` for damage-triggered follow-up effects
   - `turnStart` + `hpPercentAtOrBelow` for low-HP survival passives
 - Function hooks still work for JS-authored content, but data-driven hook effect arrays are the preferred authoring path.
+
+## Iris authoring patterns (Seven Association South)
+
+Reference pack: `battle/content/packs/user/iris-seven-south-pack.json`
+
+### S1 vs S1-2 (hidden follow-up, not a slot variant)
+
+- **S1** (`predictive-cuts`): normal `skillSlot: "slot-1"` planner skill.
+- **S1-2** (`fall-back-i-got-you`): separate skill with `showInPlanner: false`, `cannotClash: true`, `skipDefenseSkills: true`.
+- Trigger via passive `"...Don't thank me."` using reactive hooks + `queueUnopposedFollowUp` (not `skillSlot` variant swap).
+
+```json
+{
+  "oncePer": "turn",
+  "conditions": [{ "type": "eventSkillSlotIs", "value": "slot-3" }],
+  "actions": [{
+    "type": "queueUnopposedFollowUp",
+    "skillId": "fall-back-i-got-you",
+    "target": "eventDefender"
+  }]
+}
+```
+
+Enemy stagger by an ally uses `unitStaggered` + `eventStaggeredUnitSideIs: "enemy"` + `eventSourceSideIs: "player"` with `target: "staggeredUnit"`.
+
+### S2-2 / S3-2 (planner variants)
+
+Use `skillSlot` + `variantConditions` + `variantPriority` (e.g. Reading 12 → Prod the Weakness, Locked Plating → Modular-Weapon Max Potential). `grantSkillOffer` can push variant skills into the planner top lane when a status threshold is reached.
+
+### Concealed Exoskeleton (charge + shield sync)
+
+Mirror `charge_barrier`: status hooks call `gainShield` with `linkedStatusId` and `linkedStatusCountDeltaOnBreak: -1`, shield `amount` scaled by status count × 3. Status template: **Concealed Exoskeleton** in Creator.
+
+### Tremor amplitude
+
+Skill `onHit` effect `amplitudeConvert` converts Tremor → `tremor_gnaw` preserving potency/count. Pair with `burstTremor` on panic / S3 coins.
+
+### Creator hints
+
+- Hidden follow-up skills: uncheck **Show in planner**, check **Cannot clash** and **Skip defense skills**.
+- Ally reactive passives: hook **Ally Attack End** or **Unit Staggered** with event conditions (`eventSkillSlotIs`, `eventSourceSideIs`).
+- Slot aggro on skills: `adjustSlotAggro` in `onAttackEnd` effects (Creator effect: **Adjust Slot Aggro**).
