@@ -477,6 +477,16 @@
                             ? `<img class="echoes-battle-panel__field-stagger-overlay" src="${staggerOverlayUrl}" alt="Staggered">`
                             : ''}
                     </span>
+                    ${isPlayer
+                        ? `<div class="echoes-battle-panel__field-vitals-lc">
+                            ${lcCombatUi?.renderLcUnitVitals
+                                ? lcCombatUi.renderLcUnitVitals(unit, { escapeHtml, variant: 'field' })
+                                : `
+                                    <span class="echoes-battle-panel__field-hp-lc">${unit.hp}</span>
+                                    <span class="echoes-battle-panel__field-sp-lc">${unit.sp}</span>
+                                `}
+                        </div>`
+                        : ''}
                     ${renderMiniStatuses(unit)}
                 </button>
             `;

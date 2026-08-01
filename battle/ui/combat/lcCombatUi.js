@@ -506,18 +506,6 @@
                     </div>
                     <div class="echoes-lc-dashboard-console__actions">
                         <button
-                            class="echoes-lc-console-toggle echoes-lc-console-toggle--win${uiState?.turnDebugEnabled ? ' is-active' : ''}"
-                            type="button"
-                            data-action="toggle-turn-debug"
-                            title="Win rate debug"
-                        >Win Rate ▲</button>
-                        <button
-                            class="echoes-lc-console-toggle echoes-lc-console-toggle--damage${uiState?.inspect?.isOpen ? ' is-active' : ''}"
-                            type="button"
-                            data-action="toggle-inspect"
-                            title="Damage breakdown"
-                        >Damage ▲</button>
-                        <button
                             class="echoes-lc-start-button${startStyle ? ' has-image' : ''}"
                             type="button"
                             data-action="resolve-turn"

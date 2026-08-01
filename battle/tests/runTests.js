@@ -7578,6 +7578,7 @@ function runSuite() {
         assert(topHudHtml.includes('echoes-lc-battle-top-hud'), 'Expected top HUD.');
         assert(topHudHtml.includes('ENEMY'), 'Expected enemy counter label.');
         assert(topHudHtml.includes('TURN'), 'Expected turn counter label.');
+        assert(!topHudHtml.includes('echoes-lc-dante-clock'), 'Dante clock should not be in top HUD.');
 
         const enemyHpHtml = lcBattleHud.renderLcEnemyHpBar({ hp: 62, maxHp: 100 }, {
             escapeHtml: (value) => String(value),
@@ -7656,7 +7657,10 @@ function runSuite() {
         assert(html.includes('data-action="resolve-turn"'), 'Expected resolve turn action.');
         assert(html.includes('echoes-lc-sin-rail--vertical'), 'Expected vertical sin rail.');
         assert(html.includes('echoes-lc-dashboard-console'), 'Expected dashboard console backplate.');
-        assert(!html.includes('echoes-battle-panel__field-vitals-lc'), 'Field units should not use foot vitals.');
+        assert(!html.includes('Win Rate'), 'Win rate toggle should not be in dashboard console.');
+        assert(!html.includes('echoes-lc-console-toggle'), 'Dashboard console should not use placeholder toggles.');
+        assert(html.includes('echoes-battle-panel__field-vitals-lc'), 'Allied field units should show HP vitals.');
+        assert(html.includes('echoes-lc-vitals--field'), 'Allied field units should use field vitals bar.');
     });
 
     test('Schema: rules.background validates image path', () => {

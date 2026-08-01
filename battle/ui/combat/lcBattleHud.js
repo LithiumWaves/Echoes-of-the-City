@@ -28,22 +28,11 @@
         const livingEnemies = countLivingUnits(battle.enemyUnits);
         const totalEnemies = (battle.enemyUnits || []).length;
         const goblets = getGobletCounts(battle);
-        const resolveDisabled = battle.phase !== 'select' || battle.winner || uiState?.isPlaybackRunning;
         const inspectOpen = Boolean(uiState?.inspect?.isOpen);
         const debugEnabled = Boolean(uiState?.turnDebugEnabled);
         const debugToolsEnabled = uiState?.debugToolsEnabled !== false;
         const playbackActive = Boolean(uiState?.isPlaybackRunning);
         const nextDisabled = resolvedBattle.phase !== 'resolved' || resolvedBattle.winner || playbackActive;
-        const danteStyle = lcChrome?.resolveAssetStyle(
-            lcChrome.LC_BATTLE_UI_ASSETS.danteClockFace,
-            resolveAssetUrl,
-            escapeAttribute,
-        );
-        const plateStyle = lcChrome?.resolveAssetStyle(
-            lcChrome.LC_BATTLE_UI_ASSETS.topHudPlate,
-            resolveAssetUrl,
-            escapeAttribute,
-        );
 
         return `
             <header class="echoes-lc-battle-top-hud">
@@ -79,11 +68,6 @@
                     <button class="echoes-lc-chrome-button echoes-lc-chrome-button--mini" type="button" data-action="next-turn" title="Next turn" ${nextDisabled ? 'disabled' : ''}>Next</button>
                     <button class="echoes-lc-chrome-button echoes-lc-chrome-button--mini" type="button" data-action="reset-fight" title="Reset fight">Reset</button>
                     <button class="echoes-lc-chrome-button echoes-lc-chrome-button--icon" type="button" data-action="quit-battle" title="Quit battle">«</button>
-                    <div class="echoes-lc-dante-clock${playbackActive ? ' is-active' : ''}" aria-label="Dante clock">
-                        <div class="echoes-lc-dante-clock__face${danteStyle ? ' has-image' : ''}" style="${plateStyle ? '' : danteStyle}"></div>
-                        <span class="echoes-lc-dante-clock__label">DANTE</span>
-                        <span class="echoes-lc-dante-clock__needle" aria-hidden="true"></span>
-                    </div>
                 </div>
             </header>
         `;
