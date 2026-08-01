@@ -286,12 +286,29 @@
 
     function renderPassiveCard(passive, passiveIndex, catalog, creatorUi, escapeAttr, escapeHtml) {
         const requirements = passive?.requirements || {};
+        const tagRenderer = battleModules.skillTagRenderer || window.EchoesOfTheCitySkillTagRenderer || {};
+        const plannerLabel = passive?.plannerLabel || '';
+        const descriptionEditor = tagRenderer.renderTaggedDescriptionEditor?.({
+            value: passive?.description || '',
+            fieldAttrs: `data-action="creator-unit-passive-field" data-index="${passiveIndex}" data-field="description"`,
+            catalog,
+            escapeAttr,
+            escapeHtml,
+            label: 'Passive description',
+            rows: 8,
+            placeholder: 'When an ally Staggers an enemy… gain 1 [assist_defense]',
+        }) || `
+            <textarea data-action="creator-unit-passive-field" data-index="${passiveIndex}" data-field="description" rows="4" placeholder="Description">${escapeHtml(String(passive?.description || ''))}</textarea>
+        `;
         return `
             <article class="echoes-moveset__passive-card">
                 <header class="echoes-moveset__passive-header">
-                    <span class="echoes-moveset__passive-number">PASSIVE ${passiveIndex + 1}</span>
+                    <span class="echoes-moveset__passive-number">${escapeHtml(plannerLabel || `PASSIVE ${passiveIndex + 1}`)}</span>
                     ${renderPassiveRequirementBadge(passive, escapeAttr)}
                 </header>
+                <label class="echoes-moveset__passive-label-field">Skill label
+                    <input data-action="creator-unit-passive-field" data-index="${passiveIndex}" data-field="plannerLabel" value="${escapeAttr(String(plannerLabel))}" placeholder="PASSIVE" />
+                </label>
                 <input class="echoes-moveset__passive-name" data-action="creator-unit-passive-field" data-index="${passiveIndex}" data-field="name" value="${escapeAttr(String(passive?.name || ''))}" placeholder="Passive name" />
                 <input class="echoes-moveset__passive-id" data-action="creator-unit-passive-field" data-index="${passiveIndex}" data-field="id" value="${escapeAttr(String(passive?.id || ''))}" placeholder="passive-id" />
                 <div class="echoes-moveset__passive-req-row">
@@ -302,7 +319,7 @@
                     </select></label>
                     <label>Min<input data-action="creator-passive-req" data-index="${passiveIndex}" data-field="resonanceMinimum" inputmode="numeric" value="${escapeAttr(String(requirements.resonance?.minimum ?? requirements.resonance?.value ?? ''))}" placeholder="3" /></label>
                 </div>
-                <textarea data-action="creator-unit-passive-field" data-index="${passiveIndex}" data-field="description" rows="2" placeholder="Description">${escapeHtml(String(passive?.description || ''))}</textarea>
+                ${descriptionEditor}
                 <div class="echoes-moveset__passive-hooks">
                     ${creatorUi.renderHooksEditor(
                         passive?.hooks || {},

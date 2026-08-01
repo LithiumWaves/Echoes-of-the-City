@@ -148,6 +148,42 @@
         return parts.join('').replace(/\n/g, '<br>');
     }
 
+    function renderTaggedDescriptionEditor(options = {}) {
+        const {
+            value = '',
+            fieldAttrs = '',
+            catalog = null,
+            escapeAttr = (v) => String(v ?? ''),
+            escapeHtml: escapeHtmlFn = escapeHtml,
+            label = 'Description',
+            rows = 10,
+            placeholder = '[On_Hit] Inflict 1 [rupture]',
+        } = options;
+        const previewHtml = renderTaggedText(value, catalog);
+        return `
+            <div class="echoes-tagged-desc">
+                <label class="echoes-tagged-desc__label">${escapeHtmlFn(label)}</label>
+                <p class="echoes-creator__hint echoes-tagged-desc__help">
+                    To enter a status effect / coin effect / attack effect, put them in square brackets with underscores instead of spaces,
+                    e.g. <code>[sinking_deluge]</code>, <code>[On_Use]</code>, <code>[On_Hit]</code>, <code>[coin_1]</code>, <code>[heads_hit]</code>.
+                    Tags style the preview only — they do not change combat hooks.
+                </p>
+                <textarea
+                    class="echoes-tagged-desc__textarea echoes-skill-creator__description"
+                    ${fieldAttrs}
+                    rows="${Number(rows) || 10}"
+                    placeholder="${escapeAttr(placeholder)}"
+                >${escapeHtmlFn(String(value || ''))}</textarea>
+                <div class="echoes-tagged-desc__preview">
+                    <div class="echoes-tagged-desc__preview-title">Live preview</div>
+                    <div class="echoes-tagged-desc__preview-body">
+                        ${previewHtml || '<span class="echoes-creator__hint">Preview appears as you add tags.</span>'}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     const skillTagRenderer = {
         TRIGGER_LABELS,
         STATUS_COLORS,
@@ -155,6 +191,7 @@
         classifyTag,
         renderTagHtml,
         renderTaggedText,
+        renderTaggedDescriptionEditor,
         escapeHtml,
     };
 

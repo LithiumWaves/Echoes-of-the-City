@@ -86,17 +86,22 @@
         `;
     }
 
-    function renderKitPassiveCard(passive, escapeHtml) {
+    function renderKitPassiveCard(passive, catalog, escapeHtml) {
+        const tagRenderer = battleModules.skillTagRenderer || window.EchoesOfTheCitySkillTagRenderer || {};
+        const descriptionHtml = tagRenderer.renderTaggedText?.(passive?.description || '', catalog)
+            || escapeHtml(passive?.description || '');
         return `
             <article class="echoes-kit-card echoes-kit-card--passive">
                 <header class="echoes-kit-card__header">
                     <div class="echoes-kit-card__titles">
-                        <span class="echoes-kit-card__label">PASSIVE</span>
+                        <span class="echoes-kit-card__label">${escapeHtml(passive?.plannerLabel || 'PASSIVE')}</span>
                         <strong class="echoes-kit-card__name">${escapeHtml(passive?.name || passive?.id || 'Passive')}</strong>
                     </div>
                 </header>
                 <div class="echoes-kit-card__body">
-                    <p class="echoes-kit-card__passive-text">${escapeHtml(passive?.description || 'No description.')}</p>
+                    ${descriptionHtml
+                        ? `<div class="echoes-kit-card__description">${descriptionHtml}</div>`
+                        : '<p class="echoes-kit-card__passive-text">No description.</p>'}
                 </div>
             </article>
         `;
@@ -122,7 +127,7 @@
 
         const attackCards = attackSkills.map(({ skill, index }) => renderKitSkillCard(skill, index, selectedSkillIndex, catalog, escapeAttr, escapeHtml)).join('');
         const defenseCards = defenseSkills.map(({ skill, index }) => renderKitSkillCard(skill, index, selectedSkillIndex, catalog, escapeAttr, escapeHtml)).join('');
-        const passiveCards = passives.map((passive) => renderKitPassiveCard(passive, escapeHtml)).join('');
+        const passiveCards = passives.map((passive) => renderKitPassiveCard(passive, catalog, escapeHtml)).join('');
 
         return `
             <aside class="echoes-kit-strip">

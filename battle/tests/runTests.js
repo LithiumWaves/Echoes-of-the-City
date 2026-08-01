@@ -7546,6 +7546,55 @@ function runSuite() {
         assert(html.includes('echoes-skill-tag--coin'), 'Expected coin tag class.');
         assert(html.includes('<br>'), 'Expected newlines preserved as breaks.');
         assert(!html.includes('<script'), 'Expected escaped HTML.');
+
+        const editor = tags.renderTaggedDescriptionEditor({
+            value: 'Gain 1 [rupture]',
+            fieldAttrs: 'data-action="creator-status-field" data-field="description"',
+            catalog,
+            escapeAttr: (value) => String(value),
+            escapeHtml: (value) => String(value),
+            label: 'Effect description',
+            rows: 8,
+        });
+        assert(editor.includes('echoes-tagged-desc'), 'Expected tagged description editor root.');
+        assert(editor.includes('[sinking_deluge]'), 'Expected tag syntax help.');
+        assert(editor.includes('echoes-tagged-desc__preview'), 'Expected live preview panel.');
+        assert(editor.includes('echoes-skill-tag--status'), 'Expected rendered status tag in preview.');
+        assert(editor.includes('data-action="creator-status-field"'), 'Expected status field attrs wired.');
+    });
+
+    test('Passive card: tagged description editor and planner label', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = { EchoesOfTheCityBattleModules: {} };
+        require(path.resolve(battleRoot, 'ui/sinColors.js'));
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillTagRenderer.js'));
+        require(path.resolve(battleRoot, 'ui/creator/creatorUiHelpers.js'));
+        require(path.resolve(battleRoot, 'ui/creator/movesetSheet/movesetSheetRenderer.js'));
+
+        const creatorUi = global.window.EchoesOfTheCityCreatorUi;
+        const movesetSheet = global.window.EchoesOfTheCityMovesetSheet;
+        const catalog = creatorUi.buildCatalog([{ id: 'assist-defense', label: 'Assist Defense' }]);
+        const escapeAttr = (value) => String(value);
+        const escapeHtml = (value) => String(value);
+        const html = movesetSheet.renderPassiveCard(
+            {
+                id: 'dont-thank-me',
+                name: "...Don't thank me.",
+                plannerLabel: 'PASSIVE',
+                description: 'Gain 1 [assist_defense] when an ally is Staggered.',
+                hooks: {},
+            },
+            0,
+            catalog,
+            creatorUi,
+            escapeAttr,
+            escapeHtml,
+        );
+        assert(html.includes('echoes-tagged-desc'), 'Expected tagged description on passive card.');
+        assert(html.includes('Passive description'), 'Expected passive description label.');
+        assert(html.includes('data-field="plannerLabel"'), 'Expected planner label field.');
+        assert(html.includes('echoes-skill-tag--status'), 'Expected tagged preview on passive card.');
     });
 
     test('Skill inspector: Limbus form and kit strip preview', () => {

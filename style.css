@@ -2014,6 +2014,63 @@
     color: rgba(255, 220, 160, 0.9);
 }
 
+.echoes-tagged-desc {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.echoes-tagged-desc__label {
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(255, 232, 200, 0.78);
+}
+
+.echoes-tagged-desc__help {
+    margin: 0;
+}
+
+.echoes-tagged-desc__textarea {
+    min-height: 10rem;
+    width: 100%;
+    resize: vertical;
+    line-height: 1.4;
+}
+
+.echoes-tagged-desc__preview {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.4rem;
+    background: rgba(0, 0, 0, 0.28);
+    padding: 0.5rem 0.6rem;
+}
+
+.echoes-tagged-desc__preview-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgba(255, 232, 200, 0.7);
+    margin-bottom: 0.3rem;
+}
+
+.echoes-tagged-desc__preview-body {
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.echoes-moveset__passive-label-field {
+    display: grid;
+    gap: 0.2rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: rgba(255, 232, 200, 0.72);
+}
+
+.echoes-moveset__passive-card .echoes-tagged-desc {
+    margin-top: 0.25rem;
+}
+
 @media (max-width: 1200px) {
     .echoes-skill-inspector--kit {
         grid-template-columns: 1fr;

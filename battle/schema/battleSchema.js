@@ -1651,6 +1651,9 @@
         if (passive.description != null && typeof passive.description !== 'string') {
             pushError(errors, `${path}.description`, 'must be a string when provided.');
         }
+        if (passive.plannerLabel != null && typeof passive.plannerLabel !== 'string') {
+            pushError(errors, `${path}.plannerLabel`, 'must be a string when provided.');
+        }
         if (passive.requirements != null) {
             if (typeof passive.requirements !== 'object' || Array.isArray(passive.requirements)) {
                 pushError(errors, `${path}.requirements`, 'must be an object when provided.');

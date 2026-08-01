@@ -2238,15 +2238,30 @@
                                                                     </div>
                                                                 </div>
 
-                    <div class="echoes-creator__field-row">
-                        <label>Description (shown to players)</label>
-                        <textarea data-action="creator-status-field" data-field="description" rows="2">${escapeHtml(String(statusView?.draft?.description || ''))}</textarea>
-                                                                    </div>
-
-                    <div class="echoes-creator__field-row">
-                        <label>Tags (comma separated)</label>
-                        <input data-action="creator-status-tags" value="${escapeAttribute(statusTags)}" placeholder="buff, custom, damage" />
-                                                                </div>
+                    <details class="echoes-editor-workshop__details" open>
+                        <summary class="echoes-editor-workshop__details-summary">Effect Info</summary>
+                        <div class="echoes-editor-workshop__details-body">
+                            ${(window.EchoesOfTheCitySkillTagRenderer || window.EchoesOfTheCityBattleModules?.skillTagRenderer)?.renderTaggedDescriptionEditor?.({
+                                value: statusView?.draft?.description || '',
+                                fieldAttrs: 'data-action="creator-status-field" data-field="description"',
+                                catalog,
+                                escapeAttr: escapeAttribute,
+                                escapeHtml,
+                                label: 'Effect description',
+                                rows: 10,
+                                placeholder: '- Max Stack: 20 — Gain (Stack x 3) Shield — use [rupture] tags for statuses',
+                            }) || `
+                                <div class="echoes-creator__field-row">
+                                    <label>Effect description</label>
+                                    <textarea data-action="creator-status-field" data-field="description" rows="8">${escapeHtml(String(statusView?.draft?.description || ''))}</textarea>
+                                </div>
+                            `}
+                            <div class="echoes-creator__field-row">
+                                <label>Tags (comma separated)</label>
+                                <input data-action="creator-status-tags" value="${escapeAttribute(statusTags)}" placeholder="buff, custom, damage" />
+                            </div>
+                        </div>
+                    </details>
 
                     <details class="echoes-editor-workshop__details" open>
                         <summary class="echoes-editor-workshop__details-summary">Stack rules</summary>
@@ -3962,7 +3977,16 @@
                     if (!passive || typeof passive !== 'object') {
                         return;
                     }
-                    passive[field] = normalizeStringInput(passiveField.value, '');
+                    const nextValue = normalizeStringInput(passiveField.value, '');
+                    if ((field === 'plannerLabel' || field === 'description') && !nextValue) {
+                        if (field === 'plannerLabel') {
+                            delete passive.plannerLabel;
+                        } else {
+                            passive.description = '';
+                        }
+                        return;
+                    }
+                    passive[field] = nextValue;
                 });
                 rerenderCreatorAfterUnitEdit();
             }
