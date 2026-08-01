@@ -16,9 +16,9 @@
     };
     const ONCE_PER_OPTIONS = ['battle', 'turn', 'skill', 'coin'];
     const TARGET_OPTIONS = [
-        { value: '', label: 'Opponent (default)' },
-        { value: 'self', label: 'Self' },
-        { value: 'opponent', label: 'Opponent' },
+        { value: '', label: 'Opponent (Inflict / hit them)' },
+        { value: 'self', label: 'Self (Gain buffs on you)' },
+        { value: 'opponent', label: 'Opponent (Inflict / hit them)' },
         { value: 'allAllies', label: 'All allies' },
         { value: 'allOpponents', label: 'All opponents' },
         { value: 'randomOpponent', label: 'Random opponent' },
@@ -1129,9 +1129,10 @@
                 <div class="echoes-creator__field-row echoes-creator__field-row--2">
                     <label>What happens</label>
                     ${typeSelect}
-                    <label>On target</label>
+                    <label>Who receives this</label>
                     ${targetSelect}
                 </div>
+                <p class="echoes-creator__hint">Use Self for Gain…; Opponent for Inflict….</p>
                 ${specificFields}
                 ${renderEffectFilters(effect, catalog, escapeAttr, fieldAttrs, options)}
                 <details class="echoes-creator__advanced">

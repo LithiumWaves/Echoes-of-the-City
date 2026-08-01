@@ -7464,6 +7464,74 @@ function runSuite() {
         assert(hookHtml.includes('Status stacks/count is at least'), 'Expected stacks-aware condition hint in hooks.');
     });
 
+    test('Description combat sync: compile Predictive Cuts–like description', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = { EchoesOfTheCityBattleModules: {} };
+        require(path.resolve(battleRoot, 'ui/creator/creatorUiHelpers.js'));
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/descriptionCombatSync.js'));
+
+        const sync = global.window.EchoesOfTheCityDescriptionCombatSync;
+        assert(typeof sync?.compileEffectsFromDescription === 'function', 'Expected compileEffectsFromDescription.');
+
+        const catalog = {
+            statusList: [
+                { id: 'concealed-exoskeleton', label: 'Concealed Exoskeleton', countOnly: true },
+                { id: 'tremor', label: 'Tremor' },
+                { id: 'rupture', label: 'Rupture' },
+                { id: 'aggro', label: 'Aggro', countOnly: true },
+            ],
+        };
+        const description = [
+            '[On_Use] Deal +6% damage for every [concealed_exoskeleton] on self (max 30%)',
+            'At 5+ / 10+ [concealed_exoskeleton], Coin Power +1 / +2',
+            'Clash Power +1 for every 5 [concealed_exoskeleton] on self (max 2)',
+            'Gain +3 [Aggro] to this Skill Slot next Turn',
+            '[Coin_1]',
+            '[On_Hit] Gain +1 [concealed_exoskeleton]',
+            '[On_Hit] Inflict 1 [tremor]',
+            '[Coin_2]',
+            '[On_Hit] Inflict 2 [rupture] and 1 [rupture] Count',
+            'This line is unknown gobbledygook',
+        ].join('\n');
+
+        const result = sync.compileEffectsFromDescription(description, catalog);
+        assert(Array.isArray(result.effects), 'Expected effects array.');
+        assert(result.skipped.some((entry) => /gobbledygook/i.test(entry.text)), 'Expected unknown line in skipped.');
+
+        const damage = result.effects.find((effect) => effect.operation === 'addStatusCountScaled');
+        assert(damage, 'Expected damage% scaling effect.');
+        assert(damage.multiplier === 0.06, 'Expected 6% multiplier from description.');
+        assert(damage.cap === 0.3, 'Expected 30% cap from description.');
+        assert(damage.statusId === 'concealed-exoskeleton', 'Expected concealed-exoskeleton on damage scale.');
+
+        const coinPower = result.effects.filter((effect) => effect.field === 'coinPowerBonus' && effect.minStatusCount != null);
+        assert(coinPower.length === 2, 'Expected two tiered coin power effects.');
+        assert(coinPower[0].minStatusCount === 5 && coinPower[0].value === 1, 'Expected 5+ → +1 coin power.');
+        assert(coinPower[1].minStatusCount === 10 && coinPower[1].value === 2, 'Expected 10+ → +2 coin power.');
+
+        const clash = result.effects.find((effect) => effect.field === 'clashPowerBonus');
+        assert(clash, 'Expected clash power stepped amount.');
+
+        const aggro = result.effects.find((effect) => effect.type === 'adjustSlotAggro');
+        assert(aggro && aggro.value === 3, 'Expected +3 slot aggro.');
+        assert(aggro.trigger === 'onAttackEnd', 'Expected aggro onAttackEnd.');
+
+        const gain = result.effects.find((effect) => effect.type === 'applyStatus' && effect.statusId === 'concealed-exoskeleton');
+        assert(gain && gain.target === 'self', 'Expected Gain line to target self.');
+        assert(gain.coinIndex === 1, 'Expected Gain under Coin 1.');
+
+        const tremor = result.effects.find((effect) => effect.type === 'applyStatus' && effect.statusId === 'tremor');
+        assert(tremor, 'Expected Inflict tremor.');
+        assert(!tremor.target || tremor.target === 'opponent', 'Expected Inflict to use opponent/default target.');
+        assert(tremor.coinIndex === 1, 'Expected tremor under Coin 1.');
+
+        const rupture = result.effects.find((effect) => effect.type === 'applyStatus' && effect.statusId === 'rupture');
+        assert(rupture, 'Expected Inflict rupture potency/count.');
+        assert(rupture.potency === 2 && rupture.count === 1, 'Expected rupture 2 potency and 1 count.');
+        assert(rupture.coinIndex === 2, 'Expected rupture under Coin 2.');
+    });
+
     test('Skill effect patterns: compile and humanize Predictive Cuts patterns', () => {
         const battleRoot = path.resolve(__dirname, '..');
         clearRequireCache(battleRoot);
@@ -7605,6 +7673,7 @@ function runSuite() {
         require(path.resolve(battleRoot, 'ui/creator/iconPickers.js'));
         require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillEffectPatterns.js'));
         require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillTagRenderer.js'));
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/descriptionCombatSync.js'));
         require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillPreview.js'));
         require(path.resolve(battleRoot, 'ui/creator/creatorUiHelpers.js'));
         require(path.resolve(battleRoot, 'ui/creator/movesetSheet/movesetSheetRenderer.js'));
@@ -7649,6 +7718,9 @@ function runSuite() {
         const html = skillInspector.renderSkillInspector(unitDraft, catalog, creatorUi, escapeAttr, escapeHtml, { selectedSkillIndex: 0 });
         assert(html.includes('echoes-skill-creator'), 'Expected skill creator form.');
         assert(html.includes('Combat mechanics (engine)'), 'Expected combat mechanics section.');
+        assert(html.includes('creator-skill-wire-from-description'), 'Expected Wire combat from description button.');
+        assert(html.includes('Who receives this'), 'Expected clarified target label.');
+        assert(html.includes('Self (Gain buffs on you)'), 'Expected Self/Gain target option.');
         assert(html.includes('echoes-kit-strip'), 'Expected kit strip preview.');
         assert(html.includes('echoes-kit-card'), 'Expected kit skill cards.');
         assert(html.includes('SKILL 1'), 'Expected planner label in inspector/preview.');

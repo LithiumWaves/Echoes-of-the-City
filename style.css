@@ -1655,6 +1655,13 @@
     line-height: 1.4;
 }
 
+.echoes-skill-creator__desc-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+}
+
 .echoes-skill-creator__upload-row {
     display: flex;
     flex-wrap: wrap;

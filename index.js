@@ -98,6 +98,7 @@
         'battle/ui/creator/iconPickers.js',
         'battle/ui/creator/skillBuilder/skillEffectPatterns.js',
         'battle/ui/creator/skillBuilder/skillTagRenderer.js',
+        'battle/ui/creator/skillBuilder/descriptionCombatSync.js',
         'battle/ui/creator/skillBuilder/skillPreview.js',
         'battle/ui/creator/skillBuilder/skillInspector.js',
         'battle/ui/creator/encounterBuilder/encounterBuilderRenderer.js',
@@ -3331,6 +3332,33 @@
                 compiled.forEach((effect) => skill.effects.push({ ...effect }));
             });
             state.creatorSelectedSkillIndex = skillIndex;
+            rerenderCreatorAfterUnitEdit();
+            return;
+        }
+
+        if (action === 'creator-skill-wire-from-description') {
+            const skillIndex = Number(actionTarget.dataset.skillIndex);
+            const sync = window.EchoesOfTheCityDescriptionCombatSync
+                || window.EchoesOfTheCityBattleModules?.descriptionCombatSync;
+            if (!Number.isInteger(skillIndex) || !sync?.compileEffectsFromDescription) {
+                return;
+            }
+            const catalog = getCreatorCatalog();
+            let matchedCount = 0;
+            let skippedCount = 0;
+            updateCreatorUnitJson((draft) => {
+                draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                const skill = draft.skills[skillIndex];
+                if (!skill || typeof skill !== 'object') {
+                    return;
+                }
+                const compiled = sync.compileEffectsFromDescription(skill.description || '', catalog);
+                skill.effects = Array.isArray(compiled.effects) ? compiled.effects.map((effect) => ({ ...effect })) : [];
+                matchedCount = Array.isArray(compiled.matched) ? compiled.matched.length : 0;
+                skippedCount = Array.isArray(compiled.skipped) ? compiled.skipped.length : 0;
+            });
+            state.creatorSelectedSkillIndex = skillIndex;
+            setCreatorMessage('success', `Wired combat from description: ${matchedCount} matched, ${skippedCount} skipped.`);
             rerenderCreatorAfterUnitEdit();
             return;
         }

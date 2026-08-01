@@ -111,7 +111,7 @@
 
         return `
             <div class="echoes-skill-creator__combat">
-                <p class="echoes-creator__hint">These lines fill <code>effects[]</code> for the battle engine. Card text above is display-only — tags like <code>[On_Use]</code> do not auto-wire combat.</p>
+                <p class="echoes-creator__hint">These lines fill <code>effects[]</code> for the battle engine. Tags style the preview; use <strong>Wire combat from description</strong> to compile mechanics, then correct rows here.</p>
                 <section class="echoes-skill-inspector__sentence-section">
                     <header class="echoes-skill-inspector__sentence-header">
                         <h4>On Use</h4>
@@ -205,7 +205,7 @@
                 <label>Skill ID<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="id" value="${escapeAttr(String(skill?.id || ''))}" placeholder="skill-id" /></label>
                 <label>Planner slot<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="skillSlot" value="${escapeAttr(String(skill?.skillSlot || ''))}" placeholder="slot-1 / defense" /></label>
             </div>
-            <p class="echoes-creator__hint">To enter a status / coop / special coin / attack effect, put them in square brackets with underscores instead of spaces, e.g. <code>[sinking_deluge]</code>, <code>[On_Use]</code>, <code>[On_Hit]</code>, <code>[coin_1]</code>, <code>[heads_hit]</code>.</p>
+            <p class="echoes-creator__hint">Use tags like <code>[On_Use]</code>, <code>[On_Hit]</code>, <code>[coin_1]</code>, <code>[rupture]</code> for the card preview. Then click <strong>Wire combat from description</strong> to compile those lines into editable Combat mechanics (you can still correct anything afterward).</p>
             <label class="echoes-skill-creator__field echoes-skill-creator__field--block">
                 <span>Skill description</span>
                 <textarea
@@ -217,7 +217,10 @@
                     placeholder="[On_Use] Clash Power +1 for every 5 [concealed_exoskeleton] on self (max 2)&#10;[On_Hit] Inflict 1 [tremor]"
                 >${escapeHtml(String(skill?.description || ''))}</textarea>
             </label>
-            <button class="echoes-editor-workshop__action echoes-editor-workshop__action--ghost" type="button" data-action="creator-skill-sync-description" data-skill-index="${skillIndex}">Insert effect summary into description</button>
+            <div class="echoes-skill-creator__desc-actions">
+                <button class="echoes-editor-workshop__action echoes-editor-workshop__action--accent" type="button" data-action="creator-skill-wire-from-description" data-skill-index="${skillIndex}">Wire combat from description</button>
+                <button class="echoes-editor-workshop__action echoes-editor-workshop__action--ghost" type="button" data-action="creator-skill-sync-description" data-skill-index="${skillIndex}">Insert effect summary into description</button>
+            </div>
         `;
 
         const optionsBody = `
