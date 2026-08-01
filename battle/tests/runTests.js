@@ -7339,6 +7339,105 @@ function runSuite() {
         assert(html.includes('Background image'), 'Expected background image field.');
     });
 
+    test('Skill effect patterns: compile and humanize Predictive Cuts patterns', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = { EchoesOfTheCityBattleModules: {} };
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillEffectPatterns.js'));
+
+        const patterns = global.window.EchoesOfTheCitySkillEffectPatterns;
+        assert(typeof patterns?.compilePattern === 'function', 'Expected compilePattern.');
+        assert(typeof patterns?.describeEffect === 'function', 'Expected describeEffect.');
+
+        const catalog = { statusList: [{ id: 'concealed-exoskeleton', label: 'Concealed Exoskeleton' }] };
+        const damageScaled = patterns.compilePattern('damage_pct_per_stack');
+        assert(damageScaled.length === 1, 'Expected one damage scaling effect.');
+        assert(damageScaled[0].type === 'modifyContext', 'Expected modifyContext for damage scaling.');
+        assert(damageScaled[0].operation === 'addStatusCountScaled', 'Expected addStatusCountScaled operation.');
+        const damageLine = patterns.describeEffect({
+            ...damageScaled[0],
+            statusId: 'concealed-exoskeleton',
+            multiplier: 0.06,
+            cap: 0.3,
+        }, catalog);
+        assert(damageLine.includes('6%'), 'Expected humanized percent damage line.');
+        assert(damageLine.includes('Concealed Exoskeleton'), 'Expected status label in humanized line.');
+
+        const tiered = patterns.compilePattern('tiered_coin_power');
+        assert(tiered.length === 2, 'Expected two tiered coin power effects.');
+        const tierLine = patterns.describeEffect({
+            ...tiered[0],
+            statusId: 'concealed-exoskeleton',
+            minStatusCount: 5,
+            value: 1,
+        }, catalog);
+        assert(tierLine.includes('Coin Power'), 'Expected Coin Power in tier line.');
+        assert(tierLine.includes('5+'), 'Expected threshold in tier line.');
+
+        const weighted = patterns.compilePattern('weighted_one_in_three', 2);
+        assert(weighted.length === 1, 'Expected one weighted branch effect.');
+        assert(weighted[0].coinIndex === 2, 'Expected coin index on weighted branch.');
+        const branchLine = patterns.describeEffect(weighted[0], catalog);
+        assert(branchLine.includes('33%'), 'Expected 33% label on weighted branch.');
+
+        const skill = {
+            effects: [
+                ...patterns.compilePattern('damage_pct_per_stack').map((effect) => ({
+                    ...effect,
+                    statusId: 'concealed-exoskeleton',
+                })),
+                ...tiered.map((effect) => ({ ...effect, statusId: 'concealed-exoskeleton' })),
+                ...patterns.compilePattern('slot_aggro'),
+            ],
+        };
+        const description = patterns.buildDescriptionFromEffects(skill, catalog);
+        assert(description.includes('[On Use]'), 'Expected On Use section in synced description.');
+        assert(description.includes('Aggro'), 'Expected aggro line in synced description.');
+    });
+
+    test('Skill inspector: shell renders list, form, and preview columns', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = { EchoesOfTheCityBattleModules: {} };
+        require(path.resolve(battleRoot, 'ui/sinColors.js'));
+        require(path.resolve(battleRoot, 'ui/creator/iconPickers.js'));
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillEffectPatterns.js'));
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillPreview.js'));
+        require(path.resolve(battleRoot, 'ui/creator/creatorUiHelpers.js'));
+        require(path.resolve(battleRoot, 'ui/creator/movesetSheet/movesetSheetRenderer.js'));
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillInspector.js'));
+
+        const creatorUi = global.window.EchoesOfTheCityCreatorUi;
+        const skillInspector = global.window.EchoesOfTheCitySkillInspector;
+        const catalog = creatorUi.buildCatalog([]);
+        const escapeAttr = (value) => String(value);
+        const escapeHtml = (value) => String(value);
+        const unitDraft = {
+            skills: [{
+                id: 'predictive-cuts',
+                name: 'Predictive Cuts',
+                plannerLabel: 'SKILL 1',
+                sinType: 'gluttony',
+                damageType: 'slash',
+                skillType: 'attack',
+                basePower: 3,
+                coinPower: 4,
+                coinCount: 2,
+                offenseLevel: 62,
+                attackWeight: 1,
+                effects: global.window.EchoesOfTheCitySkillEffectPatterns.compilePattern('apply_status_hit', 1),
+            }],
+        };
+
+        const html = skillInspector.renderSkillInspector(unitDraft, catalog, creatorUi, escapeAttr, escapeHtml, { selectedSkillIndex: 0 });
+        assert(html.includes('echoes-skill-inspector'), 'Expected inspector root.');
+        assert(html.includes('echoes-skill-inspector__list'), 'Expected skill list rail.');
+        assert(html.includes('echoes-skill-preview'), 'Expected live preview panel.');
+        assert(html.includes('SKILL 1'), 'Expected planner label in inspector/preview.');
+        assert(html.includes('data-action="creator-skill-picker"'), 'Expected sin/damage picker buttons.');
+        assert(html.includes('creator-skill-sync-description'), 'Expected sync description button.');
+    });
+
     test('Editor workbench: shell renderer exports and TCG labels', () => {
         const battleRoot = path.resolve(__dirname, '..');
         clearRequireCache(battleRoot);

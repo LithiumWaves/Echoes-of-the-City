@@ -336,12 +336,18 @@
         `;
     }
 
-    function renderMovesetSheet(unitDraft, catalog, creatorUi, escapeAttr, escapeHtml) {
-        const skills = Array.isArray(unitDraft?.skills) ? unitDraft.skills : [];
+    function renderMovesetSheet(unitDraft, catalog, creatorUi, escapeAttr, escapeHtml, options = {}) {
         const passives = Array.isArray(unitDraft?.passives) ? unitDraft.passives : [];
         const statusList = catalog?.statusList || [];
-
-        const skillCards = skills.map((skill, index) => renderSkillCard(skill, index, catalog, creatorUi, escapeAttr, escapeHtml)).join('');
+        const skillInspector = battleModules.skillInspector || window.EchoesOfTheCitySkillInspector || {};
+        const inspectorHtml = skillInspector.renderSkillInspector?.(
+            unitDraft,
+            catalog,
+            creatorUi,
+            escapeAttr,
+            escapeHtml,
+            { selectedSkillIndex: options.selectedSkillIndex },
+        ) || '<p class="echoes-creator__hint">Skill inspector failed to load.</p>';
         const passiveCards = passives.map((passive, index) => renderPassiveCard(passive, index, catalog, creatorUi, escapeAttr, escapeHtml)).join('');
 
         return `
@@ -350,12 +356,10 @@
                     <button class="echoes-editor-workshop__action" type="button" data-action="creator-unit-add-skill">+ Skill card</button>
                     <button class="echoes-editor-workshop__action echoes-editor-workshop__action--ghost" type="button" data-action="creator-unit-add-passive">+ Passive</button>
                 </div>
-                <div class="echoes-moveset__body">
-                    <div class="echoes-moveset__skills-column">
-                        <h3 class="echoes-moveset__column-title">Skills</h3>
-                        <div class="echoes-moveset__skills-row">
-                            ${skillCards || '<span class="echoes-creator__hint">Add a skill to start building your moveset.</span>'}
-                        </div>
+                <div class="echoes-moveset__body echoes-moveset__body--inspector">
+                    <div class="echoes-moveset__inspector-column">
+                        <h3 class="echoes-moveset__column-title">Skill inspector</h3>
+                        ${inspectorHtml}
                     </div>
                     <div class="echoes-moveset__side-column">
                         <section class="echoes-moveset__passives">

@@ -95,6 +95,10 @@
         'battle/ui/creator/creatorUiHelpers.js',
         'battle/ui/creator/editorWorkbenchRenderer.js',
         'battle/ui/creator/movesetSheet/movesetSheetRenderer.js',
+        'battle/ui/creator/iconPickers.js',
+        'battle/ui/creator/skillBuilder/skillEffectPatterns.js',
+        'battle/ui/creator/skillBuilder/skillPreview.js',
+        'battle/ui/creator/skillBuilder/skillInspector.js',
         'battle/ui/creator/encounterBuilder/encounterBuilderRenderer.js',
         'battle/ui/roster/teamBuilderRenderer.js',
         'battle/ui/drive/driveMenuRenderer.js',
@@ -190,6 +194,7 @@
         creatorJsonInput: '',
         creatorMessage: null,
         creatorPendingOpenLane: null,
+        creatorSelectedSkillIndex: 0,
         creatorUnitDraftCache: null,
         creatorBattleDraftCache: null,
         creatorRenderLock: false,
@@ -1176,6 +1181,7 @@
                 creatorUi,
                 escapeAttribute,
                 escapeHtml,
+                { selectedSkillIndex: state.creatorSelectedSkillIndex },
             ).trim();
             const newMoveset = wrapper.firstElementChild;
             if (!newMoveset) {
@@ -2149,7 +2155,7 @@
                     ${creatorUi?.renderUnitDefensesPanel?.(unitDraft, catalog, escapeAttribute, escapeHtml)
                         || ''}
 
-                    ${movesetSheet?.renderMovesetSheet(unitDraft, catalog, creatorUi, escapeAttribute, escapeHtml)
+                    ${movesetSheet?.renderMovesetSheet(unitDraft, catalog, creatorUi, escapeAttribute, escapeHtml, { selectedSkillIndex: state.creatorSelectedSkillIndex })
                         || '<span class="echoes-creator__hint">Moveset sheet module not loaded.</span>'}
 
                     <details class="echoes-editor-workshop__details">
@@ -3229,7 +3235,92 @@
                     effects: [],
                     description: '',
                 });
+                state.creatorSelectedSkillIndex = draft.skills.length - 1;
             });
+            rerenderCreatorAfterUnitEdit();
+            return;
+        }
+
+        if (action === 'creator-skill-select') {
+            const index = Number(actionTarget.dataset.index);
+            if (Number.isInteger(index)) {
+                state.creatorSelectedSkillIndex = index;
+                rerenderCreatorAfterUnitEdit();
+            }
+            return;
+        }
+
+        if (action === 'creator-skill-picker') {
+            const index = Number(actionTarget.dataset.index);
+            const picker = actionTarget.dataset.picker || '';
+            const value = actionTarget.dataset.value || '';
+            if (Number.isInteger(index) && picker && value) {
+                updateCreatorUnitJson((draft) => {
+                    draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                    const skill = draft.skills[index];
+                    if (!skill || typeof skill !== 'object') {
+                        return;
+                    }
+                    skill[picker] = value;
+                });
+                state.creatorSelectedSkillIndex = index;
+                rerenderCreatorAfterUnitEdit();
+            }
+            return;
+        }
+
+        if (action === 'creator-skill-add-pattern') {
+            const skillIndex = Number(actionTarget.dataset.skillIndex);
+            const coinIndexRaw = actionTarget.dataset.coinIndex;
+            const coinIndex = coinIndexRaw !== undefined && String(coinIndexRaw) !== '' ? Number(coinIndexRaw) : null;
+            const patterns = window.EchoesOfTheCitySkillEffectPatterns || window.EchoesOfTheCityBattleModules?.skillEffectPatterns;
+            if (!Number.isInteger(skillIndex) || !patterns?.compilePattern) {
+                return;
+            }
+            let pick = null;
+            if (Number.isInteger(coinIndex)) {
+                pick = elements.creatorContent?.querySelector(`[data-action="creator-skill-pattern-pick"][data-skill-index="${skillIndex}"][data-coin-index="${coinIndex}"]`);
+            } else {
+                pick = elements.creatorContent?.querySelector(`[data-action="creator-skill-pattern-pick"][data-skill-index="${skillIndex}"][data-scope="onSelect"]`);
+            }
+            const patternId = pick?.value || '';
+            if (!patternId) {
+                return;
+            }
+            const compiled = patterns.compilePattern(patternId, Number.isInteger(coinIndex) ? coinIndex : undefined);
+            if (!compiled.length) {
+                return;
+            }
+            updateCreatorUnitJson((draft) => {
+                draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                const skill = draft.skills[skillIndex];
+                if (!skill || typeof skill !== 'object') {
+                    return;
+                }
+                skill.effects = Array.isArray(skill.effects) ? skill.effects : [];
+                compiled.forEach((effect) => skill.effects.push({ ...effect }));
+            });
+            state.creatorSelectedSkillIndex = skillIndex;
+            rerenderCreatorAfterUnitEdit();
+            return;
+        }
+
+        if (action === 'creator-skill-sync-description') {
+            const skillIndex = Number(actionTarget.dataset.skillIndex);
+            const patterns = window.EchoesOfTheCitySkillEffectPatterns || window.EchoesOfTheCityBattleModules?.skillEffectPatterns;
+            if (!Number.isInteger(skillIndex) || !patterns?.buildDescriptionFromEffects) {
+                return;
+            }
+            const catalog = getCreatorCatalog();
+            updateCreatorUnitJson((draft) => {
+                draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
+                const skill = draft.skills[skillIndex];
+                if (!skill || typeof skill !== 'object') {
+                    return;
+                }
+                skill.description = patterns.buildDescriptionFromEffects(skill, catalog);
+            });
+            state.creatorSelectedSkillIndex = skillIndex;
             rerenderCreatorAfterUnitEdit();
             return;
         }
@@ -3381,6 +3472,7 @@
         if (action === 'creator-unit-remove-skill') {
             const index = Number(actionTarget.dataset.index);
             if (Number.isInteger(index)) {
+                let nextSelected = state.creatorSelectedSkillIndex;
                 updateCreatorUnitJson((draft) => {
                     draft.skills = Array.isArray(draft.skills) ? draft.skills : [];
                     const removed = draft.skills.splice(index, 1);
@@ -3388,7 +3480,15 @@
                     if (removedId && draft.sprites?.skills) {
                         delete draft.sprites.skills[removedId];
                     }
+                    if (!draft.skills.length) {
+                        nextSelected = -1;
+                    } else if (nextSelected >= draft.skills.length) {
+                        nextSelected = draft.skills.length - 1;
+                    } else if (nextSelected === index) {
+                        nextSelected = Math.max(0, index - 1);
+                    }
                 });
+                state.creatorSelectedSkillIndex = nextSelected;
                 rerenderCreatorAfterUnitEdit();
             }
         }
@@ -4118,7 +4218,7 @@
                     if (!skill || typeof skill !== 'object') {
                         return;
                     }
-                    if (['id', 'name', 'damageType', 'sinType', 'skillType', 'description', 'skillSlot', 'targeting', 'tags', 'unbreakableCoins'].includes(field)) {
+                    if (['id', 'name', 'damageType', 'sinType', 'skillType', 'description', 'skillSlot', 'targeting', 'tags', 'unbreakableCoins', 'plannerLabel'].includes(field)) {
                         if (field === 'tags') {
                             const trimmed = String(skillField.value ?? '').trim();
                             if (!trimmed) {
@@ -4141,15 +4241,15 @@
                             return;
                         }
                         skill[field] = normalizeStringInput(skillField.value, '');
-                        if ((field === 'skillSlot' || field === 'targeting') && !skill[field]) {
+                        if ((field === 'skillSlot' || field === 'targeting' || field === 'plannerLabel') && !skill[field]) {
                             delete skill[field];
                         }
                         return;
                     }
-                    if (['basePower', 'coinPower', 'coinCount', 'offenseLevel', 'variantPriority', 'attackWeight'].includes(field)) {
+                    if (['basePower', 'coinPower', 'coinCount', 'offenseLevel', 'variantPriority', 'attackWeight', 'deckCount'].includes(field)) {
                         const fallback = skill[field] ?? 0;
                         const parsed = normalizeNumberInput(skillField.value, fallback);
-                        if ((field === 'offenseLevel' || field === 'variantPriority' || field === 'attackWeight') && !String(skillField.value ?? '').trim()) {
+                        if ((field === 'offenseLevel' || field === 'variantPriority' || field === 'attackWeight' || field === 'deckCount') && !String(skillField.value ?? '').trim()) {
                             delete skill[field];
                         } else {
                             skill[field] = Math.round(parsed);

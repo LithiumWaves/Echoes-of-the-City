@@ -1589,6 +1589,12 @@
         if (skill.skillSlot != null && typeof skill.skillSlot !== 'string') {
             pushError(errors, `${path}.skillSlot`, 'must be a string when provided.');
         }
+        if (skill.plannerLabel != null && typeof skill.plannerLabel !== 'string') {
+            pushError(errors, `${path}.plannerLabel`, 'must be a string when provided.');
+        }
+        if (skill.deckCount != null && (!Number.isInteger(skill.deckCount) || skill.deckCount < 0)) {
+            pushError(errors, `${path}.deckCount`, 'must be a non-negative integer when provided.');
+        }
         if (skill.variantPriority != null && (!Number.isInteger(skill.variantPriority) || skill.variantPriority < 0)) {
             pushError(errors, `${path}.variantPriority`, 'must be a non-negative integer when provided.');
         }
