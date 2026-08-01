@@ -18,7 +18,7 @@
         { id: 'blunt', label: 'Blunt', glyph: '■' },
     ];
     const SKILL_TYPES = [
-        { id: 'attack', label: 'Attack' },
+        { id: 'attack', label: 'Offensive skill' },
         { id: 'guard', label: 'Guard' },
         { id: 'evade', label: 'Evade' },
         { id: 'counter', label: 'Counter' },

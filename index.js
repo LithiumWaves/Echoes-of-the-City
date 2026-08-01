@@ -97,6 +97,7 @@
         'battle/ui/creator/movesetSheet/movesetSheetRenderer.js',
         'battle/ui/creator/iconPickers.js',
         'battle/ui/creator/skillBuilder/skillEffectPatterns.js',
+        'battle/ui/creator/skillBuilder/skillTagRenderer.js',
         'battle/ui/creator/skillBuilder/skillPreview.js',
         'battle/ui/creator/skillBuilder/skillInspector.js',
         'battle/ui/creator/encounterBuilder/encounterBuilderRenderer.js',
@@ -3250,6 +3251,15 @@
             return;
         }
 
+        if (action === 'creator-skill-select-change') {
+            const index = Number(actionTarget.value);
+            if (Number.isInteger(index)) {
+                state.creatorSelectedSkillIndex = index;
+                rerenderCreatorAfterUnitEdit();
+            }
+            return;
+        }
+
         if (action === 'creator-skill-picker') {
             const index = Number(actionTarget.dataset.index);
             const picker = actionTarget.dataset.picker || '';
@@ -3508,6 +3518,16 @@
 
     function handleCreatorContentChange(event) {
         if (state.creatorRenderLock) {
+            return;
+        }
+
+        const skillSelectChange = event.target.closest('[data-action="creator-skill-select-change"]');
+        if (skillSelectChange) {
+            const index = Number(skillSelectChange.value);
+            if (Number.isInteger(index)) {
+                state.creatorSelectedSkillIndex = index;
+                rerenderCreatorAfterUnitEdit();
+            }
             return;
         }
 

@@ -356,15 +356,14 @@
                     <button class="echoes-editor-workshop__action" type="button" data-action="creator-unit-add-skill">+ Skill card</button>
                     <button class="echoes-editor-workshop__action echoes-editor-workshop__action--ghost" type="button" data-action="creator-unit-add-passive">+ Passive</button>
                 </div>
-                <div class="echoes-moveset__body echoes-moveset__body--inspector">
+                <div class="echoes-moveset__body echoes-moveset__body--kit">
                     <div class="echoes-moveset__inspector-column">
-                        <h3 class="echoes-moveset__column-title">Skill inspector</h3>
                         ${inspectorHtml}
                     </div>
                     <div class="echoes-moveset__side-column">
                         <section class="echoes-moveset__passives">
-                            <h3 class="echoes-moveset__column-title">Passives</h3>
-                            ${passiveCards || '<span class="echoes-creator__hint">No passives yet.</span>'}
+                            <h3 class="echoes-moveset__column-title">Passives (edit)</h3>
+                            ${passiveCards || '<span class="echoes-creator__hint">No passives yet. Kit preview shows passive cards on the right.</span>'}
                         </section>
                         ${renderMechanicsPanel(statusList, escapeAttr, escapeHtml)}
                     </div>

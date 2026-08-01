@@ -7395,13 +7395,42 @@ function runSuite() {
         assert(description.includes('Aggro'), 'Expected aggro line in synced description.');
     });
 
-    test('Skill inspector: shell renders list, form, and preview columns', () => {
+    test('Skill tag renderer: styles On_Use / status / coin tags', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = { EchoesOfTheCityBattleModules: {} };
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillTagRenderer.js'));
+
+        const tags = global.window.EchoesOfTheCitySkillTagRenderer;
+        assert(typeof tags?.renderTaggedText === 'function', 'Expected renderTaggedText.');
+        const catalog = {
+            statusList: [
+                { id: 'rupture', label: 'Rupture' },
+                { id: 'concealed-exoskeleton', label: 'Concealed Exoskeleton' },
+            ],
+        };
+        const html = tags.renderTaggedText(
+            '[On_Use] Inflict 2 [rupture]\n[On_Hit] Gain [concealed_exoskeleton]\n[coin_1] [Heads_Hit]',
+            catalog,
+        );
+        assert(html.includes('echoes-skill-tag--trigger'), 'Expected trigger tag class.');
+        assert(html.includes('[On Use]'), 'Expected humanized On Use label.');
+        assert(html.includes('echoes-skill-tag--status'), 'Expected status tag class.');
+        assert(html.includes('Rupture'), 'Expected status label.');
+        assert(html.includes('Concealed Exoskeleton'), 'Expected catalog status label.');
+        assert(html.includes('echoes-skill-tag--coin'), 'Expected coin tag class.');
+        assert(html.includes('<br>'), 'Expected newlines preserved as breaks.');
+        assert(!html.includes('<script'), 'Expected escaped HTML.');
+    });
+
+    test('Skill inspector: Limbus form and kit strip preview', () => {
         const battleRoot = path.resolve(__dirname, '..');
         clearRequireCache(battleRoot);
         global.window = { EchoesOfTheCityBattleModules: {} };
         require(path.resolve(battleRoot, 'ui/sinColors.js'));
         require(path.resolve(battleRoot, 'ui/creator/iconPickers.js'));
         require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillEffectPatterns.js'));
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillTagRenderer.js'));
         require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillPreview.js'));
         require(path.resolve(battleRoot, 'ui/creator/creatorUiHelpers.js'));
         require(path.resolve(battleRoot, 'ui/creator/movesetSheet/movesetSheetRenderer.js'));
@@ -7409,7 +7438,9 @@ function runSuite() {
 
         const creatorUi = global.window.EchoesOfTheCityCreatorUi;
         const skillInspector = global.window.EchoesOfTheCitySkillInspector;
-        const catalog = creatorUi.buildCatalog([]);
+        const catalog = creatorUi.buildCatalog([
+            { id: 'rupture', label: 'Rupture', name: 'Rupture' },
+        ]);
         const escapeAttr = (value) => String(value);
         const escapeHtml = (value) => String(value);
         const unitDraft = {
@@ -7425,17 +7456,32 @@ function runSuite() {
                 coinCount: 2,
                 offenseLevel: 62,
                 attackWeight: 1,
+                description: '[On_Use] Clash Power +1\n[On_Hit] Inflict 1 [rupture]',
                 effects: global.window.EchoesOfTheCitySkillEffectPatterns.compilePattern('apply_status_hit', 1),
+            }, {
+                id: 'guard-skill',
+                name: 'Guard',
+                skillType: 'guard',
+                plannerLabel: 'DEFENSE',
+                basePower: 8,
+                coinPower: 0,
+                coinCount: 1,
+                description: '',
+                effects: [],
             }],
+            passives: [{ id: 'passive_1', name: 'Test Passive', description: 'Owned passive text.' }],
         };
 
         const html = skillInspector.renderSkillInspector(unitDraft, catalog, creatorUi, escapeAttr, escapeHtml, { selectedSkillIndex: 0 });
-        assert(html.includes('echoes-skill-inspector'), 'Expected inspector root.');
-        assert(html.includes('echoes-skill-inspector__list'), 'Expected skill list rail.');
-        assert(html.includes('echoes-skill-preview'), 'Expected live preview panel.');
+        assert(html.includes('echoes-skill-creator'), 'Expected skill creator form.');
+        assert(html.includes('Combat mechanics (engine)'), 'Expected combat mechanics section.');
+        assert(html.includes('echoes-kit-strip'), 'Expected kit strip preview.');
+        assert(html.includes('echoes-kit-card'), 'Expected kit skill cards.');
         assert(html.includes('SKILL 1'), 'Expected planner label in inspector/preview.');
+        assert(html.includes('echoes-skill-tag--trigger'), 'Expected rendered description tags in kit card.');
         assert(html.includes('data-action="creator-skill-picker"'), 'Expected sin/damage picker buttons.');
-        assert(html.includes('creator-skill-sync-description'), 'Expected sync description button.');
+        assert(html.includes('creator-skill-select-change'), 'Expected skill select dropdown.');
+        assert(html.includes('PASSIVE'), 'Expected passive card in kit strip.');
     });
 
     test('Editor workbench: shell renderer exports and TCG labels', () => {
