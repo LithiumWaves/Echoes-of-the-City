@@ -2348,10 +2348,18 @@
         return {
             applyEffects,
             getEffectStatusPotency,
+            getEffectStatusCount,
         };
     }
 
-    function effectMatchesRuntime(effect, runtime, getEffectStatusPotency) {
+    function effectMatchesRuntime(effect, runtime, statusReaders = {}) {
+        const getEffectStatusPotency = typeof statusReaders === 'function'
+            ? statusReaders
+            : statusReaders?.getEffectStatusPotency;
+        const getEffectStatusCount = typeof statusReaders === 'function'
+            ? null
+            : statusReaders?.getEffectStatusCount;
+
         if (typeof effect.coinIndex === 'number' && typeof runtime.coinIndex === 'number' && effect.coinIndex !== runtime.coinIndex) {
             return false;
         }
@@ -2364,8 +2372,22 @@
             return false;
         }
 
-        if (typeof effect.minStatusPotency === 'number' && getEffectStatusPotency(runtime, effect) < effect.minStatusPotency) {
-            return false;
+        if (typeof effect.minStatusPotency === 'number') {
+            const potency = typeof getEffectStatusPotency === 'function'
+                ? getEffectStatusPotency(runtime, effect)
+                : 0;
+            if (potency < effect.minStatusPotency) {
+                return false;
+            }
+        }
+
+        if (typeof effect.minStatusCount === 'number') {
+            const statusCount = typeof getEffectStatusCount === 'function'
+                ? getEffectStatusCount(runtime, effect)
+                : 0;
+            if (statusCount < effect.minStatusCount) {
+                return false;
+            }
         }
 
         if (effect.headsOnly && !runtime.isHeads) {
@@ -2852,13 +2874,13 @@
     }
 
     function createSkillEffectRunner(deps) {
-        const { applyEffects, getEffectStatusPotency } = createEffectExecutor(deps);
-        const { getEncounterResource } = deps || {};
+        const { applyEffects, getEffectStatusPotency, getEffectStatusCount } = createEffectExecutor(deps);
+        const statusReaders = { getEffectStatusPotency, getEffectStatusCount };
 
         function applySkillEffects(targetBattle, trigger, runtime) {
             const skill = runtime?.skill;
             const effects = Array.isArray(skill?.effects)
-                ? skill.effects.filter((effect) => effect?.trigger === trigger && effectMatchesRuntime(effect, runtime, getEffectStatusPotency))
+                ? skill.effects.filter((effect) => effect?.trigger === trigger && effectMatchesRuntime(effect, runtime, statusReaders))
                 : [];
             applyEffects(targetBattle, effects, runtime);
         }
@@ -2867,7 +2889,8 @@
     }
 
     function createPassiveEffectRunner(deps) {
-        const { applyEffects, getEffectStatusPotency } = createEffectExecutor(deps);
+        const { applyEffects, getEffectStatusPotency, getEffectStatusCount } = createEffectExecutor(deps);
+        const statusReaders = { getEffectStatusPotency, getEffectStatusCount };
         const { getStatus, invokeHooks, getEncounterResource } = deps || {};
 
         function applyPassiveEffects(targetBattle, hookName, hookEffects, runtime, options = {}) {
@@ -2907,7 +2930,7 @@
                     }
 
                     const actions = Array.isArray(block.actions)
-                        ? block.actions.filter((effect) => effectMatchesRuntime(effect, hookRuntime, getEffectStatusPotency))
+                        ? block.actions.filter((effect) => effectMatchesRuntime(effect, hookRuntime, statusReaders))
                         : [];
                     if (!actions.length) {
                         return;
@@ -2923,7 +2946,7 @@
             }
 
             const effects = Array.isArray(hookEffects)
-                ? hookEffects.filter((effect) => effectMatchesRuntime(effect, hookRuntime, getEffectStatusPotency))
+                ? hookEffects.filter((effect) => effectMatchesRuntime(effect, hookRuntime, statusReaders))
                 : [];
             if (effects.length) {
                 emitStatusTriggerLifecycle('beforeStatusTrigger');

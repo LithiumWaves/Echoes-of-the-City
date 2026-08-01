@@ -29,15 +29,35 @@
         { value: 'highestHpAlly', label: 'Highest HP ally' },
     ];
     const CONTEXT_FIELDS = [
-        'dynamicDamageBonus',
-        'staticDamageBonus',
-        'flatPowerBonus',
-        'coinPowerBonus',
-        'clashPowerBonus',
-        'critChanceBonus',
-        'damageMultiplier',
-        'additiveDamage',
+        { value: 'dynamicDamageBonus', label: 'Damage bonus (dynamic)' },
+        { value: 'staticDamageBonus', label: 'Damage bonus (static)' },
+        { value: 'flatPowerBonus', label: 'Flat power bonus' },
+        { value: 'coinPowerBonus', label: 'Coin power bonus' },
+        { value: 'clashPowerBonus', label: 'Clash power bonus' },
+        { value: 'critChanceBonus', label: 'Crit chance bonus' },
+        { value: 'damageMultiplier', label: 'Damage multiplier' },
+        { value: 'additiveDamage', label: 'Additive damage' },
     ];
+
+    const EFFECT_LABEL_OVERRIDES = {
+        consumeStatus: 'Consume Status (Charge, etc.)',
+        adjustStatus: 'Adjust Status stacks',
+        applyStatus: 'Apply Status',
+        clearStatus: 'Clear Status',
+        modifyContext: 'Gain Power / Damage Bonus',
+        modifyCoinMap: 'Gain Coin Power (per coin)',
+        dealFixedDamage: 'Deal Fixed Damage',
+        dealHpPercentDamage: 'Deal % Max HP Damage',
+        healHp: 'Heal HP',
+        adjustSanity: 'Adjust SP / Sanity',
+        burstTremor: 'Burst Tremor',
+        convertStatus: 'Convert Status',
+        amplitudeConvert: 'Amplitude Convert (Tremor → Gnaw)',
+        setFollowUpSkill: 'Set Follow-up Skill',
+        queueUnopposedFollowUp: 'Queue Unopposed Follow-up',
+        grantSkillOffer: 'Grant Skill Offer',
+        adjustSlotAggro: 'Adjust Slot Aggro',
+    };
 
     const CONDITION_LABELS = {
         always: 'Always (no check)',
@@ -174,8 +194,59 @@
 
     const SKILL_EFFECT_PRESETS = [
         { label: 'Apply status on hit', trigger: 'onHit', type: 'applyStatus', statusId: '', potency: 1, count: 1 },
+        { label: 'Consume Charge (or status) on use', trigger: 'onUse', type: 'consumeStatus', target: 'self', statusId: 'charge', countDelta: -1 },
+        { label: 'Gain Coin Power (+2 all coins)', trigger: 'onSelect', type: 'modifyContext', field: 'coinPowerBonus', operation: 'add', value: 2 },
+        { label: 'Gain Coin Power on coin 1', trigger: 'onSelect', type: 'modifyCoinMap', field: 'coinPowerBonusByCoin', coinIndex: 1, value: 2 },
+        {
+            label: 'At 5+ status potency → +1 Coin Power',
+            trigger: 'onSelect',
+            type: 'modifyContext',
+            field: 'coinPowerBonus',
+            operation: 'add',
+            value: 1,
+            statusId: 'poise',
+            minStatusPotency: 5,
+            statusSource: 'self',
+        },
+        {
+            label: 'At 3+ status count → +2 Damage',
+            trigger: 'onSelect',
+            type: 'modifyContext',
+            field: 'dynamicDamageBonus',
+            operation: 'add',
+            value: 2,
+            statusId: 'charge',
+            minStatusCount: 3,
+            statusSource: 'self',
+        },
+        {
+            label: 'Damage scales with status potency',
+            trigger: 'onSelect',
+            type: 'modifyContext',
+            field: 'dynamicDamageBonus',
+            operation: 'addStatusPotencyScaled',
+            statusId: 'burn',
+            multiplier: 1,
+            statusSource: 'self',
+        },
+        {
+            label: 'Damage scales with status count',
+            trigger: 'onSelect',
+            type: 'modifyContext',
+            field: 'dynamicDamageBonus',
+            operation: 'addStatusCountScaled',
+            statusId: 'charge',
+            multiplier: 1,
+            statusSource: 'self',
+        },
+        {
+            label: 'Deal damage = status potency × multiplier',
+            trigger: 'onHit',
+            type: 'dealFixedDamage',
+            target: 'opponent',
+            amount: { statusPotency: { target: 'self', statusId: 'burn' }, multiplier: 1 },
+        },
         { label: 'Heal self on hit', trigger: 'onHit', type: 'healHp', target: 'self', value: 5 },
-        { label: 'Coin power bonus (coin 1)', trigger: 'onSelect', type: 'modifyCoinMap', field: 'coinPowerBonusByCoin', coinIndex: 1, value: 2 },
         { label: 'Damage bonus on select', trigger: 'onSelect', type: 'modifyContext', field: 'dynamicDamageBonus', operation: 'add', value: 3 },
         { label: 'SP gain on clash win', trigger: 'onClashWin', type: 'adjustSanity', target: 'self', value: 5 },
     ];
@@ -356,10 +427,12 @@
         const defs = registry.effectDefinitions || {};
         const all = Object.entries(defs).map(([id, def]) => ({
             id,
-            label: def.label || id,
+            label: EFFECT_LABEL_OVERRIDES[id] || def.label || id,
         }));
         const commonSet = new Set(COMMON_EFFECT_TYPES);
-        const common = all.filter((entry) => commonSet.has(entry.id));
+        const common = COMMON_EFFECT_TYPES
+            .map((id) => all.find((entry) => entry.id === id))
+            .filter(Boolean);
         const rest = all.filter((entry) => !commonSet.has(entry.id));
         return { common, rest, all };
     }
@@ -537,82 +610,107 @@
         const numericValue = typeof amount === 'number' ? amount : '';
         const potencySource = amount?.statusPotency || {};
         const countSource = amount?.statusCount || {};
+        const multiplier = typeof amount?.multiplier === 'number' ? amount.multiplier : '';
 
         return `
             <div class="echoes-creator__amount-editor">
                 <select ${attrs} data-field="amountMode" style="width:100%; margin-bottom:0.35rem;">
                     <option value="number" ${mode === 'number' ? 'selected' : ''}>Fixed number</option>
-                    <option value="statusPotency" ${mode === 'statusPotency' ? 'selected' : ''}>Equals status potency</option>
-                    <option value="statusCount" ${mode === 'statusCount' ? 'selected' : ''}>Equals status count</option>
+                    <option value="statusPotency" ${mode === 'statusPotency' ? 'selected' : ''}>From status potency (× multiplier)</option>
+                    <option value="statusCount" ${mode === 'statusCount' ? 'selected' : ''}>From status count (× multiplier)</option>
                 </select>
                 ${mode === 'number'
                     ? `<input ${attrs} data-field="amount" inputmode="numeric" value="${escapeAttr(String(numericValue))}" placeholder="Amount" style="width:100%;" />`
                     : mode === 'statusPotency'
                         ? `
-                            <div class="echoes-creator__field-row echoes-creator__field-row--2">
-                                <input ${attrs} data-amount-mode="statusPotency" data-amount-field="statusId" value="${escapeAttr(String(potencySource.statusId || ''))}" placeholder="Status ID" />
+                            <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                                <input ${attrs} data-amount-mode="statusPotency" data-amount-field="statusId" value="${escapeAttr(String(potencySource.statusId || ''))}" placeholder="Status ID (e.g. burn)" />
                                 <select ${attrs} data-amount-mode="statusPotency" data-amount-field="target" style="width:100%;">
                                     <option value="self" ${potencySource.target === 'self' || !potencySource.target ? 'selected' : ''}>Self</option>
                                     <option value="opponent" ${potencySource.target === 'opponent' ? 'selected' : ''}>Opponent</option>
                                 </select>
+                                <input ${attrs} data-amount-mode="statusPotency" data-amount-field="multiplier" inputmode="decimal" value="${escapeAttr(String(multiplier))}" placeholder="×1" title="Multiplier" />
                             </div>
                         `
                         : `
-                            <div class="echoes-creator__field-row echoes-creator__field-row--2">
-                                <input ${attrs} data-amount-mode="statusCount" data-amount-field="statusId" value="${escapeAttr(String(countSource.statusId || ''))}" placeholder="Status ID" />
+                            <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                                <input ${attrs} data-amount-mode="statusCount" data-amount-field="statusId" value="${escapeAttr(String(countSource.statusId || ''))}" placeholder="Status ID (e.g. charge)" />
                                 <select ${attrs} data-amount-mode="statusCount" data-amount-field="target" style="width:100%;">
                                     <option value="self" ${countSource.target === 'self' || !countSource.target ? 'selected' : ''}>Self</option>
                                     <option value="opponent" ${countSource.target === 'opponent' ? 'selected' : ''}>Opponent</option>
                                 </select>
+                                <input ${attrs} data-amount-mode="statusCount" data-amount-field="multiplier" inputmode="decimal" value="${escapeAttr(String(multiplier))}" placeholder="×1" title="Multiplier" />
                             </div>
                         `}
             </div>
         `;
     }
 
-    function renderEffectFilters(effect, escapeAttr, fieldAttrs, options = {}) {
+    function renderEffectFilters(effect, catalog, escapeAttr, fieldAttrs, options = {}) {
         if (!options.showFilters) {
             return '';
         }
+        const statusList = catalog?.statusList || [];
         const coinIndex = effect?.coinIndex ?? '';
         const criticalOnly = Boolean(effect?.criticalOnly);
         const outcome = effect?.outcome || '';
         const minPotency = effect?.minStatusPotency ?? '';
+        const minCount = effect?.minStatusCount ?? '';
         const statusSource = effect?.statusSource || 'self';
+        const hasStatusGate = Boolean(effect?.statusId)
+            || minPotency !== ''
+            || minCount !== '';
 
         return `
-            <details class="echoes-creator__filters">
-                <summary>Optional filters (coin, crit, clash outcome)</summary>
-                <div class="echoes-creator__field-row echoes-creator__field-row--3" style="margin-top:0.5rem;">
-                    <label>Coin #</label>
-                    <input ${fieldAttrs} data-field="coinIndex" inputmode="numeric" value="${escapeAttr(String(coinIndex))}" placeholder="Any coin" />
-                    <label class="echoes-creator__checkbox" style="align-self:center;">
-                        <input type="checkbox" ${fieldAttrs} data-field="criticalOnly" ${criticalOnly ? 'checked' : ''} />
-                        Critical only
-                    </label>
-                    <label class="echoes-creator__checkbox" style="align-self:center;">
-                        <input type="checkbox" ${fieldAttrs} data-field="headsOnly" ${effect?.headsOnly ? 'checked' : ''} />
-                        Heads only
-                    </label>
-                    <label class="echoes-creator__checkbox" style="align-self:center;">
-                        <input type="checkbox" ${fieldAttrs} data-field="tailsOnly" ${effect?.tailsOnly ? 'checked' : ''} />
-                        Tails only
-                    </label>
-                    <label>Clash outcome</label>
-                    <select ${fieldAttrs} data-field="outcome" style="width:100%;">
-                        <option value="" ${!outcome ? 'selected' : ''}>Any</option>
-                        <option value="win" ${outcome === 'win' ? 'selected' : ''}>Clash win</option>
-                        <option value="lose" ${outcome === 'lose' ? 'selected' : ''}>Clash lose</option>
-                    </select>
-                </div>
-                <div class="echoes-creator__field-row echoes-creator__field-row--3">
-                    <label>Min status potency</label>
-                    <input ${fieldAttrs} data-field="minStatusPotency" inputmode="numeric" value="${escapeAttr(String(minPotency))}" placeholder="Optional" />
-                    <label>Check on</label>
-                    <select ${fieldAttrs} data-field="statusSource" style="width:100%;">
-                        <option value="self" ${statusSource === 'self' ? 'selected' : ''}>Self</option>
-                        <option value="opponent" ${statusSource === 'opponent' ? 'selected' : ''}>Opponent</option>
-                    </select>
+            <details class="echoes-creator__filters" ${hasStatusGate ? 'open' : ''}>
+                <summary>When this runs (coin / crit / status gate)</summary>
+                <div class="echoes-creator__filters-body">
+                    <div class="echoes-creator__section">
+                        <div class="echoes-creator__section-title">Status gate — “At X+/Y+ status, then…”</div>
+                        <p class="echoes-creator__hint">Leave blank to always run. Example: status Charge, count ≥ 3 → only then grant the bonus.</p>
+                        <div class="echoes-creator__field-row">
+                            <label>Status to check</label>
+                            ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
+                        </div>
+                        <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                            <label>Min potency (X+)
+                                <input ${fieldAttrs} data-field="minStatusPotency" inputmode="numeric" value="${escapeAttr(String(minPotency))}" placeholder="e.g. 5" />
+                            </label>
+                            <label>Min count (Y+)
+                                <input ${fieldAttrs} data-field="minStatusCount" inputmode="numeric" value="${escapeAttr(String(minCount))}" placeholder="e.g. 3" />
+                            </label>
+                            <label>Check on
+                                <select ${fieldAttrs} data-field="statusSource" style="width:100%;">
+                                    <option value="self" ${statusSource === 'self' ? 'selected' : ''}>Self</option>
+                                    <option value="opponent" ${statusSource === 'opponent' ? 'selected' : ''}>Opponent</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="echoes-creator__field-row echoes-creator__field-row--3" style="margin-top:0.35rem;">
+                        <label>Coin #
+                            <input ${fieldAttrs} data-field="coinIndex" inputmode="numeric" value="${escapeAttr(String(coinIndex))}" placeholder="Any coin" />
+                        </label>
+                        <label class="echoes-creator__checkbox" style="align-self:end;">
+                            <input type="checkbox" ${fieldAttrs} data-field="criticalOnly" ${criticalOnly ? 'checked' : ''} />
+                            Critical only
+                        </label>
+                        <label class="echoes-creator__checkbox" style="align-self:end;">
+                            <input type="checkbox" ${fieldAttrs} data-field="headsOnly" ${effect?.headsOnly ? 'checked' : ''} />
+                            Heads only
+                        </label>
+                        <label class="echoes-creator__checkbox" style="align-self:end;">
+                            <input type="checkbox" ${fieldAttrs} data-field="tailsOnly" ${effect?.tailsOnly ? 'checked' : ''} />
+                            Tails only
+                        </label>
+                        <label>Clash outcome
+                            <select ${fieldAttrs} data-field="outcome" style="width:100%;">
+                                <option value="" ${!outcome ? 'selected' : ''}>Any</option>
+                                <option value="win" ${outcome === 'win' ? 'selected' : ''}>Clash win</option>
+                                <option value="lose" ${outcome === 'lose' ? 'selected' : ''}>Clash lose</option>
+                            </select>
+                        </label>
+                    </div>
                 </div>
             </details>
         `;
@@ -663,15 +761,16 @@
         case 'clearStatus':
             specificFields = `
                 <div class="echoes-creator__field-row">
-                    <label>Status</label>
+                    <label>${type === 'consumeStatus' ? 'Status to consume (Charge, Poise, …)' : 'Status'}</label>
                     ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
                 </div>
                 <div class="echoes-creator__field-row echoes-creator__field-row--3">
-                    <label>Potency Δ</label>
-                    <input ${fieldAttrs} data-field="potencyDelta" inputmode="numeric" value="${escapeAttr(String(effect?.potencyDelta ?? ''))}" placeholder="±" />
-                    <label>Count Δ</label>
-                    <input ${fieldAttrs} data-field="countDelta" inputmode="numeric" value="${escapeAttr(String(effect?.countDelta ?? ''))}" placeholder="±" />
+                    <label>${type === 'consumeStatus' ? 'Potency spent' : 'Potency Δ'}</label>
+                    <input ${fieldAttrs} data-field="potencyDelta" inputmode="numeric" value="${escapeAttr(String(effect?.potencyDelta ?? ''))}" placeholder="${type === 'consumeStatus' ? '-1' : '±'}" />
+                    <label>${type === 'consumeStatus' ? 'Count spent' : 'Count Δ'}</label>
+                    <input ${fieldAttrs} data-field="countDelta" inputmode="numeric" value="${escapeAttr(String(effect?.countDelta ?? ''))}" placeholder="${type === 'consumeStatus' ? '-1' : '±'}" />
                 </div>
+                ${type === 'consumeStatus' ? '<p class="echoes-creator__hint">Use negative deltas to spend stacks (e.g. Count −1). Pair with a status gate below if spending only at a threshold.</p>' : ''}
             `;
             break;
         case 'dealFixedDamage':
@@ -710,26 +809,27 @@
         case 'modifyContext':
             specificFields = `
                 <div class="echoes-creator__field-row echoes-creator__field-row--3">
-                    <label>Field</label>
+                    <label>Bonus type</label>
                     <select ${fieldAttrs} data-field="field" style="width:100%;">
-                        ${buildSelectOptions(CONTEXT_FIELDS, effect?.field || 'dynamicDamageBonus', escapeAttr)}
+                        ${buildSelectOptions(CONTEXT_FIELDS, effect?.field || 'coinPowerBonus', escapeAttr)}
                     </select>
-                    <label>Operation</label>
+                    <label>How to add</label>
                     <select ${fieldAttrs} data-field="operation" style="width:100%;">
-                        <option value="add" ${effect?.operation === 'add' ? 'selected' : ''}>Add</option>
-                        <option value="set" ${effect?.operation === 'set' ? 'selected' : ''}>Set</option>
-                        <option value="addStatusCountScaled" ${effect?.operation === 'addStatusCountScaled' ? 'selected' : ''}>Add × status count</option>
-                        <option value="addStatusPotencyScaled" ${effect?.operation === 'addStatusPotencyScaled' ? 'selected' : ''}>Add × status potency</option>
+                        <option value="add" ${!effect?.operation || effect?.operation === 'add' ? 'selected' : ''}>Fixed amount</option>
+                        <option value="set" ${effect?.operation === 'set' ? 'selected' : ''}>Set absolute</option>
+                        <option value="addStatusCountScaled" ${effect?.operation === 'addStatusCountScaled' ? 'selected' : ''}>× status count</option>
+                        <option value="addStatusPotencyScaled" ${effect?.operation === 'addStatusPotencyScaled' ? 'selected' : ''}>× status potency</option>
                     </select>
-                    <label>Value</label>
-                    <input ${fieldAttrs} data-field="value" inputmode="decimal" value="${escapeAttr(String(effect?.value ?? effect?.multiplier ?? ''))}" placeholder="value" />
+                    <label>${effect?.operation === 'addStatusCountScaled' || effect?.operation === 'addStatusPotencyScaled' ? 'Per stack' : 'Value'}</label>
+                    <input ${fieldAttrs} data-field="value" inputmode="decimal" value="${escapeAttr(String(effect?.value ?? effect?.multiplier ?? ''))}" placeholder="e.g. 2" />
                 </div>
                 <div class="echoes-creator__field-row echoes-creator__field-row--2">
-                    <label>Status (for scaled ops)</label>
+                    <label>Status (for × stack ops / gate)</label>
                     ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
                     <label>Cap (optional)</label>
                     <input ${fieldAttrs} data-field="cap" inputmode="decimal" value="${escapeAttr(String(effect?.cap ?? ''))}" placeholder="cap" />
                 </div>
+                <p class="echoes-creator__hint">Pick <strong>Coin power bonus</strong> for Gain Coin Power. For “At 5+ Poise, +1 Coin Power”, set Value to 1 and open the status gate below (Min potency 5).</p>
             `;
             break;
         case 'burstTremor':
@@ -776,7 +876,7 @@
         case 'modifyCoinMap':
             specificFields = `
                 <div class="echoes-creator__field-row echoes-creator__field-row--3">
-                    <label>Coin stat</label>
+                    <label>Coin bonus</label>
                     <select ${fieldAttrs} data-field="field" style="width:100%;">
                         ${buildSelectOptions(COIN_MAP_FIELD_OPTIONS, effect?.field || 'coinPowerBonusByCoin', escapeAttr)}
                     </select>
@@ -785,6 +885,7 @@
                     <label>Value</label>
                     <input ${fieldAttrs} data-field="value" inputmode="decimal" value="${escapeAttr(String(effect?.value ?? ''))}" placeholder="Bonus" />
                 </div>
+                <p class="echoes-creator__hint">Applies only to the listed coin. Prefer <strong>Gain Power / Damage Bonus</strong> with Coin power bonus for all coins.</p>
             `;
             break;
         case 'modifyPhysicalResistance':
@@ -905,7 +1006,7 @@
                     ${targetSelect}
                 </div>
                 ${specificFields}
-                ${renderEffectFilters(effect, escapeAttr, fieldAttrs, options)}
+                ${renderEffectFilters(effect, catalog, escapeAttr, fieldAttrs, options)}
                 <details class="echoes-creator__advanced">
                     <summary>Expert: edit raw JSON</summary>
                     <textarea ${fieldAttrs} data-field="__raw" rows="4" class="echoes-creator__raw-json">${escapeHtml(JSON.stringify(effect, null, 2))}</textarea>
@@ -1056,7 +1157,7 @@
         return `
             <div class="echoes-creator__hook-block">
                 <div class="echoes-creator__hook-block-header">
-                    <span class="echoes-creator__badge">Conditional block</span>
+                    <span class="echoes-creator__badge">If / Then</span>
                     <select ${blockAttrs} data-action="creator-hook-block-field" data-field="oncePer" style="max-width: 10rem;">
                         <option value="" ${!oncePer ? 'selected' : ''}>No limit</option>
                         ${ONCE_PER_OPTIONS.map((entry) => `<option value="${entry}" ${oncePer === entry ? 'selected' : ''}>Once per ${entry}</option>`).join('')}
@@ -1065,11 +1166,13 @@
                 </div>
                 <div class="echoes-creator__section">
                     <div class="echoes-creator__section-title">Only if ALL of these are true</div>
+                    <p class="echoes-creator__hint">Common: “Status count is at least” / “Status potency is at least” for Charge, Poise, Reading, etc.</p>
                     ${conditionRows || '<span class="echoes-creator__hint">No conditions — this always runs when the trigger fires.</span>'}
                     <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${blockAttrs} data-action="creator-hook-add-condition">+ Add condition</button>
                 </div>
                 <div class="echoes-creator__section">
                     <div class="echoes-creator__section-title">Then do this</div>
+                    <p class="echoes-creator__hint">Actions include Consume Status, Gain Power / Damage Bonus, Apply Status, and more.</p>
                     ${actionRows || '<span class="echoes-creator__hint">Add at least one action.</span>'}
                     <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${blockAttrs} data-action="creator-hook-add-action">+ Add action</button>
                 </div>
@@ -1123,7 +1226,7 @@
                         ${entryMarkup}
                         <div class="echoes-creator__hook-event-actions">
                             <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${hookAttrs} data-action="creator-hook-add-simple">+ Simple action</button>
-                            <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${hookAttrs} data-action="creator-hook-add-block">+ Conditional block</button>
+                            <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${hookAttrs} data-action="creator-hook-add-block">+ Conditional (At X+/Y+ status…)</button>
                             <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${hookAttrs} data-action="creator-hook-remove-event">Remove event</button>
                         </div>
                     </div>
@@ -1224,7 +1327,7 @@
 
         return `
             <div class="echoes-creator__skill-effects">
-                <p class="echoes-creator__hint">Skill effects run at specific moments (on select, on hit, on clash, etc.). Each effect is one action — use Passives or Statuses for complex IF/THEN logic.</p>
+                <p class="echoes-creator__hint">Skill effects run at specific moments. Use Quick add for Consume Charge, Coin Power, or “At X+ status” patterns. Open <strong>When this runs</strong> on any effect for status gates. Passives still own multi-condition IF/THEN blocks.</p>
                 <div class="echoes-creator__quick-add-bar">
                     <select data-action="creator-skill-preset-pick" data-skill-index="${skillIndex}" style="flex:1; min-width:12rem;">
                         <option value="">— Quick add preset —</option>
@@ -1267,6 +1370,15 @@
                 effect.amount.statusPotency.target = trimmed || 'self';
             } else if (subField === 'statusId') {
                 effect.amount.statusPotency.statusId = trimmed;
+            } else if (subField === 'multiplier') {
+                if (!trimmed) {
+                    delete effect.amount.multiplier;
+                } else {
+                    const parsed = Number(trimmed);
+                    if (Number.isFinite(parsed)) {
+                        effect.amount.multiplier = parsed;
+                    }
+                }
             }
             delete effect.value;
             return;
@@ -1278,6 +1390,15 @@
                 effect.amount.statusCount.target = trimmed || 'self';
             } else if (subField === 'statusId') {
                 effect.amount.statusCount.statusId = trimmed;
+            } else if (subField === 'multiplier') {
+                if (!trimmed) {
+                    delete effect.amount.multiplier;
+                } else {
+                    const parsed = Number(trimmed);
+                    if (Number.isFinite(parsed)) {
+                        effect.amount.multiplier = parsed;
+                    }
+                }
             }
             delete effect.value;
         }
@@ -1388,7 +1509,7 @@
             }
             return;
         }
-        if (['potency', 'count', 'coinIndex', 'value', 'potencyDelta', 'countDelta', 'cap', 'minStatusPotency'].includes(field)) {
+        if (['potency', 'count', 'coinIndex', 'value', 'potencyDelta', 'countDelta', 'cap', 'minStatusPotency', 'minStatusCount', 'multiplier'].includes(field)) {
             const trimmed = String(rawValue ?? '').trim();
             if (!trimmed) {
                 delete effect[field];
@@ -1398,7 +1519,7 @@
             effect[field] = Number.isFinite(parsed) ? parsed : trimmed;
             return;
         }
-        if (field === 'operation' && rawValue === 'addStatusCountScaled') {
+        if (field === 'operation' && (rawValue === 'addStatusCountScaled' || rawValue === 'addStatusPotencyScaled')) {
             effect.operation = rawValue;
             if (!effect.multiplier && effect.value != null) {
                 effect.multiplier = effect.value;

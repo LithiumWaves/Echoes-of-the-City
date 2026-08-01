@@ -96,14 +96,6 @@
 
     function renderVariantConditionsSection(skill, skillIndex, catalog, creatorUi, escapeAttr, escapeHtml) {
         const conditions = Array.isArray(skill?.variantConditions) ? skill.variantConditions : [];
-        const variantPriority = Number(skill?.variantPriority);
-        const showSection = conditions.length > 0
-            || (Number.isFinite(variantPriority) && variantPriority > 0);
-
-        if (!showSection) {
-            return '';
-        }
-
         const conditionRows = conditions.map((condition, condIndex) => {
             const fieldAttrs = `data-action="creator-skill-variant-condition-field" data-skill-index="${skillIndex}" data-condition-index="${condIndex}"`;
             return `
@@ -115,13 +107,34 @@
         }).join('');
 
         return `
-            <details class="echoes-moveset__variant-conditions" open>
-                <summary class="echoes-moveset__lane-title">Variant activation (all conditions must pass)</summary>
+            <details class="echoes-moveset__variant-conditions" ${conditions.length ? 'open' : ''}>
+                <summary class="echoes-moveset__section-summary">Variant unlock conditions</summary>
                 <div class="echoes-moveset__variant-conditions-body">
-                    ${conditionRows || '<span class="echoes-creator__hint">No conditions — this variant is inactive until you add one.</span>'}
+                    <p class="echoes-creator__hint">Use this when this skill replaces another in the same slot (e.g. at 12 Reading, show Prod the Weakness). All conditions must pass.</p>
+                    ${conditionRows || '<span class="echoes-creator__hint">No conditions yet — base skill stays active without them.</span>'}
                     <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-skill-variant-add-condition" data-skill-index="${skillIndex}">+ Add condition</button>
                 </div>
             </details>
+        `;
+    }
+
+    function renderSkillQuickAddBar(skillIndex, creatorUi, escapeAttr, escapeHtml) {
+        const presets = Array.isArray(creatorUi?.SKILL_EFFECT_PRESETS) ? creatorUi.SKILL_EFFECT_PRESETS : [];
+        const presetOptions = presets.map((preset, index) => `
+            <option value="${index}">${escapeHtml(preset.label)}</option>
+        `).join('');
+
+        return `
+            <div class="echoes-moveset__quick-add">
+                <label class="echoes-moveset__quick-add-label">Quick add effect</label>
+                <div class="echoes-moveset__quick-add-row">
+                    <select data-action="creator-skill-preset-pick" data-skill-index="${skillIndex}">
+                        <option value="">— Pick a common pattern —</option>
+                        ${presetOptions}
+                    </select>
+                    <button class="echoes-editor-workshop__action echoes-editor-workshop__action--accent" type="button" data-action="creator-skill-add-preset" data-skill-index="${skillIndex}">Add</button>
+                </div>
+            </div>
         `;
     }
 
@@ -135,7 +148,7 @@
         const sinTypes = catalog.sinTypes || [];
 
         const buildSelect = (options, selected, attrs) => {
-            return `<select ${attrs} style="width:100%;">${creatorUi.buildSelectOptions(options, selected, escapeAttr)}</select>`;
+            return `<select ${attrs}>${creatorUi.buildSelectOptions(options, selected, escapeAttr)}</select>`;
         };
 
         const staticLanes = STATIC_PHASE_LANES.map((lane) => renderPhaseLane(
@@ -173,6 +186,12 @@
         const skillTags = Array.isArray(skill?.tags) ? skill.tags.join(', ') : '';
         const unbreakableCoins = Array.isArray(skill?.unbreakableCoins) ? skill.unbreakableCoins.join(', ') : '';
 
+        const targetingOptions = [
+            { value: '', label: 'Normal (manual / AI pick)' },
+            { value: 'indiscriminate', label: 'Indiscriminate (random up to Wt)' },
+            { value: 'highestMaxPower', label: 'Highest max power' },
+        ];
+
         return `
             <article class="echoes-moveset__skill-card echoes-moveset__skill-card--lc" style="--echoes-lc-sin-color:${sinColor};">
                 <header class="echoes-moveset__skill-header">
@@ -181,41 +200,69 @@
                         <input class="echoes-moveset__skill-name" data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="name" value="${escapeAttr(String(skill?.name || ''))}" placeholder="Skill name" />
                         <input class="echoes-moveset__skill-id" data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="id" value="${escapeAttr(String(skill?.id || ''))}" placeholder="skill-id" />
                     </div>
-                    <div class="echoes-moveset__coin-pips">${renderCoinPips(coinCount, sinType)}</div>
+                    <div class="echoes-moveset__coin-pips" title="Coin count">${renderCoinPips(coinCount, sinType)}</div>
                 </header>
-                <div class="echoes-moveset__skill-stats">
-                    <label>Base<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="basePower" inputmode="numeric" value="${escapeAttr(String(skill?.basePower ?? 0))}" /></label>
-                    <label>Coin<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="coinPower" inputmode="numeric" value="${escapeAttr(String(skill?.coinPower ?? 0))}" /></label>
-                    <label>Coins<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="coinCount" inputmode="numeric" value="${escapeAttr(String(skill?.coinCount ?? 1))}" /></label>
-                    <label>Wt<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="attackWeight" inputmode="numeric" value="${escapeAttr(String(skill?.attackWeight ?? ''))}" placeholder="1" /></label>
-                    <label>Off<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="offenseLevel" inputmode="numeric" value="${escapeAttr(String(skill?.offenseLevel ?? ''))}" placeholder="—" /></label>
-                </div>
-                <div class="echoes-moveset__skill-meta echoes-moveset__skill-stats">
-                    <label>Type</label>${buildSelect(skillTypes, skill?.skillType || 'attack', `data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="skillType"`)}
-                    <label>Dmg</label>${buildSelect(damageTypes, skill?.damageType || 'slash', `data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="damageType"`)}
-                    <label>Sin</label>${buildSelect(sinTypes, sinType, `data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="sinType"`)}
-                </div>
-                <div class="echoes-moveset__skill-variant-row">
-                    <label>Slot<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="skillSlot" value="${escapeAttr(String(skill?.skillSlot || ''))}" placeholder="slot-1" /></label>
-                    <label>Variant prio<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="variantPriority" inputmode="numeric" value="${escapeAttr(String(skill?.variantPriority ?? ''))}" placeholder="0" /></label>
-                    <label class="echoes-creator__checkbox"><input type="checkbox" data-action="creator-unit-skill-toggle" data-index="${skillIndex}" data-field="showInPlanner" ${!hiddenInPlanner ? 'checked' : ''} /> Show in planner</label>
-                    <label class="echoes-creator__checkbox"><input type="checkbox" data-action="creator-unit-skill-toggle" data-index="${skillIndex}" data-field="cannotClash" ${cannotClash ? 'checked' : ''} /> Cannot clash</label>
-                    <label class="echoes-creator__checkbox"><input type="checkbox" data-action="creator-unit-skill-toggle" data-index="${skillIndex}" data-field="skipDefenseSkills" ${skipDefenseSkills ? 'checked' : ''} /> Skip defense skills</label>
-                    <label>Targeting<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="targeting" value="${escapeAttr(String(targeting))}" placeholder="indiscriminate" /></label>
-                    <label>Tags<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="tags" value="${escapeAttr(skillTags)}" placeholder="skill-3" /></label>
-                    <label>Unbreakable coins<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="unbreakableCoins" value="${escapeAttr(unbreakableCoins)}" placeholder="2, 3" /></label>
-                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-skill-add-variant" data-index="${skillIndex}">+ Variant</button>
-                </div>
+
+                <section class="echoes-moveset__skill-section">
+                    <h4 class="echoes-moveset__section-title">Power</h4>
+                    <div class="echoes-moveset__skill-stats echoes-moveset__skill-stats--power">
+                        <label>Base power<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="basePower" inputmode="numeric" value="${escapeAttr(String(skill?.basePower ?? 0))}" /></label>
+                        <label>Coin power<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="coinPower" inputmode="numeric" value="${escapeAttr(String(skill?.coinPower ?? 0))}" /></label>
+                        <label>Coin count<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="coinCount" inputmode="numeric" value="${escapeAttr(String(skill?.coinCount ?? 1))}" /></label>
+                        <label>Attack weight<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="attackWeight" inputmode="numeric" value="${escapeAttr(String(skill?.attackWeight ?? ''))}" placeholder="1" /></label>
+                        <label>Offense level<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="offenseLevel" inputmode="numeric" value="${escapeAttr(String(skill?.offenseLevel ?? ''))}" placeholder="—" /></label>
+                    </div>
+                </section>
+
+                <section class="echoes-moveset__skill-section">
+                    <h4 class="echoes-moveset__section-title">Identity</h4>
+                    <div class="echoes-moveset__skill-stats echoes-moveset__skill-stats--identity">
+                        <label>Skill type${buildSelect(skillTypes, skill?.skillType || 'attack', `data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="skillType"`)}</label>
+                        <label>Damage type${buildSelect(damageTypes, skill?.damageType || 'slash', `data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="damageType"`)}</label>
+                        <label>Sin affinity${buildSelect(sinTypes, sinType, `data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="sinType"`)}</label>
+                        <label>Planner slot<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="skillSlot" value="${escapeAttr(String(skill?.skillSlot || ''))}" placeholder="slot-1 / defense" /></label>
+                    </div>
+                </section>
+
+                <section class="echoes-moveset__skill-section">
+                    <h4 class="echoes-moveset__section-title">Planner &amp; combat</h4>
+                    <div class="echoes-moveset__skill-flags">
+                        <label class="echoes-creator__checkbox"><input type="checkbox" data-action="creator-unit-skill-toggle" data-index="${skillIndex}" data-field="showInPlanner" ${!hiddenInPlanner ? 'checked' : ''} /> Show in planner</label>
+                        <label class="echoes-creator__checkbox"><input type="checkbox" data-action="creator-unit-skill-toggle" data-index="${skillIndex}" data-field="cannotClash" ${cannotClash ? 'checked' : ''} /> Cannot clash</label>
+                        <label class="echoes-creator__checkbox"><input type="checkbox" data-action="creator-unit-skill-toggle" data-index="${skillIndex}" data-field="skipDefenseSkills" ${skipDefenseSkills ? 'checked' : ''} /> Skip defense skills</label>
+                    </div>
+                    <div class="echoes-moveset__skill-stats echoes-moveset__skill-stats--combat">
+                        <label>Targeting${buildSelect(targetingOptions, targeting, `data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="targeting"`)}</label>
+                        <label>Variant priority<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="variantPriority" inputmode="numeric" value="${escapeAttr(String(skill?.variantPriority ?? ''))}" placeholder="0" /></label>
+                        <label>Tags<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="tags" value="${escapeAttr(skillTags)}" placeholder="skill-3" /></label>
+                        <label>Unbreakable coins<input data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="unbreakableCoins" value="${escapeAttr(unbreakableCoins)}" placeholder="2, 3" /></label>
+                    </div>
+                    <div class="echoes-moveset__skill-variant-actions">
+                        <button class="echoes-editor-workshop__action echoes-editor-workshop__action--ghost" type="button" data-action="creator-skill-add-variant" data-index="${skillIndex}">+ Duplicate as variant</button>
+                    </div>
+                </section>
+
                 ${renderVariantConditionsSection(skill, skillIndex, catalog, creatorUi, escapeAttr, escapeHtml)}
-                ${followUpEffect ? `<div class="echoes-creator__hint">Follow-up: ${escapeHtml(String(followUpEffect.skillId || ''))}</div>` : ''}
-                <textarea class="echoes-moveset__skill-desc" data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="description" rows="2" placeholder="Player-facing description">${escapeHtml(String(skill?.description || ''))}</textarea>
-                <div class="echoes-moveset__lanes">
-                    ${staticLanes}
-                    ${allCoinLane}
-                    ${coinLanes}
-                </div>
+                ${followUpEffect ? `<div class="echoes-moveset__follow-up-note">Follow-up skill: <code>${escapeHtml(String(followUpEffect.skillId || ''))}</code></div>` : ''}
+
+                <section class="echoes-moveset__skill-section">
+                    <h4 class="echoes-moveset__section-title">Description</h4>
+                    <textarea class="echoes-moveset__skill-desc" data-action="creator-unit-skill-field" data-index="${skillIndex}" data-field="description" rows="2" placeholder="Player-facing description">${escapeHtml(String(skill?.description || ''))}</textarea>
+                </section>
+
+                <section class="echoes-moveset__skill-section echoes-moveset__skill-section--effects">
+                    <h4 class="echoes-moveset__section-title">Effects by combat phase</h4>
+                    <p class="echoes-creator__hint">Add consume / coin power / status gates with Quick add, or open a phase and customize. Open <strong>When this runs</strong> on any effect for “at X+ status” gates.</p>
+                    ${renderSkillQuickAddBar(skillIndex, creatorUi, escapeAttr, escapeHtml)}
+                    <div class="echoes-moveset__lanes">
+                        ${staticLanes}
+                        ${allCoinLane}
+                        ${coinLanes}
+                    </div>
+                </section>
+
                 <footer class="echoes-moveset__skill-footer">
-                    <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" data-action="creator-unit-remove-skill" data-index="${skillIndex}">Remove skill</button>
+                    <button class="echoes-editor-workshop__action echoes-editor-workshop__action--ghost" type="button" data-action="creator-unit-remove-skill" data-index="${skillIndex}">Remove skill</button>
                 </footer>
             </article>
         `;
