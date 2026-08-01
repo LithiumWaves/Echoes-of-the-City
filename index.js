@@ -2592,6 +2592,13 @@
         state.battleHandler?.reset();
     }
 
+    function leaveBattle() {
+        state.battleHandler?.leave?.();
+        state.battleHandler = null;
+        state.combatPhase = 'select';
+        renderBattleStartScreen();
+    }
+
     async function handleCombatContentClick(event) {
         const actionTarget = event.target.closest('[data-action]');
         if (!actionTarget) {
@@ -2662,6 +2669,11 @@
         if (action === 'cancel-deployment') {
             state.combatPhase = 'select';
             renderBattleStartScreen();
+            return;
+        }
+
+        if (action === 'quit-battle') {
+            leaveBattle();
             return;
         }
 

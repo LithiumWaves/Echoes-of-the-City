@@ -3172,6 +3172,21 @@
     overflow: hidden;
 }
 
+.echoes-battle-panel__combat-battlefield--custom-bg {
+    background: transparent;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 179, 113, 0.08),
+        0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.echoes-battle-panel__combat-battlefield--custom-bg .echoes-battle-panel__combat-stage-area {
+    background: transparent;
+}
+
+.echoes-battle-panel__combat-battlefield--custom-bg .echoes-battle-panel__combat-stage-area::before {
+    opacity: 0.12;
+}
+
 .echoes-battle-panel__field-bg {
     position: absolute;
     inset: 0;
@@ -3564,7 +3579,7 @@
 }
 
 .echoes-battle-panel__field-shadow,
-.echoes-battle-panel__field-ring {
+.echoes-battle-panel__field-hex-vitals {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
@@ -3578,20 +3593,6 @@
     border-radius: 999px;
     background: rgba(0, 0, 0, 0.36);
     filter: blur(4px);
-}
-
-.echoes-battle-panel__field-ring {
-    bottom: 0.4rem;
-    width: 7.1rem;
-    height: 1.25rem;
-    border-radius: 999px;
-    border: 2px solid rgba(255, 115, 32, 0.9);
-    box-shadow: inset 0 0 0 1px rgba(255, 177, 104, 0.22), 0 0 12px rgba(255, 98, 29, 0.12);
-}
-
-.echoes-battle-panel__field-unit--enemy .echoes-battle-panel__field-ring {
-    border-color: rgba(88, 129, 215, 0.92);
-    box-shadow: inset 0 0 0 1px rgba(131, 174, 255, 0.18), 0 0 12px rgba(57, 102, 189, 0.12);
 }
 
 .echoes-battle-panel__field-sprite {
@@ -3690,9 +3691,8 @@
     text-decoration: line-through;
 }
 
-.echoes-battle-panel__field-unit.is-staggered .echoes-battle-panel__field-ring {
-    border-color: rgba(255, 197, 98, 0.96);
-    box-shadow: inset 0 0 0 1px rgba(255, 214, 146, 0.28), 0 0 16px rgba(255, 175, 54, 0.2);
+.echoes-battle-panel__field-unit.is-staggered .echoes-lc-hex-frame {
+    filter: saturate(1.1) drop-shadow(0 0 10px rgba(255, 175, 54, 0.35));
 }
 
 .echoes-battle-panel__field-unit.is-staggered .echoes-battle-panel__field-state {
@@ -3747,27 +3747,21 @@
     font-weight: 700;
 }
 
-.echoes-battle-panel__field-unit.is-active .echoes-battle-panel__field-ring {
-    border-color: rgba(255, 205, 135, 1);
-    box-shadow:
-        inset 0 0 0 1px rgba(255, 214, 151, 0.25),
-        0 0 18px rgba(255, 178, 88, 0.22);
+.echoes-battle-panel__field-unit.is-active .echoes-lc-hex-frame {
+    filter: drop-shadow(0 0 14px rgba(255, 178, 88, 0.35));
 }
 
-.echoes-battle-panel__field-unit.is-targeted .echoes-battle-panel__field-ring,
-.echoes-battle-panel__combat-content.is-dragging-skill .echoes-battle-panel__field-unit.echoes-battle-panel__combat-unit--drop-target .echoes-battle-panel__field-ring {
-    transform: translateX(-50%) scale(1.05);
+.echoes-battle-panel__field-unit.is-targeted .echoes-lc-hex-frame,
+.echoes-battle-panel__combat-content.is-dragging-skill .echoes-battle-panel__field-unit.echoes-battle-panel__combat-unit--drop-target .echoes-lc-hex-frame {
+    transform: scale(1.05);
 }
 
-.echoes-battle-panel__field-unit.is-targeted .echoes-battle-panel__field-ring {
-    border-color: rgba(255, 208, 142, 1);
+.echoes-battle-panel__field-unit.is-targeted .echoes-lc-hex-frame {
+    filter: drop-shadow(0 0 12px rgba(255, 208, 142, 0.45));
 }
 
-.echoes-battle-panel__field-unit.echoes-battle-panel__combat-unit--drop-target.is-drop-hover .echoes-battle-panel__field-ring {
-    border-color: rgba(255, 214, 140, 1);
-    box-shadow:
-        inset 0 0 0 1px rgba(255, 227, 172, 0.22),
-        0 0 24px rgba(255, 188, 96, 0.3);
+.echoes-battle-panel__field-unit.echoes-battle-panel__combat-unit--drop-target.is-drop-hover .echoes-lc-hex-frame {
+    filter: drop-shadow(0 0 18px rgba(255, 188, 96, 0.5));
 }
 
 .echoes-battle-panel__field-unit.is-resolved {
@@ -4588,6 +4582,130 @@
 /* LC combat dashboard, field vitals, clash overlay */
 .echoes-lc-hex {
     clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+}
+
+.echoes-lc-hex-frame {
+    position: relative;
+    display: block;
+    width: 100%;
+    min-height: 4.5rem;
+    background: linear-gradient(180deg, rgba(32, 26, 22, 0.95), rgba(12, 10, 9, 0.98));
+    box-shadow:
+        inset 0 0 0 1px rgba(232, 197, 71, 0.12),
+        0 6px 14px rgba(0, 0, 0, 0.35);
+}
+
+.echoes-lc-hex-frame--portrait {
+    min-height: 4.85rem;
+}
+
+.echoes-lc-hex-frame--field {
+    width: 4.85rem;
+    min-height: 3.65rem;
+    margin: 0 auto;
+}
+
+.echoes-lc-hex-frame__content {
+    position: relative;
+    z-index: 1;
+    display: block;
+    padding: 0.35rem 0.55rem 0.4rem;
+}
+
+.echoes-lc-hex-frame--field .echoes-lc-hex-frame__content {
+    padding: 0.28rem 0.45rem 0.32rem;
+}
+
+.echoes-lc-hex-frame__rail {
+    position: absolute;
+    top: 12%;
+    bottom: 18%;
+    width: 0.28rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.12rem;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.echoes-lc-hex-frame__rail--left {
+    left: 0.12rem;
+}
+
+.echoes-lc-hex-frame__rail--right {
+    right: 0.12rem;
+}
+
+.echoes-lc-hex-frame__segment {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 0.28rem;
+    border-radius: 0.08rem;
+    background: rgba(18, 12, 10, 0.85);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.echoes-lc-hex-frame__segment.is-filled {
+    background: linear-gradient(180deg, #ff9a3c, #ff8c2a);
+    box-shadow:
+        0 0 8px rgba(255, 120, 40, 0.45),
+        inset 0 0 0 1px rgba(255, 220, 160, 0.25);
+}
+
+.echoes-lc-hex-frame__segment.is-filled.is-depleted {
+    background: linear-gradient(180deg, #c73e3e, #8a2424);
+    box-shadow:
+        0 0 6px rgba(180, 40, 40, 0.35),
+        inset 0 0 0 1px rgba(255, 160, 120, 0.15);
+}
+
+.echoes-lc-hex-frame__segment.is-empty {
+    opacity: 0.35;
+}
+
+.echoes-lc-hex-frame__art {
+    display: block;
+    width: 100%;
+    height: 2.35rem;
+    margin: 0.15rem auto 0;
+    background-size: cover;
+    background-position: center top;
+    clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.echoes-lc-hex-frame--portrait .echoes-lc-portrait__art {
+    height: 3.35rem;
+    margin-top: 0.55rem;
+}
+
+.echoes-battle-panel__field-hex-vitals {
+    bottom: 0.15rem;
+    width: 5rem;
+    z-index: 2;
+}
+
+.echoes-lc-vitals--hex-frame {
+    justify-content: space-between;
+    width: 100%;
+    padding: 0;
+    margin-top: 0.1rem;
+}
+
+.echoes-lc-vitals--hex-frame .echoes-lc-vitals__hp-value {
+    font-size: 0.82rem;
+}
+
+.echoes-lc-vitals--field.echoes-lc-vitals--hex-frame {
+    margin-top: 0.08rem;
+    max-width: none;
+}
+
+.echoes-lc-vitals--field.echoes-lc-vitals--hex-frame .echoes-lc-vitals__sp-badge {
+    min-width: 1.45rem;
+    min-height: 1.45rem;
+    font-size: 0.68rem;
 }
 
 .echoes-lc-dashboard {

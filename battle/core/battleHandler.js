@@ -1015,6 +1015,12 @@
                 engine.reset();
                 render();
             },
+            leave() {
+                stopResizeBattlefield();
+                cancelPlayback();
+                dragAssignment = null;
+                clearDropTargetState();
+            },
         };
     }
 

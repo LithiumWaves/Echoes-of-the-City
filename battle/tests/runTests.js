@@ -7490,6 +7490,31 @@ function runSuite() {
         assert(vitalsHtml.includes('echoes-lc-vitals__sp-badge'), 'Expected SP badge.');
         assert(vitalsHtml.includes('216'), 'Expected HP value.');
 
+        const hexFrameHtml = lcCombatUi.renderLcHexFrame({
+            hp: 128,
+            maxHp: 200,
+            sp: 0,
+        }, '<span class="test-inner">inner</span>', {
+            escapeHtml: (value) => String(value),
+            variant: 'portrait',
+        });
+        assert(hexFrameHtml.includes('echoes-lc-hex-frame'), 'Expected hex frame wrapper.');
+        assert(hexFrameHtml.includes('echoes-lc-hex-frame__segment'), 'Expected hex HP segments.');
+        assert(hexFrameHtml.includes('is-filled'), 'Expected filled hex segments.');
+        assert(hexFrameHtml.includes('test-inner'), 'Expected hex frame inner content.');
+
+        const portraitVitalsHtml = lcCombatUi.renderLcUnitVitals({
+            hp: 128,
+            maxHp: 200,
+            sp: 0,
+        }, {
+            escapeHtml: (value) => String(value),
+            variant: 'portrait',
+            hideHpBar: true,
+        });
+        assert(!portraitVitalsHtml.includes('echoes-lc-vitals__hp-bar'), 'Expected portrait hex vitals to hide flat HP bar.');
+        assert(portraitVitalsHtml.includes('echoes-lc-vitals--hex-frame'), 'Expected hex-frame vitals modifier.');
+
         const coinHtml = lcCombatUi.renderBillboardCoinTrack(
             ['pending', 'heads', 'tails'],
             (value) => `resolved:${value}`,
@@ -7524,6 +7549,71 @@ function runSuite() {
         assert(displayBattle.enemyUnits[0].hp === 40, 'Expected defender HP updated during playback.');
         assert(vitalsResult?.previousHp === 100, 'Expected previous HP in vitals result.');
         assert(lcCombatUi.didCrossStaggerThreshold(resolvedBattle.enemyUnits[0], 100, 40), 'Expected stagger threshold cross.');
+    });
+
+    test('Battle renderer: quit button, custom background, and field hex vitals', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = { EchoesOfTheCityBattleModules: {} };
+        require(path.resolve(battleRoot, 'ui/sinColors.js'));
+        require(path.resolve(battleRoot, 'ui/combat/lcCombatUi.js'));
+        require(path.resolve(battleRoot, 'registry/battleRegistry.js'));
+        require(path.resolve(battleRoot, 'core/battleRenderer.js'));
+
+        const battleModules = global.window.EchoesOfTheCityBattleModules;
+        const mountElement = { innerHTML: '' };
+        const renderer = battleModules.createBattleRenderer({
+            mountElement,
+            resolveAssetUrl: (value) => `resolved:${value}`,
+        });
+
+        const mockUnit = {
+            id: 'ally',
+            name: 'Ally',
+            hp: 128,
+            maxHp: 200,
+            sp: 0,
+            sprites: { splash: 'assets/ally-splash.png', idle: 'assets/ally.png', skills: {} },
+            skills: [],
+        };
+        const mockEnemy = {
+            id: 'enemy',
+            name: 'Enemy',
+            hp: 62,
+            maxHp: 100,
+            sp: 0,
+            sprites: { splash: 'assets/enemy-splash.png', idle: 'assets/enemy.png', skills: {} },
+            skills: [],
+        };
+        const battle = {
+            phase: 'select',
+            turn: 1,
+            wave: 1,
+            totalWaves: 1,
+            winner: null,
+            activePlayerSlotId: 'p1',
+            playerUnits: [mockUnit],
+            enemyUnits: [mockEnemy],
+            playerSlots: [{ id: 'p1', unitId: 'ally', index: 0, speed: 3, side: 'player' }],
+            enemySlots: [{ id: 'e1', unitId: 'enemy', index: 0, speed: 2, side: 'enemy' }],
+            log: [],
+            speedOrder: ['p1', 'e1'],
+            resolutionQueue: [],
+            rules: {
+                background: {
+                    image: 'assets/combat/backgrounds/hall.png',
+                },
+            },
+        };
+
+        renderer.render(battle, {});
+        const html = mountElement.innerHTML;
+        assert(html.includes('data-action="quit-battle"'), 'Expected quit battle button.');
+        assert(html.includes('echoes-battle-panel__field-bg'), 'Expected field background layer.');
+        assert(html.includes('--echoes-field-bg-image'), 'Expected field background CSS variable.');
+        assert(html.includes('combat-battlefield--custom-bg'), 'Expected custom background modifier class.');
+        assert(html.includes('echoes-lc-hex-frame'), 'Expected LC hex frame on field units.');
+        assert(html.includes('echoes-battle-panel__field-hex-vitals'), 'Expected field hex vitals wrapper.');
     });
 
     test('Schema: rules.background validates image path', () => {

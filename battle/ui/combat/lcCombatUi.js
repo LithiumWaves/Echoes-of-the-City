@@ -32,10 +32,53 @@
         tails: 'assets/skillborders/CoinTails.png',
     };
 
+    const HEX_HP_SEGMENT_COUNT = 6;
+
+    function renderLcHexHpBorderRails(unit) {
+        const maxHp = Math.max(1, Number(unit?.maxHp) || 1);
+        const hp = Math.max(0, Number(unit?.hp) || 0);
+        const hpRatio = hp / maxHp;
+        const lostRatio = (maxHp - hp) / maxHp;
+        const filledLeft = Math.min(HEX_HP_SEGMENT_COUNT, Math.ceil(hpRatio * HEX_HP_SEGMENT_COUNT));
+        const filledRight = Math.min(HEX_HP_SEGMENT_COUNT, Math.ceil(lostRatio * HEX_HP_SEGMENT_COUNT));
+
+        const leftSegments = Array.from({ length: HEX_HP_SEGMENT_COUNT }, (_, index) => {
+            const segmentClass = index < filledLeft ? ' is-filled' : ' is-empty';
+            return `<span class="echoes-lc-hex-frame__segment${segmentClass}" aria-hidden="true"></span>`;
+        }).join('');
+
+        const rightSegments = Array.from({ length: HEX_HP_SEGMENT_COUNT }, (_, index) => {
+            const segmentClass = index < filledRight ? ' is-filled is-depleted' : ' is-empty';
+            return `<span class="echoes-lc-hex-frame__segment${segmentClass}" aria-hidden="true"></span>`;
+        }).join('');
+
+        return `
+            <span class="echoes-lc-hex-frame__rail echoes-lc-hex-frame__rail--left" aria-hidden="true">${leftSegments}</span>
+            <span class="echoes-lc-hex-frame__rail echoes-lc-hex-frame__rail--right" aria-hidden="true">${rightSegments}</span>
+        `;
+    }
+
+    function renderLcHexFrame(unit, innerMarkup, options = {}) {
+        const {
+            escapeHtml = (value) => String(value),
+            variant = 'portrait',
+        } = options;
+
+        return `
+            <div class="echoes-lc-hex-frame echoes-lc-hex echoes-lc-hex-frame--${escapeHtml(variant)}">
+                ${renderLcHexHpBorderRails(unit)}
+                <div class="echoes-lc-hex-frame__content">
+                    ${innerMarkup}
+                </div>
+            </div>
+        `;
+    }
+
     function renderLcUnitVitals(unit, options = {}) {
         const {
             escapeHtml = (value) => String(value),
             variant = 'field',
+            hideHpBar = false,
         } = options;
         const maxHp = Math.max(1, Number(unit?.maxHp) || 1);
         const hp = Math.max(0, Number(unit?.hp) || 0);
@@ -55,12 +98,16 @@
         }).join('');
 
         return `
-            <div class="echoes-lc-vitals echoes-lc-vitals--${escapeHtml(variant)}">
+            <div class="echoes-lc-vitals echoes-lc-vitals--${escapeHtml(variant)}${hideHpBar ? ' echoes-lc-vitals--hex-frame' : ''}">
                 <span class="echoes-lc-vitals__hp-value">${escapeHtml(String(hp))}</span>
-                <div class="echoes-lc-vitals__hp-bar" aria-label="HP">
-                    <span class="echoes-lc-vitals__hp-fill" style="width:${hpPercent}%;"></span>
-                    ${markers}
-                </div>
+                ${hideHpBar
+                    ? ''
+                    : `
+                        <div class="echoes-lc-vitals__hp-bar" aria-label="HP">
+                            <span class="echoes-lc-vitals__hp-fill" style="width:${hpPercent}%;"></span>
+                            ${markers}
+                        </div>
+                    `}
                 <span class="echoes-lc-vitals__sp-badge" aria-label="Sanity">${escapeHtml(String(sp))}</span>
             </div>
         `;
@@ -344,8 +391,10 @@
                     ${battle.phase !== 'select' ? 'disabled' : ''}
                 >
                     <span class="echoes-lc-portrait__speed">${slot.speed}</span>
-                    <span class="echoes-lc-portrait__art" style="${portraitStyle}"></span>
-                    ${renderLcUnitVitals(unit, { escapeHtml, variant: 'portrait' })}
+                    ${renderLcHexFrame(unit, `
+                        <span class="echoes-lc-portrait__art" style="${portraitStyle}"></span>
+                        ${renderLcUnitVitals(unit, { escapeHtml, variant: 'portrait', hideHpBar: true })}
+                    `, { escapeHtml, variant: 'portrait' })}
                     <span class="echoes-lc-portrait__name">${slotLabel}</span>
                 </button>
             </div>
@@ -854,6 +903,8 @@
         SIN_COLORS,
         COIN_IMAGE_PATHS,
         getUnitPortraitUrl,
+        renderLcHexHpBorderRails,
+        renderLcHexFrame,
         renderLcUnitVitals,
         applyPlaybackHitVitals,
         didCrossStaggerThreshold,

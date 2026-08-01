@@ -113,6 +113,7 @@
             }
             const imageUrl = resolveAssetUrl(background.image);
             if (!imageUrl) {
+                console.debug('Echoes of the City: battlefield background image could not be resolved:', background.image);
                 return null;
             }
             return {
@@ -446,6 +447,21 @@
             const intentBorderUrl = !isPlayer && intentSkill?.borderPath
                 ? resolveAssetUrl(intentSkill.borderPath)
                 : '';
+            const portraitUrl = lcCombatUi?.getUnitPortraitUrl
+                ? lcCombatUi.getUnitPortraitUrl(unit, resolveAssetUrl)
+                : '';
+            const portraitStyle = portraitUrl ? `background-image:url('${escapeAttribute(portraitUrl)}');` : '';
+            const hexFrameInner = lcCombatUi?.renderLcHexFrame
+                ? lcCombatUi.renderLcHexFrame(unit, `
+                    <span class="echoes-lc-hex-frame__art" style="${portraitStyle}"></span>
+                    ${lcCombatUi.renderLcUnitVitals(unit, { escapeHtml, variant: 'field', hideHpBar: true })}
+                `, { escapeHtml, variant: 'field' })
+                : `
+                    <div class="echoes-battle-panel__field-vitals-lc">
+                        <span class="echoes-battle-panel__field-hp-lc">${unit.hp}</span>
+                        <span class="echoes-battle-panel__field-sp-lc">${unit.sp}</span>
+                    </div>
+                `;
 
             return `
                 <button
@@ -460,20 +476,14 @@
                     ${intentBorderUrl ? `<span class="echoes-battle-panel__field-intent-icon" style="background-image:url('${intentBorderUrl}')"></span>` : ''}
                     <span class="echoes-battle-panel__field-speed">${slot.speed}</span>
                     <span class="echoes-battle-panel__field-shadow"></span>
-                    <span class="echoes-battle-panel__field-ring"></span>
                     <span class="echoes-battle-panel__field-sprite">
                         <img src="${unitSprite}" alt="${unit.name}">
                         ${staggerOverlayUrl
                             ? `<img class="echoes-battle-panel__field-stagger-overlay" src="${staggerOverlayUrl}" alt="Staggered">`
                             : ''}
                     </span>
-                    <div class="echoes-battle-panel__field-vitals-lc">
-                        ${lcCombatUi?.renderLcUnitVitals
-                            ? lcCombatUi.renderLcUnitVitals(unit, { escapeHtml, variant: 'field' })
-                            : `
-                                <span class="echoes-battle-panel__field-hp-lc">${unit.hp}</span>
-                                <span class="echoes-battle-panel__field-sp-lc">${unit.sp}</span>
-                            `}
+                    <div class="echoes-battle-panel__field-hex-vitals">
+                        ${hexFrameInner}
                     </div>
                     ${renderMiniStatuses(unit)}
                 </button>
@@ -1545,9 +1555,10 @@
 
             const resolveDisabled = battle.phase !== 'select' || battle.winner || uiState?.isPlaybackRunning;
             const resolveLabel = uiState?.isPlaybackRunning ? 'Resolving...' : 'DUEL';
+            const hasCustomBg = Boolean(resolveBattlefieldBackground(battle));
 
             return `
-                <section class="echoes-battle-panel__combat-battlefield">
+                <section class="echoes-battle-panel__combat-battlefield${hasCustomBg ? ' echoes-battle-panel__combat-battlefield--custom-bg' : ''}">
                     ${renderBattlefieldBackgroundLayers(battle)}
                     <div class="echoes-battle-panel__combat-hud">
                         <div class="echoes-battle-panel__combat-counter-stack echoes-battle-panel__combat-counter-stack--lc">
@@ -1601,6 +1612,13 @@
                                 data-action="reset-fight"
                             >
                                 Reset
+                            </button>
+                            <button
+                                class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost echoes-battle-panel__combat-button--lc"
+                                type="button"
+                                data-action="quit-battle"
+                            >
+                                Quit
                             </button>
                         </div>
                     </div>
