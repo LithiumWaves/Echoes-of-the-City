@@ -232,6 +232,7 @@
     function renderLcSkillSlot(skill, slot, offerKey, battle, deps) {
         const {
             escapeAttribute,
+            escapeHtml = (value) => String(value),
             resolveAssetUrl,
             isDefenseSkill,
             getSkillPowerLabel,
@@ -245,7 +246,7 @@
         }
         const isSelected = slot.selectedSkillId === skill.id && slot.selectedOfferSlot === offerKey;
         const isDisabled = battle.phase !== 'select' || Boolean(battle.winner);
-        const borderUrl = resolveAssetUrl(skill.borderPath);
+        const borderUrl = resolveAssetUrl(skill.borderPath || COIN_IMAGE_PATHS.coin);
         const sinColor = SIN_COLORS[skill.sinType] || '#888';
         const tooltip = escapeAttribute([
             skill.name,
@@ -269,6 +270,7 @@
             >
                 <span class="echoes-lc-skill-slot__border" style="background-image:url('${borderUrl}')"></span>
                 <span class="echoes-lc-skill-slot__inner"></span>
+                <span class="echoes-lc-skill-slot__label">${escapeHtml(skill.name || skill.id || '')}</span>
             </button>
         `;
     }

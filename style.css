@@ -912,6 +912,111 @@
     color: rgba(255, 255, 255, 0.92);
 }
 
+.echoes-editor-import-panel {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem 1.05rem;
+    margin-bottom: 0.85rem;
+    border: 1px solid rgba(255, 140, 42, 0.28);
+    border-radius: 0.55rem;
+    background:
+        linear-gradient(145deg, rgba(255, 140, 42, 0.08), rgba(8, 10, 14, 0.55)),
+        rgba(0, 0, 0, 0.22);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.echoes-editor-import-panel__header {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+}
+
+.echoes-editor-import-panel__icon {
+    flex: 0 0 auto;
+    width: 2.35rem;
+    height: 2.35rem;
+    display: grid;
+    place-items: center;
+    border-radius: 0.45rem;
+    font-size: 1.1rem;
+    color: rgba(255, 200, 120, 0.95);
+    background: linear-gradient(180deg, rgba(255, 140, 42, 0.35), rgba(80, 32, 10, 0.85));
+    border: 1px solid rgba(255, 140, 42, 0.45);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.echoes-editor-import-panel__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: rgba(255, 240, 220, 0.96);
+}
+
+.echoes-editor-import-panel__hint,
+.echoes-editor-import-panel__persist {
+    margin: 0.2rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: rgba(255, 220, 183, 0.72);
+}
+
+.echoes-editor-import-panel__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.echoes-editor-import-panel__pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(255, 232, 200, 0.88);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.echoes-editor-import-panel__textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 7.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(8, 10, 14, 0.78);
+    color: rgba(255, 255, 255, 0.92);
+    padding: 0.65rem 0.7rem;
+    font: inherit;
+    line-height: 1.4;
+    border-radius: 0.4rem;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+.echoes-editor-import-panel__textarea:focus {
+    outline: none;
+    border-color: rgba(255, 140, 42, 0.55);
+    box-shadow:
+        inset 0 2px 8px rgba(0, 0, 0, 0.28),
+        0 0 0 1px rgba(255, 140, 42, 0.35);
+}
+
+.echoes-editor-import-panel__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+.echoes-editor-desk-panel--collection {
+    display: grid;
+    gap: 0.35rem;
+}
+
 .echoes-editor-workshop__details {
     margin-top: 0.65rem;
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -5357,6 +5462,23 @@
     background-position: center;
     background-repeat: no-repeat;
     opacity: 0.92;
+}
+
+.echoes-lc-skill-slot__label {
+    position: absolute;
+    left: 0.2rem;
+    right: 0.2rem;
+    bottom: 0.18rem;
+    z-index: 2;
+    font-size: 0.58rem;
+    line-height: 1.15;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+    pointer-events: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .echoes-lc-skill-slot--empty {

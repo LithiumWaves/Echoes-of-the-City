@@ -80,6 +80,9 @@
         'battle/content/packs/base/battles/cityGateSkirmish.js',
         'battle/content/packs/base/battles/debugFight.js',
     ];
+    const BUNDLED_USER_JSON_PACK_RELATIVE_PATHS = [
+        'battle/content/packs/user/iris-seven-south-pack.json',
+    ];
     const BATTLE_CORE_SCRIPT_RELATIVE_PATHS = [
         'battle/registry/battleRegistry.js',
         'battle/schema/battleSchema.js',
@@ -344,11 +347,19 @@
         URL.revokeObjectURL(objectUrl);
     }
 
+    function renderAfterContentImport() {
+        if (state.activeScreen === 'creator') {
+            renderCreatorScreen();
+            return;
+        }
+        renderBattleStartScreen();
+    }
+
     async function importContentJson(text, sourceLabel = 'pasted JSON') {
         const trimmedText = String(text || '').trim();
         if (!trimmedText) {
             setContentImportMessage('error', 'Paste a battle, unit, status, or content pack JSON object first.');
-            renderBattleStartScreen();
+            renderAfterContentImport();
             return;
         }
 
@@ -357,7 +368,7 @@
             parsedPayload = JSON.parse(trimmedText);
         } catch (error) {
             setContentImportMessage('error', `Invalid JSON in ${sourceLabel}: ${error?.message || error}`);
-            renderBattleStartScreen();
+            renderAfterContentImport();
             return;
         }
 
@@ -409,7 +420,7 @@
             setContentImportMessage('error', formatCombatModuleError(error));
         }
 
-        renderBattleStartScreen();
+        renderAfterContentImport();
     }
 
     async function promptContentFileImport() {
@@ -428,10 +439,45 @@
                 await importContentJson(fileText, file.name);
             } catch (error) {
                 setContentImportMessage('error', `Failed to read ${file.name}: ${error?.message || error}`);
-                renderBattleStartScreen();
+                renderAfterContentImport();
             }
         }, { once: true });
         fileInput.click();
+    }
+
+    async function loadBundledUserJsonPacks() {
+        const api = getBattleContentApi();
+        if (typeof api.installContentPack !== 'function') {
+            return { loaded: 0, errors: [] };
+        }
+
+        const errors = [];
+        let loaded = 0;
+
+        for (const relativePath of BUNDLED_USER_JSON_PACK_RELATIVE_PATHS) {
+            try {
+                const response = await fetch(resolveExtensionUrl(relativePath));
+                if (!response.ok) {
+                    errors.push(`Failed to fetch ${relativePath}: ${response.status}`);
+                    continue;
+                }
+                const payload = await response.json();
+                api.installContentPack(payload, {
+                    conflictStrategy: 'overwrite',
+                    persist: true,
+                    source: 'bundled',
+                });
+                loaded += 1;
+            } catch (error) {
+                errors.push(`${relativePath}: ${error?.message || error}`);
+            }
+        }
+
+        if (errors.length) {
+            console.warn(`${EXTENSION_ID}: bundled user pack load issues.`, errors);
+        }
+
+        return { loaded, errors };
     }
 
     function exportSelectedBattleJson() {
@@ -611,6 +657,8 @@
             if (typeof api.loadPersistedContentPacks === 'function') {
                 api.loadPersistedContentPacks();
             }
+            await loadBundledUserJsonPacks();
+            refreshBattleSelectionState();
         })().catch((error) => {
             state.creatorSelectionPromise = null;
             throw error;
@@ -2255,6 +2303,13 @@
         const deskMarkup = tab === 'library'
             ? `
                 <div class="echoes-editor-desk-panel echoes-editor-desk-panel--collection">
+                    ${editorWorkbench?.renderWorkshopImportPanel({
+                        escapeHtml,
+                        escapeAttribute,
+                        installedPackCount: installedPacks.length,
+                        contentJsonInput: state.contentJsonInput || '',
+                        importMessage: state.contentImportMessage,
+                    }) || ''}
                     <p class="echoes-editor-workshop__tip">Published sets are saved locally. Export a set to download its data payload, or uninstall to remove it from your collection.</p>
                 </div>
             `
@@ -2296,6 +2351,7 @@
             if (typeof api.loadPersistedContentPacks === 'function') {
                 api.loadPersistedContentPacks();
             }
+            await loadBundledUserJsonPacks();
             refreshBattleSelectionState();
         })().catch((error) => {
             state.battleSelectionPromise = null;
@@ -2309,42 +2365,19 @@
         }
     }
 
-    function buildDriveAdvancedMarkup(selectedBattle, installedPacks) {
-        const installedPackSummary = installedPacks.length
-            ? `Installed packs: ${installedPacks.length}`
-            : 'No installed packs';
-        const contentImportMessage = formatContentImportMessage(state.contentImportMessage);
-        const messageClass = state.contentImportMessage?.type === 'error'
-            ? ' is-error'
-            : ' is-success';
+    function buildDriveAdvancedMarkup(selectedBattle) {
         const driveMenu = getDriveMenu();
-        const advancedLabel = driveMenu?.DRIVE_LABELS?.advancedImport || 'Import / Export';
+        const advancedLabel = driveMenu?.DRIVE_LABELS?.advancedExport || 'Export';
 
         return `
             <details class="echoes-drive__advanced">
                 <summary class="echoes-drive__advanced-summary">${escapeHtml(advancedLabel)}</summary>
                 <div class="echoes-drive__advanced-body">
-                    <p class="echoes-drive__advanced-hint">Import a battle, unit, status, or full content pack JSON. Export the selected battle or a reusable dependency pack.</p>
-                    <p class="echoes-drive__advanced-hint">Data-only JSON packs persist locally after import.</p>
-                    <div class="echoes-drive__advanced-toolbar">
-                        <span class="echoes-drive__deploy-pill">${escapeHtml(installedPackSummary)}</span>
-                        <button class="echoes-drive__action echoes-drive__action--ghost" type="button" data-action="clear-installed-packs" ${installedPacks.length ? '' : 'disabled'}>Clear Installed Packs</button>
-                    </div>
-                    <textarea
-                        class="echoes-drive__import-textarea"
-                        data-action="content-json-input"
-                        rows="6"
-                        placeholder='{"id":"custom-battle","name":"Custom Battle","enemyUnitIds":[...]}'
-                    >${escapeHtml(state.contentJsonInput || '')}</textarea>
+                    <p class="echoes-drive__advanced-hint">Export the selected encounter or a reusable dependency pack. To import battles, units, or packs, use Workshop → Collection.</p>
                     <div class="echoes-drive__advanced-actions">
-                        <button class="echoes-drive__action echoes-drive__action--ghost" type="button" data-action="import-content-json">Import JSON</button>
-                        <button class="echoes-drive__action echoes-drive__action--ghost" type="button" data-action="import-content-file">Import File</button>
                         <button class="echoes-drive__action echoes-drive__action--ghost" type="button" data-action="export-selected-battle" ${selectedBattle ? '' : 'disabled'}>Export Battle</button>
                         <button class="echoes-drive__action echoes-drive__action--ghost" type="button" data-action="export-selected-pack" ${selectedBattle ? '' : 'disabled'}>Export Battle Pack</button>
                     </div>
-                    ${contentImportMessage
-                        ? `<div class="echoes-drive__message${messageClass}">${escapeHtml(contentImportMessage)}</div>`
-                        : ''}
                 </div>
             </details>
         `;
@@ -2411,7 +2444,7 @@
             selectedBattle,
             showDebugToolsToggle: Boolean(selectedBattle && !selectedBattle.isDebug),
             debugToolsEnabled: state.battleDebugToolsEnabled,
-            advancedMarkup: buildDriveAdvancedMarkup(selectedBattle, installedPacks),
+            advancedMarkup: buildDriveAdvancedMarkup(selectedBattle),
         }) || `
             <div class="echoes-battle-panel__planner-empty">Drive menu module not loaded.</div>
         `;
@@ -2731,9 +2764,10 @@
             const api = getBattleContentApi();
             if (typeof api.clearInstalledContentPacks === 'function') {
                 api.clearInstalledContentPacks();
+                await loadBundledUserJsonPacks();
                 refreshBattleSelectionState();
-                setContentImportMessage('success', 'Cleared installed content packs.');
-                renderBattleStartScreen();
+                setContentImportMessage('success', 'Cleared installed content packs. Shipped packs were reloaded.');
+                renderAfterContentImport();
                 return;
             }
         }
@@ -2882,6 +2916,28 @@
             setCreatorMessage('success', definition ? `Loaded ${entityType} "${entityId}".` : `Missing ${entityType} "${entityId}".`);
             renderCreatorScreen();
             return;
+        }
+
+        if (action === 'import-content-json') {
+            await importContentJson(state.contentJsonInput, 'pasted JSON');
+            return;
+        }
+
+        if (action === 'import-content-file') {
+            await promptContentFileImport();
+            return;
+        }
+
+        if (action === 'clear-installed-packs') {
+            const api = getBattleContentApi();
+            if (typeof api.clearInstalledContentPacks === 'function') {
+                api.clearInstalledContentPacks();
+                await loadBundledUserJsonPacks();
+                refreshBattleSelectionState();
+                setContentImportMessage('success', 'Cleared installed content packs. Shipped packs were reloaded.');
+                renderCreatorScreen();
+                return;
+            }
         }
 
         if (action === 'creator-export-pack') {
@@ -3352,6 +3408,12 @@
 
     function handleCreatorContentChange(event) {
         if (state.creatorRenderLock) {
+            return;
+        }
+
+        const contentImportTextarea = event.target.closest('[data-action="content-json-input"]');
+        if (contentImportTextarea) {
+            state.contentJsonInput = contentImportTextarea.value || '';
             return;
         }
 

@@ -17,6 +17,12 @@
         export: 'Export',
         uninstall: 'Uninstall',
         advancedBinding: 'Advanced Binding',
+        importContent: 'Import Content',
+        importContentHint: 'Paste JSON or pick a file — battles, units, statuses, or full content packs.',
+        importPersistHint: 'Imported packs are saved locally and appear in your collection.',
+        importJson: 'Import JSON',
+        importFile: 'Import File',
+        clearInstalledPacks: 'Clear All Packs',
         emptyBinder: 'Nothing bound yet — draft something in Forge.',
         emptyCollection: 'No published sets installed.',
     };
@@ -181,6 +187,66 @@
         `;
     }
 
+    function renderWorkshopImportPanel(deps) {
+        const {
+            escapeHtml,
+            escapeAttribute,
+            installedPackCount = 0,
+            contentJsonInput = '',
+            importMessage = null,
+        } = deps;
+
+        const importMessageMarkup = importMessage?.text
+            ? renderMessageBanner({
+                text: importMessage.text,
+                type: importMessage.type,
+            }, escapeHtml)
+            : '';
+
+        return `
+            <section class="echoes-editor-import-panel" aria-label="Import content">
+                <header class="echoes-editor-import-panel__header">
+                    <div class="echoes-editor-import-panel__icon" aria-hidden="true">⬡</div>
+                    <div class="echoes-editor-import-panel__headline">
+                        <h3 class="echoes-editor-import-panel__title">${escapeHtml(EDITOR_LABELS.importContent)}</h3>
+                        <p class="echoes-editor-import-panel__hint">${escapeHtml(EDITOR_LABELS.importContentHint)}</p>
+                    </div>
+                </header>
+                <p class="echoes-editor-import-panel__persist">${escapeHtml(EDITOR_LABELS.importPersistHint)}</p>
+                <div class="echoes-editor-import-panel__meta">
+                    <span class="echoes-editor-import-panel__pill">
+                        ${escapeHtml(installedPackCount ? `${installedPackCount} installed pack${installedPackCount === 1 ? '' : 's'}` : 'No packs installed')}
+                    </span>
+                    <button
+                        class="echoes-editor-workshop__action echoes-editor-workshop__action--ghost"
+                        type="button"
+                        data-action="clear-installed-packs"
+                        ${installedPackCount ? '' : 'disabled'}
+                    >${escapeHtml(EDITOR_LABELS.clearInstalledPacks)}</button>
+                </div>
+                <textarea
+                    class="echoes-editor-import-panel__textarea"
+                    data-action="content-json-input"
+                    rows="7"
+                    placeholder='{"manifest":{"id":"my-pack","name":"My Pack","version":"1.0.0"},"units":[],"battles":[]}'
+                >${escapeHtml(contentJsonInput)}</textarea>
+                <div class="echoes-editor-import-panel__actions">
+                    <button
+                        class="echoes-editor-workshop__action echoes-editor-workshop__action--accent"
+                        type="button"
+                        data-action="import-content-json"
+                    >${escapeHtml(EDITOR_LABELS.importJson)}</button>
+                    <button
+                        class="echoes-editor-workshop__action"
+                        type="button"
+                        data-action="import-content-file"
+                    >${escapeHtml(EDITOR_LABELS.importFile)}</button>
+                </div>
+                ${importMessageMarkup}
+            </section>
+        `;
+    }
+
     function renderEditorWorkbenchShell(deps) {
         const {
             escapeHtml,
@@ -246,6 +312,7 @@
         renderCardBinderTile,
         renderStatusBinderTile,
         renderPublishedSetRow,
+        renderWorkshopImportPanel,
     };
 
     battleModules.editorWorkbench = editorWorkbench;
