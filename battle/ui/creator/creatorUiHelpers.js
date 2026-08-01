@@ -62,10 +62,10 @@
     const CONDITION_LABELS = {
         always: 'Always (no check)',
         hasStatus: 'Has status',
-        statusPotencyAtLeast: 'Status potency is at least',
-        statusPotencyAtOrBelow: 'Status potency is at most',
-        statusCountAtLeast: 'Status count is at least',
-        statusCountAtOrBelow: 'Status count is at most',
+        statusPotencyAtLeast: 'Status potency is at least (keyword)',
+        statusPotencyAtOrBelow: 'Status potency is at most (keyword)',
+        statusCountAtLeast: 'Status stacks/count is at least',
+        statusCountAtOrBelow: 'Status stacks/count is at most',
         skillSinType: 'Skill sin type is',
         skillDamageType: 'Skill damage type is',
         skillType: 'Skill type is',
@@ -588,6 +588,58 @@
         return `<select ${attrs} style="width:100%;">${buildSelectOptions(options, selectedId, escapeAttr)}</select>`;
     }
 
+    function resolveStatusDefinition(statusOrId, catalog) {
+        if (!statusOrId) {
+            return null;
+        }
+        if (typeof statusOrId === 'object') {
+            return statusOrId;
+        }
+        const list = catalog?.statusList || [];
+        return list.find((entry) => entry.id === statusOrId) || null;
+    }
+
+    /**
+     * @returns {'stacks'|'potencyCount'|'unknown'}
+     */
+    function getStatusMetricMode(statusOrId, catalog) {
+        if (!statusOrId) {
+            return 'unknown';
+        }
+        const status = resolveStatusDefinition(statusOrId, catalog);
+        if (!status) {
+            return 'unknown';
+        }
+        if (status.countOnly === true) {
+            return 'stacks';
+        }
+        const stackModel = status.stackModel || {};
+        const potencyEnabled = Boolean(stackModel.potency?.enabled);
+        const countEnabled = Boolean(stackModel.count?.enabled);
+        if (countEnabled && !potencyEnabled) {
+            return 'stacks';
+        }
+        if (potencyEnabled) {
+            return 'potencyCount';
+        }
+        if (countEnabled) {
+            return 'stacks';
+        }
+        return 'unknown';
+    }
+
+    function cleanStackOnlyEffectFields(effect, type) {
+        delete effect.minStatusPotency;
+        delete effect.potency;
+        delete effect.potencyDelta;
+        if ((type === 'applyStatus' || type === 'queueStatus') && (effect.count == null || effect.count === '')) {
+            effect.count = 1;
+        }
+        if ((type === 'adjustStatus' || type === 'consumeStatus') && effect.countDelta == null) {
+            effect.countDelta = type === 'consumeStatus' ? -1 : 1;
+        }
+    }
+
     function renderTargetSelect(selectedValue, escapeAttr, attrs = '') {
         return `<select ${attrs} style="width:100%;">${buildSelectOptions(TARGET_OPTIONS, selectedValue || '', escapeAttr)}</select>`;
     }
@@ -657,9 +709,64 @@
         const minPotency = effect?.minStatusPotency ?? '';
         const minCount = effect?.minStatusCount ?? '';
         const statusSource = effect?.statusSource || 'self';
+        const metricMode = getStatusMetricMode(effect?.statusId, catalog);
         const hasStatusGate = Boolean(effect?.statusId)
             || minPotency !== ''
             || minCount !== '';
+
+        let gateMetricFields = '';
+        let gateHint = 'Leave blank to always run. Keyword statuses use potency/count; most other statuses use stacks only.';
+        if (metricMode === 'stacks') {
+            gateHint = 'Leave blank to always run. Example: at 5+ stacks of this status, then grant the bonus.';
+            gateMetricFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--2">
+                    <label>Min stacks (X+)
+                        <input ${fieldAttrs} data-field="minStatusCount" inputmode="numeric" value="${escapeAttr(String(minCount))}" placeholder="e.g. 5" />
+                    </label>
+                    <label>Check on
+                        <select ${fieldAttrs} data-field="statusSource" style="width:100%;">
+                            <option value="self" ${statusSource === 'self' ? 'selected' : ''}>Self</option>
+                            <option value="opponent" ${statusSource === 'opponent' ? 'selected' : ''}>Opponent</option>
+                        </select>
+                    </label>
+                </div>
+            `;
+        } else if (metricMode === 'potencyCount') {
+            gateHint = 'Leave blank to always run. Example: status Charge, count ≥ 3 → only then grant the bonus.';
+            gateMetricFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                    <label>Min potency (X+)
+                        <input ${fieldAttrs} data-field="minStatusPotency" inputmode="numeric" value="${escapeAttr(String(minPotency))}" placeholder="e.g. 5" />
+                    </label>
+                    <label>Min count (Y+)
+                        <input ${fieldAttrs} data-field="minStatusCount" inputmode="numeric" value="${escapeAttr(String(minCount))}" placeholder="e.g. 3" />
+                    </label>
+                    <label>Check on
+                        <select ${fieldAttrs} data-field="statusSource" style="width:100%;">
+                            <option value="self" ${statusSource === 'self' ? 'selected' : ''}>Self</option>
+                            <option value="opponent" ${statusSource === 'opponent' ? 'selected' : ''}>Opponent</option>
+                        </select>
+                    </label>
+                </div>
+            `;
+        } else {
+            gateMetricFields = `
+                <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                    <label>Min potency (X+)
+                        <input ${fieldAttrs} data-field="minStatusPotency" inputmode="numeric" value="${escapeAttr(String(minPotency))}" placeholder="keyword only" />
+                    </label>
+                    <label>Min stacks / count (Y+)
+                        <input ${fieldAttrs} data-field="minStatusCount" inputmode="numeric" value="${escapeAttr(String(minCount))}" placeholder="e.g. 3" />
+                    </label>
+                    <label>Check on
+                        <select ${fieldAttrs} data-field="statusSource" style="width:100%;">
+                            <option value="self" ${statusSource === 'self' ? 'selected' : ''}>Self</option>
+                            <option value="opponent" ${statusSource === 'opponent' ? 'selected' : ''}>Opponent</option>
+                        </select>
+                    </label>
+                </div>
+            `;
+        }
 
         return `
             <details class="echoes-creator__filters" ${hasStatusGate ? 'open' : ''}>
@@ -667,25 +774,12 @@
                 <div class="echoes-creator__filters-body">
                     <div class="echoes-creator__section">
                         <div class="echoes-creator__section-title">Status gate — “At X+/Y+ status, then…”</div>
-                        <p class="echoes-creator__hint">Leave blank to always run. Example: status Charge, count ≥ 3 → only then grant the bonus.</p>
+                        <p class="echoes-creator__hint">${gateHint}</p>
                         <div class="echoes-creator__field-row">
                             <label>Status to check</label>
                             ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
                         </div>
-                        <div class="echoes-creator__field-row echoes-creator__field-row--3">
-                            <label>Min potency (X+)
-                                <input ${fieldAttrs} data-field="minStatusPotency" inputmode="numeric" value="${escapeAttr(String(minPotency))}" placeholder="e.g. 5" />
-                            </label>
-                            <label>Min count (Y+)
-                                <input ${fieldAttrs} data-field="minStatusCount" inputmode="numeric" value="${escapeAttr(String(minCount))}" placeholder="e.g. 3" />
-                            </label>
-                            <label>Check on
-                                <select ${fieldAttrs} data-field="statusSource" style="width:100%;">
-                                    <option value="self" ${statusSource === 'self' ? 'selected' : ''}>Self</option>
-                                    <option value="opponent" ${statusSource === 'opponent' ? 'selected' : ''}>Opponent</option>
-                                </select>
-                            </label>
-                        </div>
+                        ${gateMetricFields}
                     </div>
                     <div class="echoes-creator__field-row echoes-creator__field-row--3" style="margin-top:0.35rem;">
                         <label>Coin #
@@ -740,38 +834,71 @@
 
         let specificFields = '';
 
+        const effectStatusMetric = getStatusMetricMode(effect?.statusId, catalog);
+
         switch (type) {
         case 'applyStatus':
         case 'queueStatus':
-            specificFields = `
-                <div class="echoes-creator__field-row">
-                    <label>Status</label>
-                    ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
-                </div>
-                <div class="echoes-creator__field-row echoes-creator__field-row--3">
-                    <label>Potency</label>
-                    <input ${fieldAttrs} data-field="potency" inputmode="numeric" value="${escapeAttr(String(effect?.potency ?? ''))}" placeholder="Potency" />
-                    <label>Count</label>
-                    <input ${fieldAttrs} data-field="count" inputmode="numeric" value="${escapeAttr(String(effect?.count ?? ''))}" placeholder="Count" />
-                </div>
-            `;
+            if (effectStatusMetric === 'stacks') {
+                specificFields = `
+                    <div class="echoes-creator__field-row">
+                        <label>Status</label>
+                        ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
+                    </div>
+                    <div class="echoes-creator__field-row">
+                        <label>Stacks
+                            <input ${fieldAttrs} data-field="count" inputmode="numeric" value="${escapeAttr(String(effect?.count ?? 1))}" placeholder="Stacks" />
+                        </label>
+                    </div>
+                `;
+            } else {
+                specificFields = `
+                    <div class="echoes-creator__field-row">
+                        <label>Status</label>
+                        ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
+                    </div>
+                    <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                        <label>Potency</label>
+                        <input ${fieldAttrs} data-field="potency" inputmode="numeric" value="${escapeAttr(String(effect?.potency ?? ''))}" placeholder="Potency" />
+                        <label>${effectStatusMetric === 'unknown' ? 'Stacks / count' : 'Count'}</label>
+                        <input ${fieldAttrs} data-field="count" inputmode="numeric" value="${escapeAttr(String(effect?.count ?? ''))}" placeholder="${effectStatusMetric === 'unknown' ? 'Stacks or count' : 'Count'}" />
+                    </div>
+                `;
+            }
             break;
         case 'adjustStatus':
         case 'consumeStatus':
         case 'clearStatus':
-            specificFields = `
-                <div class="echoes-creator__field-row">
-                    <label>${type === 'consumeStatus' ? 'Status to consume (Charge, Poise, …)' : 'Status'}</label>
-                    ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
-                </div>
-                <div class="echoes-creator__field-row echoes-creator__field-row--3">
-                    <label>${type === 'consumeStatus' ? 'Potency spent' : 'Potency Δ'}</label>
-                    <input ${fieldAttrs} data-field="potencyDelta" inputmode="numeric" value="${escapeAttr(String(effect?.potencyDelta ?? ''))}" placeholder="${type === 'consumeStatus' ? '-1' : '±'}" />
-                    <label>${type === 'consumeStatus' ? 'Count spent' : 'Count Δ'}</label>
-                    <input ${fieldAttrs} data-field="countDelta" inputmode="numeric" value="${escapeAttr(String(effect?.countDelta ?? ''))}" placeholder="${type === 'consumeStatus' ? '-1' : '±'}" />
-                </div>
-                ${type === 'consumeStatus' ? '<p class="echoes-creator__hint">Use negative deltas to spend stacks (e.g. Count −1). Pair with a status gate below if spending only at a threshold.</p>' : ''}
-            `;
+            if (type !== 'clearStatus' && effectStatusMetric === 'stacks') {
+                specificFields = `
+                    <div class="echoes-creator__field-row">
+                        <label>${type === 'consumeStatus' ? 'Status to consume' : 'Status'}</label>
+                        ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
+                    </div>
+                    <div class="echoes-creator__field-row">
+                        <label>${type === 'consumeStatus' ? 'Stacks spent' : 'Stacks Δ'}
+                            <input ${fieldAttrs} data-field="countDelta" inputmode="numeric" value="${escapeAttr(String(effect?.countDelta ?? ''))}" placeholder="${type === 'consumeStatus' ? '-1' : '±'}" />
+                        </label>
+                    </div>
+                    ${type === 'consumeStatus' ? '<p class="echoes-creator__hint">Use a negative value to spend stacks (e.g. −1). Pair with a status gate below if spending only at a threshold.</p>' : ''}
+                `;
+            } else {
+                specificFields = `
+                    <div class="echoes-creator__field-row">
+                        <label>${type === 'consumeStatus' ? 'Status to consume (Charge, Poise, …)' : 'Status'}</label>
+                        ${renderStatusSelect(statusList, effect?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
+                    </div>
+                    ${type === 'clearStatus' ? '' : `
+                    <div class="echoes-creator__field-row echoes-creator__field-row--3">
+                        <label>${type === 'consumeStatus' ? 'Potency spent' : 'Potency Δ'}</label>
+                        <input ${fieldAttrs} data-field="potencyDelta" inputmode="numeric" value="${escapeAttr(String(effect?.potencyDelta ?? ''))}" placeholder="${type === 'consumeStatus' ? '-1' : '±'}" />
+                        <label>${type === 'consumeStatus' ? 'Stacks / count spent' : 'Stacks / count Δ'}</label>
+                        <input ${fieldAttrs} data-field="countDelta" inputmode="numeric" value="${escapeAttr(String(effect?.countDelta ?? ''))}" placeholder="${type === 'consumeStatus' ? '-1' : '±'}" />
+                    </div>
+                    ${type === 'consumeStatus' ? '<p class="echoes-creator__hint">Use negative deltas to spend stacks (e.g. Count −1). Pair with a status gate below if spending only at a threshold.</p>' : ''}
+                    `}
+                `;
+            }
             break;
         case 'dealFixedDamage':
         case 'dealHpPercentDamage':
@@ -1065,11 +1192,26 @@
                 <option value="false" ${condition?.value === false ? 'selected' : ''}>No</option>
             </select>`;
         } else if (['statusPotencyAtLeast', 'statusPotencyAtOrBelow', 'statusCountAtLeast', 'statusCountAtOrBelow'].includes(type)) {
+            const conditionMetric = getStatusMetricMode(condition?.statusId, catalog);
+            const isPotencyCondition = type === 'statusPotencyAtLeast' || type === 'statusPotencyAtOrBelow';
+            const isStacksCondition = type === 'statusCountAtLeast' || type === 'statusCountAtOrBelow';
+            let metricHint = '';
+            let valuePlaceholder = 'value';
+            if (isStacksCondition && conditionMetric === 'stacks') {
+                valuePlaceholder = 'Min stacks';
+            } else if (isStacksCondition) {
+                valuePlaceholder = 'Min stacks / count';
+            } else if (isPotencyCondition && conditionMetric === 'stacks') {
+                metricHint = '<p class="echoes-creator__hint">This status is stacks-only — use “Status stacks/count is at least” instead of potency.</p>';
+            } else if (isPotencyCondition) {
+                valuePlaceholder = 'Min potency';
+            }
             valueFields = `
                 <div class="echoes-creator__field-row echoes-creator__field-row--2">
                     ${renderStatusSelect(statusList, condition?.statusId || '', escapeAttr, `${fieldAttrs} data-field="statusId"`)}
-                    <input ${fieldAttrs} data-field="value" inputmode="numeric" value="${escapeAttr(String(condition?.value ?? ''))}" placeholder="value" />
+                    <input ${fieldAttrs} data-field="value" inputmode="numeric" value="${escapeAttr(String(condition?.value ?? ''))}" placeholder="${escapeAttr(valuePlaceholder)}" />
                 </div>
+                ${metricHint}
             `;
         } else if (['encounterResourceAtLeast', 'encounterResourceAtOrBelow', 'unitResourceAtLeast', 'unitResourceAtOrBelow'].includes(type)) {
             valueFields = `
@@ -1148,7 +1290,7 @@
             const fieldAttrs = `${blockAttrs} data-action-index="${actionIndex}" data-action="creator-hook-action-field"`;
             return `
                 <div class="echoes-creator__action-wrap">
-                    ${renderEffectFields(action, catalog, escapeAttr, escapeHtml, fieldAttrs)}
+                    ${renderEffectFields(action, catalog, escapeAttr, escapeHtml, fieldAttrs, { showFilters: true })}
                     <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${blockAttrs} data-action="creator-hook-remove-action" data-action-index="${actionIndex}">Remove action</button>
                 </div>
             `;
@@ -1166,7 +1308,7 @@
                 </div>
                 <div class="echoes-creator__section">
                     <div class="echoes-creator__section-title">Only if ALL of these are true</div>
-                    <p class="echoes-creator__hint">Common: “Status count is at least” / “Status potency is at least” for Charge, Poise, Reading, etc.</p>
+                    <p class="echoes-creator__hint">Use “Status stacks/count is at least” for stack-only statuses (Aggro, Haste, custom). Use potency conditions only for keyword statuses (Charge, Poise, Rupture).</p>
                     ${conditionRows || '<span class="echoes-creator__hint">No conditions — this always runs when the trigger fires.</span>'}
                     <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${blockAttrs} data-action="creator-hook-add-condition">+ Add condition</button>
                 </div>
@@ -1185,7 +1327,7 @@
         return `
             <div class="echoes-creator__simple-effect">
                 <span class="echoes-creator__badge">Simple action</span>
-                ${renderEffectFields(effect, catalog, escapeAttr, escapeHtml, fieldAttrs)}
+                ${renderEffectFields(effect, catalog, escapeAttr, escapeHtml, fieldAttrs, { showFilters: true })}
                 <button class="echoes-battle-panel__combat-button echoes-battle-panel__combat-button--ghost" type="button" ${effectAttrs} data-action="creator-simple-effect-remove">Remove</button>
             </div>
         `;
@@ -1492,6 +1634,19 @@
             delete effect.outcome;
             return;
         }
+        if (field === 'statusId') {
+            const trimmed = String(rawValue ?? '').trim();
+            if (!trimmed) {
+                delete effect.statusId;
+                return;
+            }
+            effect.statusId = trimmed;
+            const catalog = options.catalog || null;
+            if (getStatusMetricMode(trimmed, catalog) === 'stacks') {
+                cleanStackOnlyEffectFields(effect, effect.type || 'applyStatus');
+            }
+            return;
+        }
         if (field === 'amount') {
             const trimmed = String(rawValue ?? '').trim();
             if (!trimmed) {
@@ -1599,13 +1754,18 @@
         renderSkillEffectsSection,
         applyEffectFieldUpdate,
         applyConditionFieldUpdate,
+        getStatusMetricMode,
+        resolveStatusDefinition,
         normalizeNumberInput,
         normalizeStringInput,
         buildSelectOptions,
         renderTargetSelect,
         renderStatusSelect,
         renderEffectFields,
+        renderEffectFilters,
         renderConditionRow,
+        renderHookBlock,
+        renderHooksEditor,
     };
 
     battleModules.creatorUi = CreatorUi;

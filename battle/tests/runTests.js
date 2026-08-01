@@ -7339,6 +7339,131 @@ function runSuite() {
         assert(html.includes('Background image'), 'Expected background image field.');
     });
 
+    test('Creator UI: stack-only statuses adapt gate and apply fields', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = { EchoesOfTheCityBattleModules: {} };
+        require(path.resolve(battleRoot, 'ui/creator/creatorUiHelpers.js'));
+
+        const creatorUi = global.window.EchoesOfTheCityCreatorUi;
+        assert(typeof creatorUi?.getStatusMetricMode === 'function', 'Expected getStatusMetricMode.');
+
+        const catalog = creatorUi.buildCatalog([
+            {
+                id: 'rupture',
+                label: 'Rupture',
+                stackModel: {
+                    potency: { enabled: true, min: 0, max: 99, application: 'add' },
+                    count: { enabled: true, min: 0, max: 99, application: 'add' },
+                },
+            },
+            {
+                id: 'aggro',
+                label: 'Aggro',
+                countOnly: true,
+                stackModel: {
+                    count: { enabled: true, min: 0, max: 99, application: 'add' },
+                },
+            },
+            {
+                id: 'haste-like',
+                label: 'Haste',
+                stackModel: {
+                    count: { enabled: true, min: 0, max: 99, application: 'add' },
+                },
+            },
+        ]);
+
+        assert(creatorUi.getStatusMetricMode('rupture', catalog) === 'potencyCount', 'Expected rupture as potencyCount.');
+        assert(creatorUi.getStatusMetricMode('aggro', catalog) === 'stacks', 'Expected aggro as stacks.');
+        assert(creatorUi.getStatusMetricMode('haste-like', catalog) === 'stacks', 'Expected count-enabled-only as stacks.');
+        assert(creatorUi.getStatusMetricMode('', catalog) === 'unknown', 'Expected empty status as unknown.');
+
+        const escapeAttr = (value) => String(value);
+        const escapeHtml = (value) => String(value);
+        const fieldAttrs = 'data-action="creator-skill-effect-field"';
+
+        const stacksGate = creatorUi.renderEffectFilters(
+            { statusId: 'aggro', minStatusCount: 3, type: 'modifyContext' },
+            catalog,
+            escapeAttr,
+            fieldAttrs,
+            { showFilters: true },
+        );
+        assert(stacksGate.includes('Min stacks'), 'Expected Min stacks label for countOnly gate.');
+        assert(!stacksGate.includes('Min potency'), 'Expected no Min potency for countOnly gate.');
+
+        const keywordGate = creatorUi.renderEffectFilters(
+            { statusId: 'rupture', minStatusPotency: 5, type: 'modifyContext' },
+            catalog,
+            escapeAttr,
+            fieldAttrs,
+            { showFilters: true },
+        );
+        assert(keywordGate.includes('Min potency'), 'Expected Min potency for keyword gate.');
+        assert(keywordGate.includes('Min count'), 'Expected Min count for keyword gate.');
+
+        const stacksApply = creatorUi.renderEffectFields(
+            { type: 'applyStatus', statusId: 'aggro', count: 2 },
+            catalog,
+            escapeAttr,
+            escapeHtml,
+            fieldAttrs,
+            { showFilters: false },
+        );
+        assert(stacksApply.includes('Stacks'), 'Expected Stacks field for countOnly apply.');
+        assert(!stacksApply.includes('>Potency<') && !stacksApply.includes('<label>Potency</label>'), 'Expected no Potency label for countOnly apply.');
+
+        const keywordApply = creatorUi.renderEffectFields(
+            { type: 'applyStatus', statusId: 'rupture', potency: 2, count: 1 },
+            catalog,
+            escapeAttr,
+            escapeHtml,
+            fieldAttrs,
+            { showFilters: false },
+        );
+        assert(keywordApply.includes('<label>Potency</label>'), 'Expected Potency for keyword apply.');
+
+        const effect = { type: 'applyStatus', statusId: 'rupture', potency: 3, count: 2, minStatusPotency: 5 };
+        creatorUi.applyEffectFieldUpdate(effect, 'statusId', 'aggro', { catalog });
+        assert(effect.statusId === 'aggro', 'Expected statusId updated.');
+        assert(effect.potency === undefined, 'Expected potency cleared for stacks status.');
+        assert(effect.minStatusPotency === undefined, 'Expected minStatusPotency cleared for stacks status.');
+        assert(effect.count === 2, 'Expected existing count kept.');
+
+        const stacksCondition = creatorUi.renderConditionRow(
+            { type: 'statusCountAtLeast', statusId: 'aggro', value: 5 },
+            catalog,
+            escapeAttr,
+            escapeHtml,
+            'data-action="creator-hook-condition-field"',
+        );
+        assert(stacksCondition.includes('Min stacks'), 'Expected Min stacks placeholder on stacks condition.');
+
+        const potencyOnStacks = creatorUi.renderConditionRow(
+            { type: 'statusPotencyAtLeast', statusId: 'aggro', value: 5 },
+            catalog,
+            escapeAttr,
+            escapeHtml,
+            'data-action="creator-hook-condition-field"',
+        );
+        assert(potencyOnStacks.includes('stacks-only'), 'Expected stacks-only warning on potency condition.');
+
+        const hookHtml = creatorUi.renderHookBlock(
+            {
+                conditions: [],
+                actions: [{ type: 'applyStatus', statusId: 'aggro', count: 1 }],
+            },
+            catalog,
+            escapeAttr,
+            escapeHtml,
+            'data-creator-scope="status"',
+        );
+        assert(hookHtml.includes('When this runs'), 'Expected status gate filters on status/passive hook actions.');
+        assert(hookHtml.includes('Stacks'), 'Expected Stacks field in status/passive hook apply action.');
+        assert(hookHtml.includes('Status stacks/count is at least'), 'Expected stacks-aware condition hint in hooks.');
+    });
+
     test('Skill effect patterns: compile and humanize Predictive Cuts patterns', () => {
         const battleRoot = path.resolve(__dirname, '..');
         clearRequireCache(battleRoot);

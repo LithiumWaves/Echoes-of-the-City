@@ -10,6 +10,26 @@
         return match?.label || match?.name || statusId;
     }
 
+    function isStacksOnlyStatus(catalog, statusId) {
+        if (!statusId) {
+            return false;
+        }
+        const creatorUi = battleModules.creatorUi || window.EchoesOfTheCityCreatorUi;
+        if (typeof creatorUi?.getStatusMetricMode === 'function') {
+            return creatorUi.getStatusMetricMode(statusId, catalog) === 'stacks';
+        }
+        const match = (catalog?.statusList || []).find((entry) => entry.id === statusId);
+        if (!match) {
+            return false;
+        }
+        if (match.countOnly === true) {
+            return true;
+        }
+        const potencyEnabled = Boolean(match.stackModel?.potency?.enabled);
+        const countEnabled = Boolean(match.stackModel?.count?.enabled);
+        return countEnabled && !potencyEnabled;
+    }
+
     function pct(value) {
         if (typeof value !== 'number' || !Number.isFinite(value)) {
             return '';
@@ -105,7 +125,6 @@
                 trigger: 'onHit',
                 type: 'applyStatus',
                 statusId: '',
-                potency: 1,
                 count: 1,
                 coinIndex: coinIndex || 1,
             }],
@@ -119,7 +138,6 @@
                 type: 'applyStatus',
                 target: 'self',
                 statusId: '',
-                potency: 0,
                 count: 1,
                 coinIndex: coinIndex || 1,
             }],
@@ -138,7 +156,6 @@
                         actions: [{
                             type: 'applyStatus',
                             statusId: '',
-                            potency: 1,
                             count: 1,
                         }],
                     },
@@ -203,7 +220,8 @@
             return `[${triggerLabel}] Deal +${pct(effect.multiplier)} damage per ${statusLabel(catalog, effect.statusId)} on self${cap ? ` (max ${cap})` : ''}`;
         }
         if (type === 'modifyContext' && effect.field === 'coinPowerBonus' && effect.operation === 'add' && effect.minStatusCount) {
-            return `[${triggerLabel}] At ${effect.minStatusCount}+ ${statusLabel(catalog, effect.statusId)}, Coin Power +${effect.value || 0}${coinSuffix}`;
+            const unit = isStacksOnlyStatus(catalog, effect.statusId) ? 'stacks' : 'count';
+            return `[${triggerLabel}] At ${effect.minStatusCount}+ ${statusLabel(catalog, effect.statusId)} ${unit}, Coin Power +${effect.value || 0}${coinSuffix}`;
         }
         if (type === 'modifyContext' && effect.field === 'coinPowerBonus' && effect.operation === 'add' && !effect.minStatusCount) {
             return `[${triggerLabel}] Coin Power +${effect.value || 0}${coinSuffix}`;
@@ -216,6 +234,11 @@
         }
         if (type === 'applyStatus') {
             const target = effect.target === 'self' ? 'self' : 'target';
+            const stacksOnly = isStacksOnlyStatus(catalog, effect.statusId);
+            if (stacksOnly) {
+                const stacks = effect.count != null ? ` ${effect.count} stacks` : '';
+                return `[On Hit${coinSuffix}] ${target === 'self' ? 'Gain' : 'Inflict'} ${statusLabel(catalog, effect.statusId)}${stacks}`;
+            }
             const potency = effect.potency != null ? ` potency ${effect.potency}` : '';
             const count = effect.count != null ? ` count ${effect.count}` : '';
             return `[On Hit${coinSuffix}] ${target === 'self' ? 'Gain' : 'Inflict'} ${statusLabel(catalog, effect.statusId)}${potency}${count}`;

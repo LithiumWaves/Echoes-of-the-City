@@ -2253,9 +2253,13 @@
                         <div class="echoes-editor-workshop__details-body">
                             <label class="echoes-creator__checkbox">
                                 <input type="checkbox" data-action="creator-status-count-only" ${statusView?.draft?.countOnly ? 'checked' : ''} />
-                                Count only (no potency — like Damage Up)
+                                Stacks only (no potency — like Aggro, Haste, Damage Up)
                             </label>
+                            <p class="echoes-creator__hint">${statusView?.draft?.countOnly
+                                ? 'This status tracks stacks only. Keyword statuses (Rupture, Burn, etc.) use potency + count instead.'
+                                : 'Keyword statuses use potency + count. Most non-keyword statuses should use stacks only.'}</p>
                             <div class="echoes-editor-field-grid echoes-editor-field-grid--2">
+                                ${statusView?.draft?.countOnly ? '' : `
                                 <fieldset class="echoes-creator__fieldset">
                                     <legend>Potency</legend>
                                     <label class="echoes-creator__checkbox">
@@ -2265,26 +2269,27 @@
                                     <div class="echoes-creator__field-row echoes-creator__field-row--2">
                                         <input data-action="creator-status-stack-field" data-bucket="potency" data-field="min" inputmode="numeric" value="${escapeAttribute(String(statusView?.potency?.min ?? 0))}" placeholder="Min" />
                                         <input data-action="creator-status-stack-field" data-bucket="potency" data-field="max" inputmode="numeric" value="${escapeAttribute(String(statusView?.potency?.max ?? 99))}" placeholder="Max" />
-                                                            </div>
+                                    </div>
                                 </fieldset>
+                                `}
                                 <fieldset class="echoes-creator__fieldset">
-                                    <legend>Count</legend>
+                                    <legend>${statusView?.draft?.countOnly ? 'Stacks' : 'Count'}</legend>
                                     <label class="echoes-creator__checkbox">
-                                        <input type="checkbox" data-action="creator-status-stack-toggle" data-bucket="count" ${statusView?.count?.enabled ? 'checked' : ''} />
-                                        Use count
+                                        <input type="checkbox" data-action="creator-status-stack-toggle" data-bucket="count" ${statusView?.count?.enabled || statusView?.draft?.countOnly ? 'checked' : ''} ${statusView?.draft?.countOnly ? 'disabled' : ''} />
+                                        ${statusView?.draft?.countOnly ? 'Uses stacks' : 'Use count'}
                                     </label>
                                     <div class="echoes-creator__field-row echoes-creator__field-row--2">
                                         <input data-action="creator-status-stack-field" data-bucket="count" data-field="min" inputmode="numeric" value="${escapeAttribute(String(statusView?.count?.min ?? 0))}" placeholder="Min" />
                                         <input data-action="creator-status-stack-field" data-bucket="count" data-field="max" inputmode="numeric" value="${escapeAttribute(String(statusView?.count?.max ?? 99))}" placeholder="Max" />
-                                                </div>
+                                    </div>
                                 </fieldset>
-                                            </div>
+                            </div>
                             <label class="echoes-creator__checkbox">
                                 <input type="checkbox" data-action="creator-status-expire-count" ${statusView?.expireWhen?.countLte != null ? 'checked' : ''} />
-                                Expire when count reaches 0
+                                Expire when ${statusView?.draft?.countOnly ? 'stacks' : 'count'} reach 0
                             </label>
-                                        </div>
-                                    </details>
+                        </div>
+                    </details>
 
                     <details class="echoes-editor-workshop__details" open>
                         <summary class="echoes-editor-workshop__details-summary">Behavior — triggers &amp; effects</summary>
@@ -3721,7 +3726,11 @@
                         return;
                     }
                     if (creatorUi) {
-                        creatorUi.applyEffectFieldUpdate(effect, field || 'amount', rawValue, { amountMode, amountSubField });
+                        creatorUi.applyEffectFieldUpdate(effect, field || 'amount', rawValue, {
+                            amountMode,
+                            amountSubField,
+                            catalog: getCreatorCatalog(),
+                        });
                     }
                 });
                 rerenderCreatorAfterBattleEdit();
@@ -3814,10 +3823,24 @@
         if (statusCountOnly) {
             updateCreatorStatusJson((draft) => {
                 draft.countOnly = Boolean(statusCountOnly.checked);
-                if (draft.countOnly && draft.stackModel?.potency) {
+                draft.stackModel = draft.stackModel && typeof draft.stackModel === 'object' && !Array.isArray(draft.stackModel)
+                    ? draft.stackModel
+                    : {};
+                draft.stackModel.potency = draft.stackModel.potency && typeof draft.stackModel.potency === 'object'
+                    ? draft.stackModel.potency
+                    : { enabled: true, min: 0, max: 99, application: 'add' };
+                draft.stackModel.count = draft.stackModel.count && typeof draft.stackModel.count === 'object'
+                    ? draft.stackModel.count
+                    : { enabled: true, min: 0, max: 99, application: 'add' };
+                if (draft.countOnly) {
                     draft.stackModel.potency.enabled = false;
-                } else if (draft.stackModel?.potency) {
+                    draft.stackModel.count.enabled = true;
+                    if (!draft.stackModel.expireWhen || typeof draft.stackModel.expireWhen !== 'object') {
+                        draft.stackModel.expireWhen = { countLte: 0 };
+                    }
+                } else {
                     draft.stackModel.potency.enabled = true;
+                    draft.stackModel.count.enabled = true;
                 }
             });
             renderCreatorScreen();
@@ -4064,7 +4087,11 @@
                     effect = entry.actions[actionIndex];
                 }
                 if (effect && creatorUi) {
-                    creatorUi.applyEffectFieldUpdate(effect, field || 'amount', rawValue, { amountMode, amountSubField });
+                    creatorUi.applyEffectFieldUpdate(effect, field || 'amount', rawValue, {
+                        amountMode,
+                        amountSubField,
+                        catalog: getCreatorCatalog(),
+                    });
                 }
             });
             rerenderCreatorHookEditor(entityType, scope);
@@ -4093,7 +4120,11 @@
                         return;
                     }
                     if (creatorUi) {
-                        creatorUi.applyEffectFieldUpdate(effect, field || 'amount', rawValue, { amountMode, amountSubField });
+                        creatorUi.applyEffectFieldUpdate(effect, field || 'amount', rawValue, {
+                            amountMode,
+                            amountSubField,
+                            catalog: getCreatorCatalog(),
+                        });
                     }
                 });
                 rerenderCreatorAfterUnitEdit();
