@@ -7612,8 +7612,8 @@ function runSuite() {
         assert(html.includes('echoes-battle-panel__field-bg'), 'Expected field background layer.');
         assert(html.includes('--echoes-field-bg-image'), 'Expected field background CSS variable.');
         assert(html.includes('combat-battlefield--custom-bg'), 'Expected custom background modifier class.');
-        assert(html.includes('echoes-lc-hex-frame'), 'Expected LC hex frame on field units.');
-        assert(html.includes('echoes-battle-panel__field-hex-vitals'), 'Expected field hex vitals wrapper.');
+        assert(html.includes('echoes-battle-panel__field-vitals-lc'), 'Expected field vitals below units.');
+        assert(!html.includes('echoes-battle-panel__field-hex-vitals'), 'Field units should not use hex overlay.');
     });
 
     test('Schema: rules.background validates image path', () => {
