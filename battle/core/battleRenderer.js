@@ -1563,11 +1563,10 @@
 
             return `
                 <section class="echoes-battle-panel__combat-battlefield echoes-battle-panel__combat-battlefield--lc${hasCustomBg ? ' echoes-battle-panel__combat-battlefield--custom-bg' : ''}">
-                    ${renderBattlefieldBackgroundLayers(battle)}
                     ${topHudMarkup}
-                    <div class="echoes-battle-panel__combat-stage-area echoes-battle-panel__combat-stage-area--lc">
+                    <div class="echoes-battle-panel__combat-stage-area echoes-battle-panel__combat-stage-area--lc${hasCustomBg ? ' echoes-battle-panel__combat-stage-area--custom-bg' : ''}">
+                        ${renderBattlefieldBackgroundLayers(battle)}
                         ${renderTargetOverlayWithUiState(battle, activePlayerSlot, uiState)}
-                        ${renderResolutionCard(getResolvedBattle(battle, uiState), activePlayerSlot, uiState)}
                         ${renderPlaybackOverlay(battle, uiState)}
                         ${renderResolutionBadges(getResolvedBattle(battle, uiState), uiState)}
                         ${renderTurnDebugOverlay(battle, activePlayerSlot, uiState)}

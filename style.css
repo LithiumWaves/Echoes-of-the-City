@@ -3632,6 +3632,24 @@
     opacity: 0.12;
 }
 
+.echoes-battle-panel__combat-stage-area--custom-bg {
+    background: transparent;
+}
+
+.echoes-battle-panel__combat-stage-area--custom-bg::before {
+    opacity: 0;
+    display: none;
+}
+
+.echoes-battle-panel__combat-battlefield--custom-bg .echoes-battle-panel__combat-stage-area--lc {
+    background: transparent;
+}
+
+.echoes-battle-panel__combat-battlefield--custom-bg .echoes-battle-panel__combat-stage-area--lc::before {
+    opacity: 0;
+    display: none;
+}
+
 .echoes-battle-panel__field-bg {
     position: absolute;
     inset: 0;

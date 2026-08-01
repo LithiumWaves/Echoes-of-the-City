@@ -87,11 +87,23 @@
             resolveAssetUrl,
             escapeAttribute,
         );
+        const thresholds = Array.isArray(unit?.staggerThresholds) ? unit.staggerThresholds : [];
+        const thresholdIndex = Number.isInteger(unit?.staggerThresholdIndex) ? unit.staggerThresholdIndex : 0;
+        const thresholdMarkers = thresholds.map((threshold, index) => {
+            const position = Math.max(0, Math.min(100, (Number(threshold) / maxHp) * 100));
+            const markerClass = index < thresholdIndex
+                ? ' is-spent'
+                : index === thresholdIndex
+                    ? ' is-next'
+                    : '';
+            return `<span class="echoes-lc-vitals__threshold-marker${markerClass}" style="left:${position}%;" aria-hidden="true"></span>`;
+        }).join('');
 
         return `
             <div class="echoes-lc-enemy-hp-bar" aria-label="HP ${escapeHtml(String(hp))}">
                 <div class="echoes-lc-enemy-hp-bar__frame${barStyle ? ' has-image' : ''}" style="${barStyle}">
                     <span class="echoes-lc-enemy-hp-bar__fill" style="width:${hpPercent}%;"></span>
+                    ${thresholdMarkers}
                 </div>
                 <span class="echoes-lc-enemy-hp-bar__value">${escapeHtml(String(hp))}</span>
             </div>
