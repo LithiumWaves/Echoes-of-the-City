@@ -158,15 +158,21 @@
             label = 'Description',
             rows = 10,
             placeholder = '[On_Hit] Inflict 1 [rupture]',
+            wireAction = '',
+            wireLabel = 'Wire hooks from description',
+            wireAttrs = '',
         } = options;
         const previewHtml = renderTaggedText(value, catalog);
+        const wireButton = wireAction
+            ? `<button class="echoes-editor-workshop__action echoes-editor-workshop__action--accent" type="button" data-action="${escapeAttr(wireAction)}" ${wireAttrs}>${escapeHtmlFn(wireLabel)}</button>`
+            : '';
         return `
             <div class="echoes-tagged-desc">
                 <label class="echoes-tagged-desc__label">${escapeHtmlFn(label)}</label>
                 <p class="echoes-creator__hint echoes-tagged-desc__help">
                     To enter a status effect / coin effect / attack effect, put them in square brackets with underscores instead of spaces,
                     e.g. <code>[sinking_deluge]</code>, <code>[On_Use]</code>, <code>[On_Hit]</code>, <code>[coin_1]</code>, <code>[heads_hit]</code>.
-                    Tags style the preview only — they do not change combat hooks.
+                    Tags style the preview; use <strong>Wire hooks from description</strong> to compile Behavior, then correct there.
                 </p>
                 <textarea
                     class="echoes-tagged-desc__textarea echoes-skill-creator__description"
@@ -174,6 +180,7 @@
                     rows="${Number(rows) || 10}"
                     placeholder="${escapeAttr(placeholder)}"
                 >${escapeHtmlFn(String(value || ''))}</textarea>
+                ${wireButton ? `<div class="echoes-tagged-desc__wire">${wireButton}</div>` : ''}
                 <div class="echoes-tagged-desc__preview">
                     <div class="echoes-tagged-desc__preview-title">Live preview</div>
                     <div class="echoes-tagged-desc__preview-body">

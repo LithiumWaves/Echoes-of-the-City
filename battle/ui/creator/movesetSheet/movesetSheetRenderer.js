@@ -297,8 +297,12 @@
             label: 'Passive description',
             rows: 8,
             placeholder: 'When an ally Staggers an enemy… gain 1 [assist_defense]',
+            wireAction: 'creator-passive-wire-from-description',
+            wireLabel: 'Wire hooks from description',
+            wireAttrs: `data-passive-index="${passiveIndex}"`,
         }) || `
             <textarea data-action="creator-unit-passive-field" data-index="${passiveIndex}" data-field="description" rows="4" placeholder="Description">${escapeHtml(String(passive?.description || ''))}</textarea>
+            <button class="echoes-editor-workshop__action echoes-editor-workshop__action--accent" type="button" data-action="creator-passive-wire-from-description" data-passive-index="${passiveIndex}">Wire hooks from description</button>
         `;
         return `
             <article class="echoes-moveset__passive-card">
@@ -321,6 +325,7 @@
                 </div>
                 ${descriptionEditor}
                 <div class="echoes-moveset__passive-hooks">
+                    <p class="echoes-creator__hint">Hooks come from <strong>Wire hooks from description</strong> or templates; description alone does not run combat until wired.</p>
                     ${creatorUi.renderHooksEditor(
                         passive?.hooks || {},
                         catalog,

@@ -7543,6 +7543,58 @@ function runSuite() {
         );
     });
 
+    test('Description hooks sync: status burn-like and passive turn-end gain', () => {
+        const battleRoot = path.resolve(__dirname, '..');
+        clearRequireCache(battleRoot);
+        global.window = { EchoesOfTheCityBattleModules: {} };
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/descriptionCombatSync.js'));
+        require(path.resolve(battleRoot, 'ui/creator/skillBuilder/descriptionHooksSync.js'));
+
+        const sync = global.window.EchoesOfTheCityDescriptionHooksSync;
+        assert(typeof sync?.compileHooksFromDescription === 'function', 'Expected compileHooksFromDescription.');
+
+        const catalog = {
+            statusList: [
+                { id: 'iris_irritation', label: 'Irritation', countOnly: true },
+                { id: 'burn', label: 'Burn' },
+            ],
+        };
+
+        const burn = sync.compileHooksFromDescription(
+            'At turn end, take fixed damage equal to Potency, then lose 1 Count.\nThis line is unknown gobbledygook',
+            catalog,
+            { ownerType: 'status', ownerId: 'my-burn' },
+        );
+        assert(Array.isArray(burn.hooks.turnEnd) && burn.hooks.turnEnd.length === 1, 'Expected one turnEnd hook block.');
+        const burnActions = burn.hooks.turnEnd[0].actions || [];
+        const damage = burnActions.find((action) => action.type === 'dealFixedDamage');
+        const loseCount = burnActions.find((action) => action.type === 'adjustStatus' && action.countDelta === -1);
+        assert(damage, 'Expected dealFixedDamage from burn-like description.');
+        assert(damage.amount?.statusPotency?.statusId === 'my-burn', 'Expected potency damage linked to status id.');
+        assert(loseCount, 'Expected lose 1 Count adjustStatus.');
+        assert(loseCount.statusId === 'my-burn', 'Expected count loss on this status.');
+        assert(burn.skipped.some((entry) => /gobbledygook/i.test(entry.text)), 'Expected unknown line in skipped.');
+
+        const passive = sync.compileHooksFromDescription(
+            '[Turn_End] Starting at Turn 3, gain 1 [iris_irritation]\nAlly follow-up remake mark stays skipped',
+            catalog,
+            { ownerType: 'passive' },
+        );
+        assert(Array.isArray(passive.hooks.turnEnd) && passive.hooks.turnEnd.length === 1, 'Expected one turnEnd passive hook.');
+        const passiveBlock = passive.hooks.turnEnd[0];
+        assert(
+            Array.isArray(passiveBlock.conditions)
+            && passiveBlock.conditions.some((condition) => condition.type === 'turnAtLeast' && condition.value === 3),
+            'Expected turnAtLeast 3 condition.',
+        );
+        const gain = (passiveBlock.actions || []).find((action) => (
+            (action.type === 'adjustStatus' || action.type === 'applyStatus')
+            && action.statusId === 'iris_irritation'
+        ));
+        assert(gain, 'Expected gain iris_irritation on self.');
+        assert(passive.skipped.some((entry) => /remake mark/i.test(entry.text)), 'Expected complex line in skipped.');
+    });
+
     test('Kit save wiring: clash pattern validates, empty idle allowed, Iris aliases resolve', () => {
         const battleModules = createBattleEnvironment();
         require(path.resolve(battleRoot, 'ui/creator/skillBuilder/skillEffectPatterns.js'));
@@ -7728,12 +7780,16 @@ function runSuite() {
             escapeHtml: (value) => String(value),
             label: 'Effect description',
             rows: 8,
+            wireAction: 'creator-status-wire-from-description',
+            wireLabel: 'Wire hooks from description',
         });
         assert(editor.includes('echoes-tagged-desc'), 'Expected tagged description editor root.');
         assert(editor.includes('[sinking_deluge]'), 'Expected tag syntax help.');
         assert(editor.includes('echoes-tagged-desc__preview'), 'Expected live preview panel.');
         assert(editor.includes('echoes-skill-tag--status'), 'Expected rendered status tag in preview.');
         assert(editor.includes('data-action="creator-status-field"'), 'Expected status field attrs wired.');
+        assert(editor.includes('creator-status-wire-from-description'), 'Expected status Wire hooks action.');
+        assert(editor.includes('compile Behavior'), 'Expected honesty copy about wiring Behavior.');
     });
 
     test('Passive card: tagged description editor and planner label', () => {
@@ -7768,6 +7824,8 @@ function runSuite() {
         assert(html.includes('Passive description'), 'Expected passive description label.');
         assert(html.includes('data-field="plannerLabel"'), 'Expected planner label field.');
         assert(html.includes('echoes-skill-tag--status'), 'Expected tagged preview on passive card.');
+        assert(html.includes('creator-passive-wire-from-description'), 'Expected passive Wire hooks action.');
+        assert(html.includes('data-passive-index="0"'), 'Expected passive index on wire button.');
     });
 
     test('Skill inspector: Limbus form and kit strip preview', () => {

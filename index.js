@@ -99,6 +99,7 @@
         'battle/ui/creator/skillBuilder/skillEffectPatterns.js',
         'battle/ui/creator/skillBuilder/skillTagRenderer.js',
         'battle/ui/creator/skillBuilder/descriptionCombatSync.js',
+        'battle/ui/creator/skillBuilder/descriptionHooksSync.js',
         'battle/ui/creator/skillBuilder/skillPreview.js',
         'battle/ui/creator/skillBuilder/skillInspector.js',
         'battle/ui/creator/encounterBuilder/encounterBuilderRenderer.js',
@@ -2251,10 +2252,13 @@
                                 label: 'Effect description',
                                 rows: 10,
                                 placeholder: '- Max Stack: 20 — Gain (Stack x 3) Shield — use [rupture] tags for statuses',
+                                wireAction: 'creator-status-wire-from-description',
+                                wireLabel: 'Wire hooks from description',
                             }) || `
                                 <div class="echoes-creator__field-row">
                                     <label>Effect description</label>
                                     <textarea data-action="creator-status-field" data-field="description" rows="8">${escapeHtml(String(statusView?.draft?.description || ''))}</textarea>
+                                    <button class="echoes-editor-workshop__action echoes-editor-workshop__action--accent" type="button" data-action="creator-status-wire-from-description">Wire hooks from description</button>
                                 </div>
                             `}
                             <div class="echoes-creator__field-row">
@@ -2310,6 +2314,7 @@
                     <details class="echoes-editor-workshop__details" open>
                         <summary class="echoes-editor-workshop__details-summary">Behavior — triggers &amp; effects</summary>
                         <div class="echoes-editor-workshop__details-body">
+                            <p class="echoes-creator__hint">Hooks come from <strong>Wire hooks from description</strong> or templates; description alone does not run combat until wired. Correct rows here afterward.</p>
                             ${creatorUi?.renderHooksEditor(
                                 statusView?.draft?.hooks || {},
                                 catalog,
@@ -3359,6 +3364,63 @@
             });
             state.creatorSelectedSkillIndex = skillIndex;
             setCreatorMessage('success', `Wired combat from description: ${matchedCount} matched, ${skippedCount} skipped.`);
+            rerenderCreatorAfterUnitEdit();
+            return;
+        }
+
+        if (action === 'creator-status-wire-from-description') {
+            const sync = window.EchoesOfTheCityDescriptionHooksSync
+                || window.EchoesOfTheCityBattleModules?.descriptionHooksSync;
+            if (!sync?.compileHooksFromDescription) {
+                return;
+            }
+            const catalog = getCreatorCatalog();
+            let matchedCount = 0;
+            let skippedCount = 0;
+            updateCreatorStatusJson((draft) => {
+                const ownerId = String(draft?.id || 'this-status');
+                const unitSkills = Array.isArray(state.creatorUnitDraftCache?.skills)
+                    ? state.creatorUnitDraftCache.skills
+                    : [];
+                const compiled = sync.compileHooksFromDescription(draft.description || '', catalog, {
+                    ownerType: 'status',
+                    ownerId,
+                    skillList: unitSkills,
+                });
+                draft.hooks = compiled.hooks && typeof compiled.hooks === 'object' ? compiled.hooks : {};
+                matchedCount = Array.isArray(compiled.matched) ? compiled.matched.length : 0;
+                skippedCount = Array.isArray(compiled.skipped) ? compiled.skipped.length : 0;
+            });
+            setCreatorMessage('success', `Wired hooks from description: ${matchedCount} matched, ${skippedCount} skipped.`);
+            renderCreatorScreen();
+            return;
+        }
+
+        if (action === 'creator-passive-wire-from-description') {
+            const passiveIndex = Number(actionTarget.dataset.passiveIndex);
+            const sync = window.EchoesOfTheCityDescriptionHooksSync
+                || window.EchoesOfTheCityBattleModules?.descriptionHooksSync;
+            if (!Number.isInteger(passiveIndex) || !sync?.compileHooksFromDescription) {
+                return;
+            }
+            const catalog = getCreatorCatalog();
+            let matchedCount = 0;
+            let skippedCount = 0;
+            updateCreatorUnitJson((draft) => {
+                draft.passives = Array.isArray(draft.passives) ? draft.passives : [];
+                const passive = draft.passives[passiveIndex];
+                if (!passive || typeof passive !== 'object') {
+                    return;
+                }
+                const compiled = sync.compileHooksFromDescription(passive.description || '', catalog, {
+                    ownerType: 'passive',
+                    ownerId: String(passive.id || ''),
+                });
+                passive.hooks = compiled.hooks && typeof compiled.hooks === 'object' ? compiled.hooks : {};
+                matchedCount = Array.isArray(compiled.matched) ? compiled.matched.length : 0;
+                skippedCount = Array.isArray(compiled.skipped) ? compiled.skipped.length : 0;
+            });
+            setCreatorMessage('success', `Wired hooks from description: ${matchedCount} matched, ${skippedCount} skipped.`);
             rerenderCreatorAfterUnitEdit();
             return;
         }
